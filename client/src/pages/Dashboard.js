@@ -806,10 +806,69 @@ export default function Dashboard() {
                   {allUsers.map(u => {
                     const group = groupedByUser[u.id] || [];
                     if (!group.length) return null;
+
+                    // Get this user's recruiters (recruiters have _ownerKey = recruiters_{userId})
+                    const userRecruiters = recruiters.filter(r =>
+                      r._ownerKey === `recruiters_${u.id}` || (!r._ownerKey && false)
+                    );
+
+                    // Sub-group this user's candidates by recruiter
+                    const byRecruiter = {};
+                    group.forEach(c => {
+                      const key = c.recruiterId || '__none__';
+                      if (!byRecruiter[key]) byRecruiter[key] = [];
+                      byRecruiter[key].push(c);
+                    });
+                    const hasRecruiters = userRecruiters.length > 0 && Object.keys(byRecruiter).some(k => k !== '__none__' && byRecruiter[k].length > 0);
+
                     return (
-                      <div key={u.id} style={{ marginBottom: 28 }}>
-                        <GroupHeader photoUrl={null} initial={(u.displayName||u.username||'?').charAt(0).toUpperCase()} name={u.displayName||u.username} subtitle={u.isAdmin ? 'Administrator' : 'Hiring Manager'} count={group.length} />
-                        <GroupTable candidates={group} />
+                      <div key={u.id} style={{ marginBottom: 32, padding: '0 0 24px', borderBottom: '1px solid var(--border)' }}>
+                        {/* User header */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                          <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 15, color: 'var(--accent)', border: '2px solid var(--accent)', flexShrink: 0 }}>
+                            {(u.displayName||u.username||'?').charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{u.displayName || u.username}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{u.isAdmin ? 'Administrator' : 'Hiring Manager'} · {group.length} candidate{group.length !== 1 ? 's' : ''}</div>
+                          </div>
+                        </div>
+
+                        {hasRecruiters ? (
+                          // Sub-group by recruiter
+                          <div style={{ paddingLeft: 16, borderLeft: '2px solid var(--border)' }}>
+                            {userRecruiters.map(r => {
+                              const rGroup = byRecruiter[r.id] || [];
+                              if (!rGroup.length) return null;
+                              return (
+                                <div key={r.id} style={{ marginBottom: 20 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                    <div style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0, background: r.photoUrl ? undefined : 'var(--bg-elevated)', overflow: 'hidden', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: 'var(--accent)' }}>
+                                      {r.photoUrl ? <img src={r.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : r.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{r.name}</span>
+                                    {r.currentTitle && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>· {r.currentTitle}</span>}
+                                    <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '1px 8px', borderRadius: 8 }}>{rGroup.length}</span>
+                                  </div>
+                                  <GroupTable candidates={rGroup} />
+                                </div>
+                              );
+                            })}
+                            {/* Unassigned under this user */}
+                            {(byRecruiter['__none__'] || []).length > 0 && (
+                              <div style={{ marginBottom: 20 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— No Recruiter Assigned</span>
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '1px 8px', borderRadius: 8 }}>{byRecruiter['__none__'].length}</span>
+                                </div>
+                                <GroupTable candidates={byRecruiter['__none__']} />
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          // No recruiters — flat list
+                          <GroupTable candidates={group} />
+                        )}
                       </div>
                     );
                   })}

@@ -878,6 +878,128 @@ function StatusTab({ candidate, onUpdated }) {
   );
 }
 
+// ── Edit Profile Modal ───────────────────────────────────────────────────────
+function EditProfileModal({ candidate, onClose, onSaved }) {
+  const { roles, recruiters } = useContext(AppContext);
+  const [form, setForm] = useState({
+    fullName:     candidate.fullName     || '',
+    email:        candidate.email        || '',
+    phone:        candidate.phone        || '',
+    linkedinUrl:  candidate.linkedinUrl  || '',
+    location:     candidate.location     || '',
+    currentTitle: candidate.currentTitle || '',
+    role:         candidate.role         || '',
+    resumeUrl:    candidate.resumeUrl    || '',
+    recruiterId:  candidate.recruiterId  || '',
+    photoUrl:     candidate.photoUrl     || '',
+  });
+  const [saving, setSaving]       = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [resumeFile, setResumeFile] = useState(null);
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    accept: { 'application/pdf': ['.pdf'], 'application/msword': ['.doc'], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'], 'text/plain': ['.txt'] },
+    maxFiles: 1,
+    onDrop: async (files) => {
+      const file = files[0]; if (!file) return;
+      setResumeFile(file); setExtracting(true);
+      try {
+        const fd = new FormData(); fd.append('resume', file);
+        const data = await candidateApi.extract(fd);
+        setForm(p => ({
+          ...p,
+          fullName:     p.fullName     || data.fullName     || '',
+          email:        p.email        || data.email        || '',
+          phone:        p.phone        || data.phone        || '',
+          linkedinUrl:  p.linkedinUrl  || data.linkedinUrl  || '',
+          location:     p.location     || data.location     || '',
+          currentTitle: p.currentTitle || data.currentTitle || '',
+          photoUrl:     p.photoUrl     || data.photoUrl     || '',
+        }));
+        toast.success('Resume re-parsed');
+      } catch (e) { toast.error(e.message); }
+      finally { setExtracting(false); }
+    },
+  });
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const fd = new FormData();
+      Object.entries(form).forEach(([k, v]) => fd.append(k, v || ''));
+      const recruiterName = recruiters.find(r => r.id === form.recruiterId)?.name || '';
+      fd.set('recruiterName', recruiterName);
+      if (resumeFile) fd.append('resume', resumeFile);
+      await candidateApi.update(candidate.id, fd);
+      toast.success('Profile updated!');
+      onSaved();
+    } catch (e) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 640, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="modal-title">Edit Candidate Profile</div>
+
+        {/* Photo + resume dropzone */}
+        <div style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'flex-start' }}>
+          <div style={{ width: 72, height: 72, borderRadius: '50%', flexShrink: 0, background: 'var(--bg-elevated)', border: '2px solid var(--border)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>
+            {form.photoUrl ? <img src={form.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div className="form-label" style={{ marginBottom: 6 }}>
+              Resume {extracting && <span style={{ color: 'var(--accent)', marginLeft: 6 }}>⟳ Parsing...</span>}
+            </div>
+            <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`} style={{ padding: '12px 16px' }}>
+              <input {...getInputProps()} />
+              <div className="dropzone-icon" style={{ fontSize: 16, marginBottom: 2 }}>📄</div>
+              <div className="dropzone-text" style={{ fontSize: 12 }}>
+                {resumeFile ? resumeFile.name : isDragActive ? 'Drop here' : 'Drop new resume to re-parse (optional)'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid-2">
+          <div className="form-group"><label className="form-label">Full Name</label><input className="form-input" value={form.fullName} onChange={e => set('fullName', e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Email</label><input className="form-input" type="email" value={form.email} onChange={e => set('email', e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Phone</label><input className="form-input" value={form.phone} onChange={e => set('phone', e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Location</label><input className="form-input" value={form.location} onChange={e => set('location', e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Current Title</label><input className="form-input" value={form.currentTitle} onChange={e => set('currentTitle', e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">LinkedIn URL</label><input className="form-input" value={form.linkedinUrl} onChange={e => set('linkedinUrl', e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Photo URL</label><input className="form-input" value={form.photoUrl} onChange={e => set('photoUrl', e.target.value)} placeholder="https://..." /></div>
+          <div className="form-group"><label className="form-label">Resume URL</label><input className="form-input" value={form.resumeUrl} onChange={e => set('resumeUrl', e.target.value)} placeholder="https://..." /></div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Role</label>
+          <select className="form-select" value={form.role} onChange={e => set('role', e.target.value)}>
+            <option value="">Select role...</option>
+            {roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Recruiter</label>
+          <select className="form-select" value={form.recruiterId} onChange={e => set('recruiterId', e.target.value)}>
+            <option value="">No recruiter assigned</option>
+            {recruiters.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        </div>
+
+        <div className="flex gap-8" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
+          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving || extracting}>
+            {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving...</> : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Profile Card ──────────────────────────────────────────────────────────────
 function ProfileCard({ candidate }) {
   const { roles, recruiters } = useContext(AppContext);
@@ -952,6 +1074,7 @@ export default function CandidateDetail() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(urlTab);
   const [appliedScenario, setAppliedScenario] = useState('');
+  const [showEditProfile, setShowEditProfile] = useState(false);
 
   const fetchCandidate = useCallback(async () => {
     try {
@@ -978,8 +1101,9 @@ export default function CandidateDetail() {
 
   return (
     <div className="page">
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <Link to="/candidates" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 13 }}>← Candidates</Link>
+        <button className="btn btn-secondary btn-sm" onClick={() => setShowEditProfile(true)}>✎ Edit Profile</button>
       </div>
       <ProfileCard candidate={candidate} />
       <div className="tabs">
@@ -993,6 +1117,14 @@ export default function CandidateDetail() {
       {activeTab === 1 && <OutreachTab candidate={candidate} />}
       {activeTab === 2 && <ConversationTab candidate={candidate} appliedScenario={appliedScenario} />}
       {activeTab === 3 && <StatusTab candidate={candidate} onUpdated={fetchCandidate} />}
+
+      {showEditProfile && (
+        <EditProfileModal
+          candidate={candidate}
+          onClose={() => setShowEditProfile(false)}
+          onSaved={() => { setShowEditProfile(false); fetchCandidate(); }}
+        />
+      )}
     </div>
   );
 }

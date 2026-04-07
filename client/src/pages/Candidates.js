@@ -199,6 +199,7 @@ export default function Candidates() {
   const [total,           setTotal]            = useState(0);
   const [loading,         setLoading]          = useState(true);
   const [showAdd,         setShowAdd]          = useState(false);
+  const [editCandidate,   setEditCandidate]    = useState(null); // candidate object to edit
   const [search,          setSearch]           = useState('');
   const [statusFilter,    setStatusFilter]     = useState('');
   const [recruiterFilter, setRecruiterFilter]  = useState('');
@@ -369,7 +370,14 @@ export default function Candidates() {
                         )}
                         <td><span className={`status-badge status-${c.status}`}>{c.status?.replace('_', ' ')}</span></td>
                         <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(c.createdAt).toLocaleDateString()}</td>
-                        <td onClick={e => handleDelete(e, c.id)} style={{ color: 'var(--error)', cursor: 'pointer', fontSize: 16 }} title="Delete">✕</td>
+                        <td>
+                          <div className="flex gap-8" onClick={e => e.stopPropagation()}>
+                            <button className="btn btn-secondary btn-sm"
+                              onClick={e => { e.stopPropagation(); setEditCandidate(c); }}>✎ Edit</button>
+                            <button onClick={e => handleDelete(e, c.id)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: 16, padding: '0 4px' }} title="Delete">✕</button>
+                          </div>
+                        </td>
                       </tr>
                     );
                   })}
@@ -391,6 +399,7 @@ export default function Candidates() {
       </div>
 
       {showAdd && <CandidateModal onClose={() => setShowAdd(false)} onSaved={fetchCandidates} />}
+      {editCandidate && <CandidateModal onClose={() => setEditCandidate(null)} onSaved={fetchCandidates} initial={editCandidate} />}
     </div>
   );
 }
