@@ -1,15 +1,14 @@
-const express = require('express');
-const router = express.Router();
-const PDFDocument = require('pdfkit');
-const Candidate = require('../models/Candidate');
-const { getOpenAIClient, getKnowledgeContext, getCustomInstructions, getCompanyScenario, buildSystemContext } = require('../utils/openai');
+const express      = require('express');
+const router       = express.Router();
+const PDFDocument  = require('pdfkit');
+const Candidate    = require('../models/Candidate');
+const { getOpenAIClient, getKnowledgeContext, getCustomInstructions, getCompanyScenario } = require('../utils/openai');
 const { requireAuth } = require('../utils/auth');
 
 router.use(requireAuth);
 
-// Helper: get the effective userId for AI context
-// If admin is generating for a candidate, use the candidate's owner's context
-// so the right KB and API key are used
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 const getEffectiveUserId = async (req, candidateId) => {
   if (!req.user.isAdmin || !candidateId) return req.user.id;
   try {
@@ -19,14 +18,14 @@ const getEffectiveUserId = async (req, candidateId) => {
 };
 
 const DEFAULT_ROLES = {
-  cto:              'Chief Technology Officer (CTO)',
-  lead_blockchain:  'Lead Blockchain Engineer',
-  smart_contract:   'Smart Contract Engineer',
-  backend:          'Backend Engineer',
-  frontend_web3:    'Frontend Engineer (Web3)',
-  designer:         'Designer',
-  strategic_partner:'Strategic Partner',
-  advisor:          'Advisor',
+  cto:               'Chief Technology Officer (CTO)',
+  lead_blockchain:   'Lead Blockchain Engineer',
+  smart_contract:    'Smart Contract Engineer',
+  backend:           'Backend Engineer',
+  frontend_web3:     'Frontend Engineer (Web3)',
+  designer:          'Designer',
+  strategic_partner: 'Strategic Partner',
+  advisor:           'Advisor',
 };
 
 const TONES = {
@@ -34,7 +33,7 @@ const TONES = {
   friendly:     'warm and friendly',
   casual:       'casual and conversational',
   assertive:    'direct and assertive',
-  feminine:     'empathetic, warm, and nurturing with a feminine tone',
+  feminine:     'empathetic, warm, and nurturing',
 };
 
 async function resolveRoleLabel(role) {
@@ -52,49 +51,121 @@ async function resolveRoleLabel(role) {
   return DEFAULT_ROLES[role] || role;
 }
 
-async function getRecruiterContext(recruiterId) {
+// Recruiter context — reads from user-scoped recruiters first, then global
+async function getRecruiterContext(recruiterId, userId) {
   if (!recruiterId) return '';
   try {
     const { isConnected } = require('../utils/firebase');
     if (!isConnected()) return '';
     const Settings = require('../models/Settings');
-    const recruiters = await Settings.get('recruiters');
-    if (!recruiters || !Array.isArray(recruiters)) return '';
-    const recruiter = recruiters.find(r => r.id === recruiterId);
+
+    // Try user-scoped recruiters first
+    let recruiter = null;
+    if (userId) {
+      const userRecruiters = await Settings.get(`recruiters_${userId}`);
+      if (Array.isArray(userRecruiters)) {
+        recruiter = userRecruiters.find(r => r.id === recruiterId);
+      }
+    }
+    // Fall back to global recruiters list
+    if (!recruiter) {
+      const allSettings = await Settings.getAll();
+      const allRecruiterKeys = Object.keys(allSettings).filter(k => k.startsWith('recruiters_'));
+      for (const key of allRecruiterKeys) {
+        const list = allSettings[key];
+        if (Array.isArray(list)) {
+          recruiter = list.find(r => r.id === recruiterId);
+          if (recruiter) break;
+        }
+      }
+    }
+
     if (!recruiter) return '';
-    let ctx = `\n\n--- RECRUITER PROFILE (${recruiter.name}) ---\n${recruiter.profile || ''}`;
-    if (recruiter.photoUrl) ctx += '\n[Recruiter has a profile photo on file]';
-    return ctx;
+    return `\n\n--- RECRUITER PROFILE ---\nName: ${recruiter.name}\nTitle: ${recruiter.currentTitle || ''}\nLocation: ${recruiter.location || ''}\nEmail: ${recruiter.email || ''}\nBio/Style: ${recruiter.profile || ''}\nWrite messages and responses in the voice and style of this recruiter.`;
   } catch (_) { return ''; }
 }
 
-// POST /generate/scenario
+// Build candidate context string
+function buildCandidateContext(candidate, resumeLength = 2000) {
+  if (!candidate) return '';
+  return `\n--- CANDIDATE PROFILE ---\nName: ${candidate.fullName || 'N/A'}\nEmail: ${candidate.email || 'N/A'}\nPhone: ${candidate.phone || 'N/A'}\nLocation: ${candidate.location || 'N/A'}\nCurrent Title: ${candidate.currentTitle || 'N/A'}\nLinkedIn: ${candidate.linkedinUrl || 'N/A'}\nResume:\n${candidate.resumeText?.substring(0, resumeLength) || 'Not provided'}`;
+}
+
+// ── POST /generate/scenario ───────────────────────────────────────────────────
 router.post('/scenario', async (req, res) => {
   try {
     const { candidateId, role, goal, tone = 'professional', customInstructions, recruiterId } = req.body;
-    const effectiveUserId = await getEffectiveUserId(req, candidateId);
-    const openai = await getOpenAIClient(effectiveUserId);
-    const systemContext = await buildSystemContext(effectiveUserId);
-    const recruiterContext = await getRecruiterContext(recruiterId);
 
-    let candidateContext = '';
+    const effectiveUserId  = await getEffectiveUserId(req, candidateId);
+    const openai           = await getOpenAIClient(effectiveUserId);
+    const knowledgeContext = await getKnowledgeContext(effectiveUserId);
+    const userInstructions = await getCustomInstructions(effectiveUserId);
+    const companyScenario  = await getCompanyScenario(effectiveUserId);
+    const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
+
     let candidate = null;
     if (candidateId) {
       candidate = await Candidate.findById(candidateId);
-      if (candidate && Candidate.canAccess(candidate, req.user)) {
-        candidateContext = `\nCANDIDATE PROFILE:\nName: ${candidate.fullName}\nEmail: ${candidate.email}\nPhone: ${candidate.phone || 'N/A'}\nLocation: ${candidate.location || 'N/A'}\nCurrent Title: ${candidate.currentTitle || 'N/A'}\nLinkedIn: ${candidate.linkedinUrl || 'N/A'}\nResume:\n${candidate.resumeText?.substring(0, 2000) || 'Not provided'}`;
-      }
+      if (!Candidate.canAccess(candidate, req.user)) candidate = null;
     }
 
     const roleLabel = await resolveRoleLabel(role);
     const toneLabel = TONES[tone] || tone;
+    const candidateContext = buildCandidateContext(candidate);
 
-    const prompt = `You are an expert technical recruiter and interview coach. Generate a comprehensive, structured interview scenario for a ${roleLabel} position.\n\n${candidateContext}\n${systemContext}\n${recruiterContext}\n${customInstructions ? `\nADDITIONAL INSTRUCTIONS:\n${customInstructions}` : ''}\n\nINTERVIEW GOAL: ${goal || 'Assess technical competency and cultural fit'}\nTONE: ${toneLabel}\n\nGenerate a complete interview scenario with:\n1. **Interview Overview** - Brief context and objectives\n2. **Opening Questions** (3-4) - Warm-up and background\n3. **Technical Assessment** (5-7 role-specific questions with expected answers)\n4. **Behavioral Questions** (3-4) - Situation-based\n5. **Culture & Motivation** (2-3 questions)\n6. **Closing** - Questions to offer the candidate, next steps\n7. **Evaluation Rubric** - Key criteria and scoring guide\n\nMake it conversational, insightful, and tailored to the candidate profile if provided. Use the ${toneLabel} tone throughout.`;
+    // ── System prompt: who the AI is + all context ────────────────────────────
+    const systemPrompt = [
+      `You are an expert technical recruiter and interview coach specialising in ${roleLabel} roles.`,
+      knowledgeContext,
+      recruiterContext,
+      userInstructions,
+      // Company scenario is the MASTER INSTRUCTION for structure — it must be followed exactly
+      companyScenario
+        ? `\n\n=== INTERVIEW SCENARIO (FOLLOW THIS EXACTLY) ===\n${companyScenario}\n=== END OF SCENARIO ===`
+        : '',
+      candidateContext
+        ? `\n\n--- CANDIDATE TO INTERVIEW ---\n${candidateContext}`
+        : '',
+    ].filter(Boolean).join('');
+
+    // ── User prompt: what to generate ─────────────────────────────────────────
+    // If a company scenario exists, the AI must follow it — no hardcoded structure
+    // If no scenario, use a sensible default structure
+    const hasCompanyScenario = !!companyScenario;
+
+    const userPrompt = hasCompanyScenario
+      ? [
+          `Generate a complete interview scenario for the ${roleLabel} position following the INTERVIEW SCENARIO structure defined in your instructions EXACTLY.`,
+          `Interview Goal: ${goal || 'Assess technical competency and cultural fit'}`,
+          `Tone: ${toneLabel}`,
+          candidateContext ? 'Personalise the questions based on the candidate profile provided.' : '',
+          customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : '',
+          '\nDo NOT use a different structure. Follow the defined scenario precisely.',
+        ].filter(Boolean).join('\n')
+      : [
+          `Generate a comprehensive, structured interview scenario for a ${roleLabel} position.`,
+          candidateContext ? 'Personalise all questions and assessments for the candidate profile.' : '',
+          `\nInterview Goal: ${goal || 'Assess technical competency and cultural fit'}`,
+          `Tone: ${toneLabel}`,
+          customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : '',
+          userInstructions ? '' : `
+Structure the scenario with:
+1. **Interview Overview** — context and objectives
+2. **Opening Questions** (3-4) — warm-up and background
+3. **Technical Assessment** (5-7 role-specific questions with expected answers)
+4. **Behavioral Questions** (3-4) — situation-based
+5. **Culture & Motivation** (2-3 questions)
+6. **Closing** — questions to offer the candidate, next steps
+7. **Evaluation Rubric** — key criteria and scoring`,
+        ].filter(Boolean).join('\n');
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 2500,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userPrompt },
+      ],
+      max_tokens: 3000,
       temperature: 0.7,
     });
 
@@ -102,58 +173,82 @@ router.post('/scenario', async (req, res) => {
     if (candidate) await Candidate.pushScenario(candidateId, { content: scenario, role: roleLabel });
     res.json({ scenario, role: roleLabel, candidateId });
   } catch (err) {
-    console.error('[Generate scenario]', err);
+    console.error('[Generate scenario]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST /generate/outreach
+// ── POST /generate/outreach ───────────────────────────────────────────────────
 router.post('/outreach', async (req, res) => {
   try {
     const { candidateId, role, messageType = 'outreach', tone = 'professional', goal, customInstructions, recruiterId } = req.body;
-    const effectiveUserId = await getEffectiveUserId(req, candidateId);
-    const openai = await getOpenAIClient(effectiveUserId);
-    const systemContext = await buildSystemContext(effectiveUserId);
-    const recruiterContext = await getRecruiterContext(recruiterId);
 
-    let candidateContext = '';
+    const MESSAGE_TYPE_LABELS = {
+      outreach:  'initial outreach',
+      screening: 'screening interview invitation',
+      technical: 'technical interview invitation',
+      followup:  'follow-up',
+    };
+
+    const effectiveUserId  = await getEffectiveUserId(req, candidateId);
+    const openai           = await getOpenAIClient(effectiveUserId);
+    const knowledgeContext = await getKnowledgeContext(effectiveUserId);
+    const userInstructions = await getCustomInstructions(effectiveUserId);
+    const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
+
     let candidate = null;
     if (candidateId) {
       candidate = await Candidate.findById(candidateId);
-      if (candidate && Candidate.canAccess(candidate, req.user)) {
-        candidateContext = `\nCANDIDATE:\nName: ${candidate.fullName}\nEmail: ${candidate.email}\nLocation: ${candidate.location || 'N/A'}\nCurrent Title: ${candidate.currentTitle || 'N/A'}\nResume summary: ${candidate.resumeText?.substring(0, 1000) || 'Not provided'}`;
-      }
+      if (!Candidate.canAccess(candidate, req.user)) candidate = null;
     }
 
-    const roleLabel = await resolveRoleLabel(role);
-    const toneLabel = TONES[tone] || tone;
-    const messageTypeDesc = {
-      outreach:  'initial outreach / cold contact',
-      screening: 'screening interview invitation',
-      technical: 'technical interview invitation',
-      followup:  'follow-up after previous conversation',
-    }[messageType] || messageType;
+    const roleLabel     = await resolveRoleLabel(role);
+    const toneLabel     = TONES[tone] || tone;
+    const messageLabel  = MESSAGE_TYPE_LABELS[messageType] || messageType;
+    const candidateContext = buildCandidateContext(candidate, 1000);
 
-    const prompt = `You are an expert recruiter writing a ${messageTypeDesc} message for a ${roleLabel} position.\n\n${candidateContext}\n${systemContext}\n${recruiterContext}\n${customInstructions ? `\nADDITIONAL INSTRUCTIONS:\n${customInstructions}` : ''}\n\nGoal: ${goal || 'Connect with the candidate and initiate a conversation about the opportunity'}\nTone: ${toneLabel}\n\nWrite a compelling, personalized ${messageTypeDesc} message that:\n- Feels genuine and human, not templated\n- References specific details from the candidate's background if available\n- Clearly communicates the opportunity and value proposition\n- Has a clear call-to-action\n- Is the right length for ${messageType} (concise for outreach, more detailed for technical)\n\nFormat:\nSubject: [email subject line]\n\n[Message body]`;
+    const systemPrompt = [
+      `You are an expert recruiter writing ${messageLabel} messages for ${roleLabel} positions.`,
+      knowledgeContext,
+      recruiterContext,
+      userInstructions,
+      candidateContext ? `\n\n--- CANDIDATE ---\n${candidateContext}` : '',
+    ].filter(Boolean).join('');
+
+    const userPrompt = [
+      `Write a compelling, personalised ${messageLabel} message for a ${roleLabel} position.`,
+      `Goal: ${goal || 'Connect with the candidate and initiate a conversation about the opportunity'}`,
+      `Tone: ${toneLabel}`,
+      candidateContext ? 'Personalise the message using the candidate profile above — reference specific details from their background.' : '',
+      customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : '',
+      `
+Requirements:
+- Feel genuine and human, not templated
+- Clearly communicate the opportunity and value proposition
+- Include a clear call-to-action
+- Format with Subject line followed by message body`,
+    ].filter(Boolean).join('\n');
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 800,
-      temperature: 0.8,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userPrompt },
+      ],
+      max_tokens: 1000,
+      temperature: 0.7,
     });
 
     const message = completion.choices[0].message.content;
     if (candidate) await Candidate.pushOutreachMessage(candidateId, { content: message, type: messageType });
-    res.json({ message, messageType, role: roleLabel, candidateId });
+    res.json({ message, role: roleLabel, candidateId });
   } catch (err) {
-    console.error('[Generate outreach]', err);
+    console.error('[Generate outreach]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST /generate/conversation
-// Supports text replies and image uploads (base64 encoded)
+// ── POST /generate/conversation ───────────────────────────────────────────────
 router.post('/conversation', async (req, res) => {
   try {
     const {
@@ -161,35 +256,49 @@ router.post('/conversation', async (req, res) => {
       history = [], recruiterId, customInstructions, imageBase64, imageMimeType,
     } = req.body;
 
-    const effectiveUserId = await getEffectiveUserId(req, candidateId);
-    const openai = await getOpenAIClient(effectiveUserId);
-    const systemContext = await buildSystemContext(effectiveUserId);
-    const recruiterContext   = await getRecruiterContext(recruiterId);
+    const effectiveUserId  = await getEffectiveUserId(req, candidateId);
+    const openai           = await getOpenAIClient(effectiveUserId);
+    const knowledgeContext = await getKnowledgeContext(effectiveUserId);
+    const userInstructions = await getCustomInstructions(effectiveUserId);
+    const companyScenario  = await getCompanyScenario(effectiveUserId);
+    const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
 
-    let candidateContext = '';
     let candidate = null;
     if (candidateId) {
       candidate = await Candidate.findById(candidateId);
-      if (candidate && Candidate.canAccess(candidate, req.user)) {
-        candidateContext = `\nCANDIDATE PROFILE:\nName: ${candidate.fullName}\nEmail: ${candidate.email}\nPhone: ${candidate.phone || 'N/A'}\nLocation: ${candidate.location || 'N/A'}\nCurrent Title: ${candidate.currentTitle || 'N/A'}\nResume summary: ${candidate.resumeText?.substring(0, 1500) || 'Not provided'}`;
-      }
+      if (!Candidate.canAccess(candidate, req.user)) candidate = null;
     }
 
-    const roleLabel = await resolveRoleLabel(role);
-    const toneLabel = TONES[tone] || tone;
+    const roleLabel    = await resolveRoleLabel(role);
+    const toneLabel    = TONES[tone] || tone;
 
-    const systemPrompt = `You are an expert recruiter having a conversation with a job candidate for a ${roleLabel} position.
-${candidateContext}
-${systemContext}
-${recruiterContext}
-${customInstructions ? `\nCONVERSATION INSTRUCTIONS:\n${customInstructions}` : ''}
+    // Applied scenario on this specific candidate (set via Apply to Conversation)
+    const appliedScenario = candidate?.appliedScenario || '';
 
-Maintain a ${toneLabel} tone. Generate the next ideal recruiter response based on what the candidate said.
-Be natural, engaging, and move the conversation forward productively.
-If the candidate sent an image, describe what you see and respond appropriately.
-Keep responses concise but meaningful.`;
+    const systemPrompt = [
+      `You are an expert recruiter conducting a ${roleLabel} interview conversation.`,
+      `Maintain a ${toneLabel} tone throughout. Generate the next ideal recruiter response.`,
+      `Be natural, engaging, concise and move the conversation forward productively.`,
+      knowledgeContext,
+      recruiterContext,
+      // Custom instructions from KB (user's saved instructions)
+      userInstructions,
+      // Company-wide interview scenario
+      companyScenario
+        ? `\n\n=== INTERVIEW SCENARIO (FOLLOW THIS STRUCTURE) ===\n${companyScenario}\n=== END OF SCENARIO ===`
+        : '',
+      // Per-candidate applied scenario (more specific, overrides company scenario)
+      appliedScenario
+        ? `\n\n=== APPLIED INTERVIEW SCENARIO FOR THIS CANDIDATE (FOLLOW THIS) ===\n${appliedScenario}\n=== END ===`
+        : '',
+      // Per-request custom instructions from the UI (most specific)
+      customInstructions
+        ? `\n\n=== SESSION INSTRUCTIONS (HIGHEST PRIORITY) ===\n${customInstructions}\n=== END ===`
+        : '',
+      candidate ? `\n\n--- CANDIDATE ---\n${buildCandidateContext(candidate, 1500)}` : '',
+      `\nIf the candidate sent an image, describe what you observe and respond appropriately.`,
+    ].filter(Boolean).join('');
 
-    // Build message history for OpenAI
     const messages = [
       { role: 'system', content: systemPrompt },
       ...history.map(h => ({
@@ -203,70 +312,102 @@ Keep responses concise but meaningful.`;
       })),
     ];
 
-    // Current user message — may include an image
     if (imageBase64) {
       messages.push({
         role: 'user',
         content: [
           { type: 'image_url', image_url: { url: `data:${imageMimeType || 'image/jpeg'};base64,${imageBase64}` } },
-          ...(candidateReply ? [{ type: 'text', text: candidateReply }] : [{ type: 'text', text: '[Candidate sent an image]' }]),
+          ...(candidateReply ? [{ type: 'text', text: candidateReply }] : []),
         ],
       });
-    } else {
+    } else if (candidateReply) {
       messages.push({ role: 'user', content: candidateReply });
     }
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages,
-      max_tokens: 600,
+      max_tokens: 800,
       temperature: 0.7,
     });
 
     const response = completion.choices[0].message.content;
 
-    // Persist to Firestore
     if (candidate) {
-      const userEntry = {
-        role: 'user',
-        content: candidateReply || '',
-        timestamp: new Date().toISOString(),
-      };
-      if (imageBase64) {
-        userEntry.imageBase64 = imageBase64;
-        userEntry.imageMimeType = imageMimeType || 'image/jpeg';
+      const entries = [];
+      if (imageBase64 || candidateReply) {
+        entries.push({ role: 'user', content: candidateReply || '', imageBase64: imageBase64 || null, imageMimeType: imageMimeType || null });
       }
-      await Candidate.pushConversation(candidateId, [
-        userEntry,
-        { role: 'assistant', content: response, timestamp: new Date().toISOString() },
-      ]);
+      entries.push({ role: 'assistant', content: response });
+      await Candidate.pushConversation(candidateId, entries);
     }
 
-    res.json({ response, candidateId });
+    res.json({ response });
   } catch (err) {
-    console.error('[Generate conversation]', err);
+    console.error('[Generate conversation]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST /generate/export-pdf
+// ── POST /generate/recommend-role ─────────────────────────────────────────────
+router.post('/recommend-role', async (req, res) => {
+  try {
+    const { resumeText, candidateId } = req.body;
+    const openai = await getOpenAIClient(req.user.id);
+
+    let text = resumeText || '';
+    if (!text && candidateId) {
+      const candidate = await Candidate.findById(candidateId);
+      if (candidate && Candidate.canAccess(candidate, req.user)) text = candidate.resumeText || '';
+    }
+
+    const { isConnected } = require('../utils/firebase');
+    let rolesContext = '';
+    if (isConnected()) {
+      const Settings = require('../models/Settings');
+      const customRoles = await Settings.get('custom_roles');
+      if (customRoles && Array.isArray(customRoles)) {
+        rolesContext = customRoles.map(r => `- ${r.value}: ${r.label}`).join('\n');
+      }
+    }
+    if (!rolesContext) {
+      rolesContext = Object.entries(DEFAULT_ROLES).map(([v, l]) => `- ${v}: ${l}`).join('\n');
+    }
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: 'You are an expert technical recruiter. Analyse a candidate profile and recommend the most suitable role. Return ONLY valid JSON.' },
+        { role: 'user', content: `Based on this resume, recommend the best matching role from the list.\n\nAvailable roles:\n${rolesContext}\n\nResume:\n${text.substring(0, 3000)}\n\nReturn JSON: { "roleValue": "the_role_value", "recommendedRole": "The Role Label", "confidence": "high|medium|low", "reasoning": "brief explanation" }` },
+      ],
+      max_tokens: 300,
+      temperature: 0,
+      response_format: { type: 'json_object' },
+    });
+
+    const result = JSON.parse(completion.choices[0].message.content);
+    res.json(result);
+  } catch (err) {
+    console.error('[Recommend role]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /generate/export-pdf ─────────────────────────────────────────────────
 router.post('/export-pdf', async (req, res) => {
   try {
-    const { content, title = 'Interview Scenario', candidateName } = req.body;
+    const { content, title = 'Document', candidateName } = req.body;
     const doc = new PDFDocument({ margin: 50 });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${title.replace(/\s+/g, '_')}.pdf"`);
     doc.pipe(res);
-    doc.fontSize(20).fillColor('#1a1a2e').text('AI Interview Tool', { align: 'center' });
-    doc.moveDown(0.5);
-    doc.fontSize(16).fillColor('#16213e').text(title, { align: 'center' });
-    if (candidateName) doc.fontSize(12).fillColor('#444').text(`Candidate: ${candidateName}`, { align: 'center' });
-    doc.moveDown();
-    doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke('#ccc');
-    doc.moveDown();
-    doc.fontSize(11).fillColor('#222').text(content, { lineGap: 4 });
-    doc.moveDown(2);
-    doc.fontSize(9).fillColor('#999').text(`Generated on ${new Date().toLocaleString()}`, { align: 'right' });
+
+    doc.fontSize(18).font('Helvetica-Bold').text(title, { align: 'center' });
+    if (candidateName) {
+      doc.fontSize(12).font('Helvetica').moveDown(0.3).text(`Candidate: ${candidateName}`, { align: 'center' });
+    }
+    doc.moveDown().moveTo(50, doc.y).lineTo(550, doc.y).stroke();
+    doc.moveDown().fontSize(11).font('Helvetica').text(content, { lineGap: 4 });
     doc.end();
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -274,83 +415,3 @@ router.post('/export-pdf', async (req, res) => {
 });
 
 module.exports = router;
-
-// POST /generate/recommend-role — suggest best role based on candidate resume
-router.post('/recommend-role', async (req, res) => {
-  try {
-    const { resumeText, candidateId } = req.body;
-    const openai = await getOpenAIClient(req.user.id);
-
-    // Get available roles from settings or defaults
-    let roleOptions = Object.values(DEFAULT_ROLES);
-    try {
-      const { isConnected } = require('../utils/firebase');
-      if (isConnected()) {
-        const Settings = require('../models/Settings');
-        const customRoles = await Settings.get('custom_roles');
-        if (customRoles && Array.isArray(customRoles) && customRoles.length > 0) {
-          roleOptions = customRoles.map(r => r.label);
-        }
-      }
-    } catch (_) {}
-
-    let text = resumeText || '';
-    if (!text && candidateId) {
-      try {
-        const candidate = await Candidate.findById(candidateId);
-        if (candidate && Candidate.canAccess(candidate, req.user)) text = candidate.resumeText || '';
-      } catch (_) {}
-    }
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert technical recruiter. Analyse a candidate profile and recommend the most suitable role. Return ONLY valid JSON.',
-        },
-        {
-          role: 'user',
-          content: `Based on this candidate profile, recommend the best matching role from the available options.
-
-AVAILABLE ROLES:
-${roleOptions.map((r, i) => `${i + 1}. ${r}`).join('\n')}
-
-CANDIDATE PROFILE:
-${text.substring(0, 3000) || 'No resume provided'}
-
-Return JSON:
-{
-  "recommendedRole": "exact role name from the list above",
-  "confidence": "high|medium|low",
-  "reasoning": "1-2 sentence explanation of why this role fits"
-}`,
-        },
-      ],
-      max_tokens: 200,
-      temperature: 0,
-      response_format: { type: 'json_object' },
-    });
-
-    const result = JSON.parse(completion.choices[0].message.content);
-
-    // Find the matching role value
-    let roleValue = '';
-    try {
-      const { isConnected } = require('../utils/firebase');
-      const Settings = require('../models/Settings');
-      const customRoles = isConnected() ? await Settings.get('custom_roles') : null;
-      const allRoles = (customRoles && Array.isArray(customRoles) && customRoles.length > 0)
-        ? customRoles
-        : Object.entries(DEFAULT_ROLES).map(([value, label]) => ({ value, label }));
-      const match = allRoles.find(r => r.label === result.recommendedRole ||
-        r.label.toLowerCase() === result.recommendedRole?.toLowerCase());
-      roleValue = match?.value || result.recommendedRole || '';
-    } catch (_) { roleValue = result.recommendedRole || ''; }
-
-    res.json({ ...result, roleValue });
-  } catch (err) {
-    console.error('[Recommend role]', err);
-    res.status(500).json({ error: err.message });
-  }
-});
