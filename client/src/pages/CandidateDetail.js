@@ -400,7 +400,7 @@ function OutreachTab({ candidate }) {
 
 // ── Conversation Tab ──────────────────────────────────────────────────────────
 // ── Conversation Tab ──────────────────────────────────────────────────────────
-function ConversationTab({ candidate, appliedScenario }) {
+function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
   const { roles, recruiters } = useContext(AppContext);
   const [config, setConfig] = useState({
     role: candidate.role || '', tone: 'professional',
@@ -536,6 +536,8 @@ function ConversationTab({ candidate, appliedScenario }) {
     try {
       const data = await generateApi.conversation(buildPayload(newHistory, userMsg, imgData));
       setHistory(h => [...h, { role: 'assistant', content: data.response, timestamp: new Date().toISOString(), _origIdx: h.length }]);
+      // Reflect auto status change: pending → in_progress
+      if (candidate.status === 'pending' && onStatusChange) onStatusChange('in_progress');
     } catch (e) {
       toast.error(e.message);
       setHistory(h => h.slice(0, -1));
@@ -547,7 +549,7 @@ function ConversationTab({ candidate, appliedScenario }) {
   // Regenerate the last assistant reply using current (possibly updated) instructions
   const regenerateLastReply = async () => {
     if (history.length < 2) return;
-    // Find last assistant message index
+    // Find last assistant message index in local state
     const lastAssistantIdx = [...history].reverse().findIndex(m => m.role === 'assistant');
     if (lastAssistantIdx === -1) return;
     const assistantIdx = history.length - 1 - lastAssistantIdx;
@@ -559,16 +561,28 @@ function ConversationTab({ candidate, appliedScenario }) {
     if (!lastUser) return;
 
     setRegenerating(true);
-    // Remove last assistant message from display
-    setHistory(historyWithoutLast);
 
     try {
-      const data = await generateApi.conversation(buildPayload(historyWithoutLast, lastUser.content, null));
-      setHistory(h => [...h, { role: 'assistant', content: data.response, timestamp: new Date().toISOString() }]);
-      toast.success('Reply regenerated with current instructions');
+      // Step 1: Delete the old assistant message from Firestore FIRST
+      const firestoreIdx = history[assistantIdx]._origIdx ?? assistantIdx;
+      await interviewApi.deleteConversationMsg(candidate.id, firestoreIdx);
+
+      // Step 2: Update local state to remove it
+      const reindexed = historyWithoutLast.map((m, i) => ({ ...m, _origIdx: i }));
+      setHistory(reindexed);
+
+      // Step 3: Generate new reply — server will append it to Firestore
+      const data = await generateApi.conversation(buildPayload(reindexed, lastUser.content, null));
+      setHistory(h => [...h, {
+        role: 'assistant',
+        content: data.response,
+        timestamp: new Date().toISOString(),
+        _origIdx: h.length,
+      }]);
+      toast.success('Reply regenerated');
     } catch (e) {
       toast.error(e.message);
-      setHistory(history); // restore
+      setHistory(history); // restore on error
     } finally {
       setRegenerating(false);
     }
@@ -1112,7 +1126,7 @@ export default function CandidateDetail() {
       </div>
       {activeTab === 0 && <ScenarioTab candidate={candidate} onScenarioApplied={handleScenarioApplied} />}
       {activeTab === 1 && <OutreachTab candidate={candidate} />}
-      {activeTab === 2 && <ConversationTab candidate={candidate} appliedScenario={appliedScenario} />}
+      {activeTab === 2 && <ConversationTab candidate={candidate} appliedScenario={appliedScenario} onStatusChange={(newStatus) => { setCandidate(c => ({ ...c, status: newStatus })); }} />}
       {activeTab === 3 && <StatusTab candidate={candidate} onUpdated={fetchCandidate} />}
 
       {showEditProfile && (

@@ -340,6 +340,11 @@ router.post('/conversation', async (req, res) => {
       }
       entries.push({ role: 'assistant', content: response });
       await Candidate.pushConversation(candidateId, entries);
+
+      // Auto-advance status: pending → in_progress when conversation starts
+      if (candidate.status === 'pending') {
+        await Candidate.update(candidateId, { status: 'in_progress' });
+      }
     }
 
     res.json({ response });
