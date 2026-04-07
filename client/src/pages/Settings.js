@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useContext } from 'react';
+import React, { useEffect, useState, useCallback, useContext, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import toast from 'react-hot-toast';
@@ -160,6 +160,7 @@ function CompanyScenarioSection({ dbConnected }) {
 // ── Recruiter Profiles ────────────────────────────────────────────────────────
 function RecruitersSection({ dbConnected }) {
   const { recruiters, refreshSettings } = useContext(AppContext);
+  const editFormRef = useRef(null);
   const [localRecruiters, setLocalRecruiters] = useState(recruiters);
   const blankForm = { name: '', email: '', phone: '', linkedinUrl: '', location: '', currentTitle: '', profile: '', photoUrl: '' };
   const [form, setForm]     = useState(blankForm);
@@ -224,7 +225,11 @@ function RecruitersSection({ dbConnected }) {
     } catch (e) { toast.error(e.message); }
   };
 
-  const startEdit = (r) => { setEditId(r.id); setForm({ name: r.name||'', email: r.email||'', phone: r.phone||'', linkedinUrl: r.linkedinUrl||'', location: r.location||'', currentTitle: r.currentTitle||'', profile: r.profile||'', photoUrl: r.photoUrl||'' }); };
+  const startEdit = (r) => {
+    setEditId(r.id);
+    setForm({ name: r.name||'', email: r.email||'', phone: r.phone||'', linkedinUrl: r.linkedinUrl||'', location: r.location||'', currentTitle: r.currentTitle||'', profile: r.profile||'', photoUrl: r.photoUrl||'' });
+    setTimeout(() => editFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
   const cancelEdit = () => { setEditId(null); setForm(blankForm); };
   const sf = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -259,7 +264,7 @@ function RecruitersSection({ dbConnected }) {
       ))}
 
       {/* Add / Edit form */}
-      <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', padding: 14, marginTop: 12 }}>
+      <div ref={editFormRef} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: `1px solid ${editId ? 'var(--accent)' : 'var(--border)'}`, padding: 14, marginTop: 12, transition: 'border-color 0.2s' }}>
         <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', marginBottom: 12 }}>{editId ? '✎ Edit Recruiter' : '+ Add Recruiter'}</div>
 
         <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-start' }}>
@@ -551,6 +556,64 @@ function AccountSection() {
 }
 
 // ── Admin: Browse any user's resources ───────────────────────────────────────
+// ── Admin: view a specific user's recruiters ─────────────────────────────────
+function AdminUserRecruiters({ userId, dbConnected }) {
+  const [recruiters, setRecruiters] = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [expanded,   setExpanded]   = useState(null);
+
+  useEffect(() => {
+    if (!dbConnected || !userId) { setLoading(false); return; }
+    settingsApi.getAll({ userId })
+      .then(data => setRecruiters(Array.isArray(data.recruiters) ? data.recruiters : []))
+      .catch(() => setRecruiters([]))
+      .finally(() => setLoading(false));
+  }, [userId, dbConnected]);
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 24 }}><span className="spinner" /></div>;
+
+  if (!recruiters.length) return (
+    <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)', fontSize: 13 }}>
+      This user has no recruiters configured.
+    </div>
+  );
+
+  return (
+    <div>
+      {recruiters.map(r => (
+        <div key={r.id} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: 8, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
+            {/* Avatar */}
+            <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, background: r.photoUrl ? undefined : 'var(--accent-dim)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 14, border: '1.5px solid var(--border)' }}>
+              {r.photoUrl ? <img src={r.photoUrl} alt={r.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (r.name||'?').charAt(0).toUpperCase()}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{r.name}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+                {[r.currentTitle, r.email, r.location].filter(Boolean).join(' · ')}
+              </div>
+            </div>
+            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}
+              onClick={() => setExpanded(expanded === r.id ? null : r.id)}>
+              {expanded === r.id ? '▲' : '▼'}
+            </button>
+          </div>
+          {expanded === r.id && (
+            <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', background: 'var(--bg-card)' }}>
+              {r.linkedinUrl && <div style={{ fontSize: 12, marginBottom: 6 }}><a href={r.linkedinUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>LinkedIn ↗</a></div>}
+              {r.profile && <pre style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6, margin: 0 }}>{r.profile}</pre>}
+            </div>
+          )}
+        </div>
+      ))}
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+        {recruiters.length} recruiter{recruiters.length !== 1 ? 's' : ''} configured for this user.
+        To edit, the user must update their own recruiters in Settings → General → Recruiter Profiles.
+      </div>
+    </div>
+  );
+}
+
 function AdminUserResources({ dbConnected }) {
   const [users,        setUsers]        = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -610,7 +673,7 @@ function AdminUserResources({ dbConnected }) {
         <>
           {/* Tab switcher */}
           <div className="tabs" style={{ marginBottom: 16 }}>
-            {[['kb', '📁 Knowledge Base'], ['settings', '⚙ Settings']].map(([key, label]) => (
+            {[['kb', '📁 Knowledge Base'], ['recruiters', '◈ Recruiters'], ['settings', '⚙ Settings']].map(([key, label]) => (
               <button key={key} className={`tab ${tab === key ? 'active' : ''}`}
                 onClick={() => handleTabChange(key)}>{label}</button>
             ))}
@@ -619,6 +682,11 @@ function AdminUserResources({ dbConnected }) {
           {/* Knowledge base tab */}
           {tab === 'kb' && (
             <KnowledgeSection dbConnected={dbConnected} targetUserId={selectedUser.id} />
+          )}
+
+          {/* Recruiters tab */}
+          {tab === 'recruiters' && (
+            <AdminUserRecruiters userId={selectedUser.id} dbConnected={dbConnected} />
           )}
 
           {/* Settings tab */}

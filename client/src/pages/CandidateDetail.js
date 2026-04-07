@@ -3,6 +3,7 @@ import { useParams, Link, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import toast from 'react-hot-toast';
 import { candidateApi, generateApi, interviewApi } from '../utils/api';
+import { useDropzone } from 'react-dropzone';
 import { AppContext } from '../context/AppContext';
 
 const TONES = [
@@ -881,6 +882,7 @@ function StatusTab({ candidate, onUpdated }) {
 // ── Edit Profile Modal ───────────────────────────────────────────────────────
 function EditProfileModal({ candidate, onClose, onSaved }) {
   const { roles, recruiters } = useContext(AppContext);
+  const fileInputRef = useRef(null);
   const [form, setForm] = useState({
     fullName:     candidate.fullName     || '',
     email:        candidate.email        || '',
@@ -893,35 +895,34 @@ function EditProfileModal({ candidate, onClose, onSaved }) {
     recruiterId:  candidate.recruiterId  || '',
     photoUrl:     candidate.photoUrl     || '',
   });
-  const [saving, setSaving]       = useState(false);
-  const [extracting, setExtracting] = useState(false);
-  const [resumeFile, setResumeFile] = useState(null);
+  const [saving,      setSaving]      = useState(false);
+  const [extracting,  setExtracting]  = useState(false);
+  const [resumeFile,  setResumeFile]  = useState(null);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: { 'application/pdf': ['.pdf'], 'application/msword': ['.doc'], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'], 'text/plain': ['.txt'] },
-    maxFiles: 1,
-    onDrop: async (files) => {
-      const file = files[0]; if (!file) return;
-      setResumeFile(file); setExtracting(true);
-      try {
-        const fd = new FormData(); fd.append('resume', file);
-        const data = await candidateApi.extract(fd);
-        setForm(p => ({
-          ...p,
-          fullName:     p.fullName     || data.fullName     || '',
-          email:        p.email        || data.email        || '',
-          phone:        p.phone        || data.phone        || '',
-          linkedinUrl:  p.linkedinUrl  || data.linkedinUrl  || '',
-          location:     p.location     || data.location     || '',
-          currentTitle: p.currentTitle || data.currentTitle || '',
-          photoUrl:     p.photoUrl     || data.photoUrl     || '',
-        }));
-        toast.success('Resume re-parsed');
-      } catch (e) { toast.error(e.message); }
-      finally { setExtracting(false); }
-    },
-  });
+  const handleResumeChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setResumeFile(file);
+    setExtracting(true);
+    try {
+      const fd = new FormData();
+      fd.append('resume', file);
+      const data = await candidateApi.extract(fd);
+      setForm(p => ({
+        ...p,
+        fullName:     p.fullName     || data.fullName     || '',
+        email:        p.email        || data.email        || '',
+        phone:        p.phone        || data.phone        || '',
+        linkedinUrl:  p.linkedinUrl  || data.linkedinUrl  || '',
+        location:     p.location     || data.location     || '',
+        currentTitle: p.currentTitle || data.currentTitle || '',
+        photoUrl:     p.photoUrl     || data.photoUrl     || '',
+      }));
+      toast.success('Resume re-parsed — fields updated');
+    } catch (e) { toast.error(e.message); }
+    finally { setExtracting(false); }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -943,22 +944,18 @@ function EditProfileModal({ candidate, onClose, onSaved }) {
       <div className="modal" style={{ maxWidth: 640, maxHeight: '90vh', overflowY: 'auto' }}>
         <div className="modal-title">Edit Candidate Profile</div>
 
-        {/* Photo + resume dropzone */}
-        <div style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'flex-start' }}>
-          <div style={{ width: 72, height: 72, borderRadius: '50%', flexShrink: 0, background: 'var(--bg-elevated)', border: '2px solid var(--border)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>
+        {/* Photo preview + resume upload */}
+        <div style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'center' }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', flexShrink: 0, background: 'var(--bg-elevated)', border: '2px solid var(--border)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>
             {form.photoUrl ? <img src={form.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
           </div>
           <div style={{ flex: 1 }}>
-            <div className="form-label" style={{ marginBottom: 6 }}>
-              Resume {extracting && <span style={{ color: 'var(--accent)', marginLeft: 6 }}>⟳ Parsing...</span>}
-            </div>
-            <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`} style={{ padding: '12px 16px' }}>
-              <input {...getInputProps()} />
-              <div className="dropzone-icon" style={{ fontSize: 16, marginBottom: 2 }}>📄</div>
-              <div className="dropzone-text" style={{ fontSize: 12 }}>
-                {resumeFile ? resumeFile.name : isDragActive ? 'Drop here' : 'Drop new resume to re-parse (optional)'}
-              </div>
-            </div>
+            <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt" style={{ display: 'none' }} onChange={handleResumeChange} />
+            <button className="btn btn-secondary btn-sm" onClick={() => fileInputRef.current?.click()} disabled={extracting}>
+              {extracting ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Parsing...</> : '📄 Upload New Resume'}
+            </button>
+            {resumeFile && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{resumeFile.name}</div>}
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Upload to re-parse and auto-fill fields</div>
           </div>
         </div>
 
