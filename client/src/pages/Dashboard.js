@@ -1,65 +1,177 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { candidateApi, authApi } from '../utils/api';
 import { AppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
 const STATUS_CONFIG = {
-  pending:     { label: 'Pending',     color: 'var(--pending)' },
-  in_progress: { label: 'In Progress', color: 'var(--in-progress)' },
-  success:     { label: 'Success',     color: 'var(--success)' },
-  failed:      { label: 'Failed',      color: 'var(--error)' },
+  pending:     { label: 'Pending',     color: 'var(--pending)',     hex: '#f5a623' },
+  in_progress: { label: 'In Progress', color: 'var(--in-progress)', hex: '#4a9eff' },
+  success:     { label: 'Success',     color: 'var(--success)',     hex: '#00d4aa' },
+  failed:      { label: 'Failed',      color: 'var(--error)',       hex: '#ff6b6b' },
 };
 
-// ── Candidate avatar ──────────────────────────────────────────────────────────
+// ── Reusable mini components ──────────────────────────────────────────────────
 function Avatar({ src, name, size = 32 }) {
   return (
-    <div style={{
-      width: size, height: size, borderRadius: '50%', flexShrink: 0,
-      background: src ? undefined : 'var(--bg-elevated)',
-      border: '1.5px solid var(--border)', overflow: 'hidden',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: size * 0.42, color: 'var(--text-muted)',
-    }}>
+    <div style={{ width: size, height: size, borderRadius: '50%', flexShrink: 0, background: 'var(--bg-elevated)', border: '1.5px solid var(--border)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.42, color: 'var(--text-muted)' }}>
       {src ? <img src={src} alt={name || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
     </div>
   );
 }
 
-// ── Recruiter badge ───────────────────────────────────────────────────────────
-function RecruiterBadge({ recruiter }) {
-  if (!recruiter) return <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>;
+function StatCard({ icon, label, value, color, sub }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <div style={{
-        width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-        background: recruiter.photoUrl ? undefined : 'var(--accent-dim)',
-        overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: 'var(--accent)', fontWeight: 700, fontSize: 10, border: '1px solid var(--border)',
-      }}>
-        {recruiter.photoUrl
-          ? <img src={recruiter.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          : (recruiter.name || '?').charAt(0).toUpperCase()}
-      </div>
-      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{recruiter.name}</span>
+    <div className="stat-card" style={{ borderTop: `3px solid ${color}` }}>
+      <div style={{ color, fontSize: 22, marginBottom: 8 }}>{icon}</div>
+      <div className="stat-value" style={{ color }}>{value}</div>
+      <div className="stat-label">{label}</div>
+      {sub && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{sub}</div>}
     </div>
   );
 }
 
-// ── Group header (for both recruiter and user groups) ─────────────────────────
+// ── Horizontal bar chart ──────────────────────────────────────────────────────
+function BarChart({ data, colorFn, maxLabel = 'count', onClickItem }) {
+  const max = Math.max(...data.map(d => d.value), 1);
+  return (
+    <div>
+      {data.map((d, i) => (
+        <div key={i} style={{ marginBottom: 10, cursor: onClickItem ? 'pointer' : 'default' }}
+          onClick={() => onClickItem && onClickItem(d)}>
+          <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>{d.label}</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginLeft: 8 }}>{d.value}</span>
+          </div>
+          <div style={{ height: 6, background: 'var(--bg-elevated)', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${(d.value / max) * 100}%`, background: colorFn ? colorFn(d, i) : 'var(--accent)', borderRadius: 3, transition: 'width 0.6s ease' }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Donut chart (pure CSS/SVG) ────────────────────────────────────────────────
+function DonutChart({ segments, size = 120 }) {
+  const total = segments.reduce((s, d) => s + d.value, 0);
+  if (!total) return <div style={{ width: size, height: size, borderRadius: '50%', background: 'var(--bg-elevated)' }} />;
+
+  let offset = 0;
+  const cx = size / 2, cy = size / 2, r = size * 0.38, stroke = size * 0.18;
+  const circ = 2 * Math.PI * r;
+
+  return (
+    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+      {segments.map((seg, i) => {
+        const pct  = seg.value / total;
+        const dash = pct * circ;
+        const gap  = circ - dash;
+        const el = (
+          <circle key={i} cx={cx} cy={cy} r={r}
+            fill="none" stroke={seg.color} strokeWidth={stroke}
+            strokeDasharray={`${dash} ${gap}`}
+            strokeDashoffset={-offset * circ}
+            style={{ transition: 'stroke-dasharray 0.6s ease' }}
+          />
+        );
+        offset += pct;
+        return el;
+      })}
+    </svg>
+  );
+}
+
+// ── Funnel chart ──────────────────────────────────────────────────────────────
+function FunnelChart({ stages }) {
+  const maxVal = Math.max(...stages.map(s => s.value), 1);
+  return (
+    <div>
+      {stages.map((s, i) => {
+        const pct     = Math.round((s.value / maxVal) * 100);
+        const convPct = i > 0 && stages[i - 1].value > 0
+          ? Math.round((s.value / stages[i - 1].value) * 100)
+          : null;
+        return (
+          <div key={i} style={{ marginBottom: 8 }}>
+            <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 14 }}>{s.icon}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{s.label}</span>
+                {convPct !== null && (
+                  <span style={{ fontSize: 10, color: convPct >= 50 ? 'var(--success)' : 'var(--warning)', background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 8 }}>
+                    {convPct}% conv.
+                  </span>
+                )}
+              </div>
+              <span style={{ fontSize: 12, fontWeight: 700, color: s.color }}>{s.value}</span>
+            </div>
+            <div style={{ height: 8, background: 'var(--bg-elevated)', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${pct}%`, background: s.color, borderRadius: 4, transition: 'width 0.6s ease' }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Activity timeline ─────────────────────────────────────────────────────────
+function ActivityTimeline({ candidates }) {
+  // Group candidates added per week (last 8 weeks)
+  const weeks = useMemo(() => {
+    const now    = new Date();
+    const result = [];
+    for (let w = 7; w >= 0; w--) {
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - w * 7);
+      weekStart.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 7);
+
+      const count = candidates.filter(c => {
+        const d = new Date(c.createdAt);
+        return d >= weekStart && d < weekEnd;
+      }).length;
+
+      const label = w === 0 ? 'This week' : w === 1 ? 'Last week' : `${w}w ago`;
+      result.push({ label, count, weekStart });
+    }
+    return result;
+  }, [candidates]);
+
+  const max = Math.max(...weeks.map(w => w.count), 1);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 80 }}>
+        {weeks.map((w, i) => (
+          <div key={i} title={`${w.label}: ${w.count} candidates`}
+            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'flex-end' }}>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: w.count > 0 ? 600 : 400, color: w.count > 0 ? 'var(--accent)' : 'var(--text-muted)' }}>
+              {w.count > 0 ? w.count : ''}
+            </div>
+            <div style={{ width: '100%', background: w.count > 0 ? 'var(--accent)' : 'var(--bg-elevated)', borderRadius: '3px 3px 0 0', height: `${Math.max((w.count / max) * 60, w.count > 0 ? 8 : 4)}px`, opacity: i === 7 ? 1 : 0.5 + (i / 7) * 0.5, transition: 'height 0.6s ease' }} />
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+        {weeks.map((w, i) => (
+          <div key={i} style={{ flex: 1, fontSize: 9, color: 'var(--text-muted)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {i === 7 ? 'Now' : i === 6 ? '-1w' : i === 0 ? '-7w' : ''}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Group header ──────────────────────────────────────────────────────────────
 function GroupHeader({ photoUrl, initial, name, subtitle, count }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
-      <div style={{
-        width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-        background: photoUrl ? undefined : 'var(--accent-dim)',
-        overflow: 'hidden', border: '1.5px solid var(--border)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: 'var(--accent)', fontWeight: 700, fontSize: 13,
-      }}>
-        {photoUrl
-          ? <img src={photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          : initial}
+      <div style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, background: photoUrl ? undefined : 'var(--accent-dim)', overflow: 'hidden', border: '1.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 13 }}>
+        {photoUrl ? <img src={photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initial}
       </div>
       <div>
         <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{name}</div>
@@ -72,102 +184,184 @@ function GroupHeader({ photoUrl, initial, name, subtitle, count }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const { user } = useAuth();
-  const { recruiters, roles } = useContext(AppContext);
-
-  const [stats,          setStats]          = useState({ total: 0, pending: 0, in_progress: 0, success: 0, failed: 0 });
-  const [allCandidates,  setAllCandidates]  = useState([]);
-  const [recent,         setRecent]         = useState([]);
-  const [loading,        setLoading]        = useState(true);
-  const [groupMode,      setGroupMode]      = useState('none'); // 'none' | 'recruiter' | 'user'
-  const [allUsers,       setAllUsers]       = useState([]);
+  const { user }                 = useAuth();
+  const { recruiters, roles }    = useContext(AppContext);
+  const [allCandidates, setAllCandidates] = useState([]);
+  const [recent,        setRecent]        = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [groupMode,     setGroupMode]     = useState('none');
+  const [allUsers,      setAllUsers]      = useState([]);
+  const [activeView,    setActiveView]    = useState('overview'); // 'overview' | 'pipeline' | 'candidates'
 
   useEffect(() => {
-    if (user?.isAdmin) {
-      authApi.listUsers().then(setAllUsers).catch(() => {});
-    }
+    if (user?.isAdmin) authApi.listUsers().then(setAllUsers).catch(() => {});
   }, [user]);
 
   useEffect(() => {
-    const fetchData = async () => {
+    (async () => {
       try {
         const [recentData, allData] = await Promise.all([
           candidateApi.getAll({ limit: 8 }),
           candidateApi.getAll({ limit: 1000 }),
         ]);
         setRecent(recentData.candidates || []);
-        const all = allData.candidates || [];
-        setAllCandidates(all);
-        const counts = { total: allData.total || 0, pending: 0, in_progress: 0, success: 0, failed: 0 };
-        all.forEach(c => { if (counts[c.status] !== undefined) counts[c.status]++; });
-        setStats(counts);
+        setAllCandidates(allData.candidates || []);
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
-    };
-    fetchData();
+    })();
   }, []);
 
-  const getRoleLabel  = (val) => roles.find(r => r.value === val)?.label || val || '—';
-  const getRecruiter  = (id)  => recruiters.find(r => r.id === id) || null;
+  // ── Analytics computations ────────────────────────────────────────────────
+  const analytics = useMemo(() => {
+    const all = allCandidates;
+    if (!all.length) return null;
 
-  // Group candidates by recruiter
-  const groupedByRecruiter = (() => {
-    const groups = {};
-    allCandidates.forEach(c => {
-      const key = c.recruiterId || '__unassigned__';
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(c);
+    // Status counts
+    const statusCounts = { pending: 0, in_progress: 0, success: 0, failed: 0 };
+    all.forEach(c => { if (statusCounts[c.status] !== undefined) statusCounts[c.status]++; });
+
+    // Conversion rate (success / total)
+    const conversionRate = all.length > 0 ? Math.round((statusCounts.success / all.length) * 100) : 0;
+
+    // Success rate (success / (success + failed)) — excludes still-in-pipeline
+    const decided = statusCounts.success + statusCounts.failed;
+    const successRate = decided > 0 ? Math.round((statusCounts.success / decided) * 100) : 0;
+
+    // Role breakdown — top 6
+    const roleCounts = {};
+    all.forEach(c => { if (c.role) roleCounts[c.role] = (roleCounts[c.role] || 0) + 1; });
+    const roleBreakdown = Object.entries(roleCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([val, count]) => ({
+        label: roles.find(r => r.value === val)?.label || val,
+        value: count,
+      }));
+
+    // Location breakdown — top 6
+    const locCounts = {};
+    all.forEach(c => {
+      if (c.location) {
+        const loc = c.location.split(',').pop().trim() || c.location;
+        locCounts[loc] = (locCounts[loc] || 0) + 1;
+      }
     });
-    return groups;
-  })();
+    const locationBreakdown = Object.entries(locCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([label, value]) => ({ label, value }));
 
-  // Group candidates by owner (hiring manager) — admin only
-  const groupedByUser = (() => {
-    const groups = {};
-    allCandidates.forEach(c => {
-      const key = c.ownerId || '__unassigned__';
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(c);
+    // Recruiter performance
+    const recruiterStats = {};
+    all.forEach(c => {
+      if (!c.recruiterId) return;
+      if (!recruiterStats[c.recruiterId]) {
+        recruiterStats[c.recruiterId] = { total: 0, success: 0, in_progress: 0, pending: 0, failed: 0 };
+      }
+      recruiterStats[c.recruiterId].total++;
+      if (recruiterStats[c.recruiterId][c.status] !== undefined) recruiterStats[c.recruiterId][c.status]++;
     });
-    return groups;
-  })();
 
-  // Common table headers
-  const TableHead = ({ showUser = false }) => (
-    <thead>
-      <tr>
-        <th style={{ width: 36 }}></th>
-        <th>Candidate</th>
-        <th>Email</th>
-        <th>Role</th>
-        <th>Location</th>
-        <th>Recruiter</th>
-        {showUser && <th>Added By</th>}
-        <th>Status</th>
-        <th>Added</th>
-      </tr>
-    </thead>
-  );
+    const recruiterPerf = Object.entries(recruiterStats)
+      .map(([id, s]) => ({
+        id,
+        name: recruiters.find(r => r.id === id)?.name || 'Unknown',
+        ...s,
+        successRate: s.total > 0 ? Math.round((s.success / s.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 6);
 
-  // Single row
-  const CandidateRow = ({ c, showUser = false }) => {
+    // Avg time in pipeline (days from createdAt for completed candidates)
+    const completedCandidates = all.filter(c => ['success', 'failed'].includes(c.status) && c.createdAt && c.updatedAt);
+    const avgDays = completedCandidates.length > 0
+      ? Math.round(completedCandidates.reduce((sum, c) => {
+          return sum + (new Date(c.updatedAt) - new Date(c.createdAt)) / (1000 * 60 * 60 * 24);
+        }, 0) / completedCandidates.length)
+      : null;
+
+    // Monthly trend — candidates added per month (last 6 months)
+    const now = new Date();
+    const monthlyTrend = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      const count = all.filter(c => {
+        const cd = new Date(c.createdAt);
+        return cd >= d && cd < next;
+      }).length;
+      return {
+        label: d.toLocaleDateString('en', { month: 'short' }),
+        value: count,
+      };
+    });
+
+    // User (hiring manager) breakdown — admin only
+    const userStats = {};
+    all.forEach(c => {
+      const key = c.ownerId || '__none__';
+      if (!userStats[key]) userStats[key] = { name: c.ownerName || 'Unknown', total: 0, success: 0, in_progress: 0 };
+      userStats[key].total++;
+      if (userStats[key][c.status] !== undefined) userStats[key][c.status]++;
+    });
+    const userBreakdown = Object.entries(userStats)
+      .map(([id, s]) => ({ id, ...s, successRate: s.total > 0 ? Math.round((s.success / s.total) * 100) : 0 }))
+      .sort((a, b) => b.total - a.total);
+
+    return { statusCounts, conversionRate, successRate, roleBreakdown, locationBreakdown, recruiterPerf, avgDays, monthlyTrend, userBreakdown };
+  }, [allCandidates, roles, recruiters]);
+
+  const total = allCandidates.length;
+  const getRoleLabel = (val) => roles.find(r => r.value === val)?.label || val || '—';
+  const getRecruiter = (id)  => recruiters.find(r => r.id === id) || null;
+
+  // Group helpers
+  const groupedByRecruiter = useMemo(() => {
+    const g = {};
+    allCandidates.forEach(c => { const k = c.recruiterId || '__none__'; if (!g[k]) g[k] = []; g[k].push(c); });
+    return g;
+  }, [allCandidates]);
+
+  const groupedByUser = useMemo(() => {
+    const g = {};
+    allCandidates.forEach(c => { const k = c.ownerId || '__none__'; if (!g[k]) g[k] = []; g[k].push(c); });
+    return g;
+  }, [allCandidates]);
+
+  const groupButtons = [
+    { mode: 'none',      label: 'Recent' },
+    ...(recruiters.length > 0 ? [{ mode: 'recruiter', label: '◈ By Recruiter' }] : []),
+    ...(user?.isAdmin ? [{ mode: 'user', label: '👤 By User' }] : []),
+  ];
+
+  // Candidate table rows
+  const CandidateRow = ({ c }) => {
     const recruiter = getRecruiter(c.recruiterId);
     return (
       <tr onClick={() => window.location.href = `/candidates/${c.id}`} style={{ cursor: 'pointer' }}>
-        <td><Avatar src={c.photoUrl} name={c.fullName} size={30} /></td>
+        <td><Avatar src={c.photoUrl} name={c.fullName} size={28} /></td>
         <td>
-          <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 13 }}>{c.fullName || '—'}</div>
+          <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{c.fullName || '—'}</div>
           {c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.currentTitle}</div>}
         </td>
-        <td style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: 'var(--text-muted)' }}>{c.email || '—'}</td>
+        <td style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>{c.email || '—'}</td>
         <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
         <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.location ? `📍 ${c.location}` : '—'}</td>
-        <td><RecruiterBadge recruiter={recruiter} /></td>
-        {showUser && (
+        <td>
+          {recruiter ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 20, height: 20, borderRadius: '50%', background: recruiter.photoUrl ? undefined : 'var(--accent-dim)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 9, flexShrink: 0 }}>
+                {recruiter.photoUrl ? <img src={recruiter.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : recruiter.name.charAt(0).toUpperCase()}
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{recruiter.name}</span>
+            </div>
+          ) : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>}
+        </td>
+        {user?.isAdmin && (
           <td>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, flexShrink: 0 }}>
+              <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 600, color: 'var(--text-muted)' }}>
                 {(c.ownerName || '?').charAt(0).toUpperCase()}
               </div>
               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.ownerName || '—'}</span>
@@ -180,177 +374,457 @@ export default function Dashboard() {
     );
   };
 
-  // Render a group table
-  const GroupTable = ({ candidates, showUser = false }) => (
+  const TableHead = () => (
+    <thead>
+      <tr>
+        <th style={{ width: 34 }}></th>
+        <th>Candidate</th><th>Email</th><th>Role</th><th>Location</th>
+        <th>Recruiter</th>
+        {user?.isAdmin && <th>Added By</th>}
+        <th>Status</th><th>Added</th>
+      </tr>
+    </thead>
+  );
+
+  const GroupTable = ({ candidates }) => (
     <div className="table-wrap">
       <table className="data-table">
-        <TableHead showUser={showUser} />
-        <tbody>{candidates.map(c => <CandidateRow key={c.id} c={c} showUser={showUser} />)}</tbody>
+        <TableHead />
+        <tbody>{candidates.map(c => <CandidateRow key={c.id} c={c} />)}</tbody>
       </table>
     </div>
   );
 
-  // Group toggle button labels
-  const groupButtons = [
-    { mode: 'none',      label: 'Recent' },
-    ...(recruiters.length > 0 ? [{ mode: 'recruiter', label: '◈ By Recruiter' }] : []),
-    ...(user?.isAdmin   ? [{ mode: 'user',      label: '👤 By User' }]      : []),
-  ];
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="page">
       <div className="page-header">
         <div>
           <div className="page-title">Dashboard</div>
-          <div className="page-subtitle">Overview of your recruiting pipeline</div>
+          <div className="page-subtitle">Recruiting pipeline analytics and overview</div>
         </div>
         <Link to="/candidates" className="btn btn-primary">+ Add Candidate</Link>
       </div>
 
-      {/* Stats */}
-      <div className="grid-4" style={{ marginBottom: 28 }}>
-        {[
-          { key: 'total',       label: 'Total Candidates', color: 'var(--accent)',      icon: '◈' },
-          { key: 'pending',     label: 'Pending',          color: 'var(--pending)',     icon: '○' },
-          { key: 'in_progress', label: 'In Progress',      color: 'var(--in-progress)', icon: '◑' },
-          { key: 'success',     label: 'Successful',       color: 'var(--success)',     icon: '●' },
-        ].map(s => (
-          <div className="stat-card" key={s.key}>
-            <div style={{ color: s.color, fontSize: 20, marginBottom: 8 }}>{s.icon}</div>
-            <div className="stat-value" style={{ color: s.color }}>{loading ? '—' : stats[s.key]}</div>
-            <div className="stat-label">{s.label}</div>
-          </div>
+      {/* View toggle */}
+      <div className="tabs" style={{ marginBottom: 24 }}>
+        {[['overview', '📊 Overview'], ['pipeline', '🔬 Deep Analysis'], ['candidates', '◈ Candidates']].map(([key, label]) => (
+          <button key={key} className={`tab ${activeView === key ? 'active' : ''}`} onClick={() => setActiveView(key)}>{label}</button>
         ))}
       </div>
 
-      {/* Candidates table */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-16">
-          <div className="card-title">
-            {groupMode === 'none'      ? 'Recent Candidates'
-            : groupMode === 'recruiter' ? 'Candidates by Recruiter'
-            :                            'Candidates by User'}
-          </div>
-          <div className="flex gap-8">
-            {groupButtons.length > 1 && groupButtons.map(b => (
-              <button
-                key={b.mode}
-                className={`btn btn-sm ${groupMode === b.mode ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setGroupMode(b.mode)}
-              >
-                {b.label}
-              </button>
-            ))}
-            <Link to="/candidates" className="btn btn-secondary btn-sm">View All</Link>
-          </div>
-        </div>
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 80 }}><span className="spinner" style={{ width: 36, height: 36, borderWidth: 3 }} /></div>
+      ) : (
 
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}><span className="spinner" /></div>
-        ) : allCandidates.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">◈</div>
-            <div className="empty-state-title">No candidates yet</div>
-            <div className="empty-state-desc">Start by adding your first candidate</div>
-            <Link to="/candidates" className="btn btn-primary">Add Candidate</Link>
-          </div>
-        ) : groupMode === 'none' ? (
-          // ── Recent flat view ─────────────────────────────────────────────────
-          <GroupTable candidates={recent} showUser={user?.isAdmin} />
-
-        ) : groupMode === 'recruiter' ? (
-          // ── Group by recruiter ───────────────────────────────────────────────
-          <div>
-            {recruiters.map(recruiter => {
-              const group = groupedByRecruiter[recruiter.id] || [];
-              if (!group.length) return null;
-              return (
-                <div key={recruiter.id} style={{ marginBottom: 28 }}>
-                  <GroupHeader
-                    photoUrl={recruiter.photoUrl}
-                    initial={(recruiter.name || '?').charAt(0).toUpperCase()}
-                    name={recruiter.name}
-                    subtitle={recruiter.currentTitle}
-                    count={group.length}
-                  />
-                  <GroupTable candidates={group} showUser={user?.isAdmin} />
-                </div>
-              );
-            })}
-            {/* Unassigned */}
-            {(groupedByRecruiter['__unassigned__'] || []).length > 0 && (
-              <div style={{ marginBottom: 24 }}>
-                <GroupHeader
-                  photoUrl={null}
-                  initial="—"
-                  name="No Recruiter Assigned"
-                  count={groupedByRecruiter['__unassigned__'].length}
-                />
-                <GroupTable candidates={groupedByRecruiter['__unassigned__']} showUser={user?.isAdmin} />
+        <>
+          {/* ══════════════ OVERVIEW TAB ══════════════ */}
+          {activeView === 'overview' && (
+            <>
+              {/* KPI stat cards */}
+              <div className="grid-4" style={{ marginBottom: 24 }}>
+                <StatCard icon="◈" label="Total Candidates" value={total} color="var(--accent)" />
+                <StatCard icon="◑" label="In Progress" value={analytics?.statusCounts.in_progress || 0} color="var(--in-progress)"
+                  sub={total > 0 ? `${Math.round(((analytics?.statusCounts.in_progress || 0) / total) * 100)}% of pipeline` : ''} />
+                <StatCard icon="●" label="Success Rate" value={`${analytics?.successRate || 0}%`} color="var(--success)"
+                  sub={`${analytics?.statusCounts.success || 0} hired of ${(analytics?.statusCounts.success || 0) + (analytics?.statusCounts.failed || 0)} decided`} />
+                <StatCard icon="⏱" label="Avg. Time to Decision" value={analytics?.avgDays != null ? `${analytics.avgDays}d` : '—'} color="var(--warning)"
+                  sub="days from add to outcome" />
               </div>
-            )}
-          </div>
 
-        ) : (
-          // ── Group by user (admin only) ───────────────────────────────────────
-          <div>
-            {allUsers.map(u => {
-              const group = groupedByUser[u.id] || [];
-              if (!group.length) return null;
-              return (
-                <div key={u.id} style={{ marginBottom: 28 }}>
-                  <GroupHeader
-                    photoUrl={null}
-                    initial={(u.displayName || u.username || '?').charAt(0).toUpperCase()}
-                    name={u.displayName || u.username}
-                    subtitle={u.isAdmin ? 'Administrator' : 'Hiring Manager'}
-                    count={group.length}
-                  />
-                  <GroupTable candidates={group} showUser={false} />
+              {/* Row 1: Pipeline status + Activity */}
+              <div className="grid-2" style={{ marginBottom: 20 }}>
+                <div className="card">
+                  <div className="card-title">Pipeline Status</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+                    <div style={{ flexShrink: 0 }}>
+                      <DonutChart size={110} segments={
+                        Object.entries(STATUS_CONFIG).map(([key, val]) => ({
+                          value: analytics?.statusCounts[key] || 0,
+                          color: val.hex,
+                        })).filter(s => s.value > 0)
+                      } />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      {Object.entries(STATUS_CONFIG).map(([key, val]) => {
+                        const count = analytics?.statusCounts[key] || 0;
+                        const pct   = total > 0 ? Math.round((count / total) * 100) : 0;
+                        return (
+                          <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                            <div style={{ width: 10, height: 10, borderRadius: '50%', background: val.hex, flexShrink: 0 }} />
+                            <span style={{ fontSize: 12, flex: 1, color: 'var(--text-secondary)' }}>{val.label}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: val.color }}>{count}</span>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 32, textAlign: 'right' }}>{pct}%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
-              );
-            })}
-            {/* Candidates with no owner (legacy) */}
-            {(groupedByUser['__unassigned__'] || []).length > 0 && (
-              <div style={{ marginBottom: 24 }}>
-                <GroupHeader photoUrl={null} initial="?" name="No Owner (Legacy)" count={groupedByUser['__unassigned__'].length} />
-                <GroupTable candidates={groupedByUser['__unassigned__']} showUser={false} />
-              </div>
-            )}
-          </div>
-        )}
-      </div>
 
-      {/* Bottom grid */}
-      <div className="grid-2 mt-24">
-        <div className="card">
-          <div className="card-title">Quick Actions</div>
-          <div className="flex flex-col gap-8">
-            <Link to="/candidates" className="btn btn-secondary w-full" style={{ justifyContent: 'flex-start' }}>◈ Add New Candidate</Link>
-            <Link to="/generate" className="btn btn-secondary w-full" style={{ justifyContent: 'flex-start' }}>◎ Generate Interview Scenario</Link>
-            <Link to="/generate?tab=outreach" className="btn btn-secondary w-full" style={{ justifyContent: 'flex-start' }}>✉ Create Outreach Message</Link>
-            <Link to="/settings" className="btn btn-secondary w-full" style={{ justifyContent: 'flex-start' }}>⚙ Configure Settings</Link>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-title">Pipeline Status</div>
-          {Object.entries(STATUS_CONFIG).map(([key, val]) => {
-            const count = stats[key] || 0;
-            const pct   = stats.total ? Math.round((count / stats.total) * 100) : 0;
-            return (
-              <div key={key} style={{ marginBottom: 14 }}>
-                <div className="flex items-center justify-between" style={{ marginBottom: 5 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{val.label}</span>
-                  <span style={{ fontSize: 12, color: val.color, fontWeight: 600 }}>{count}</span>
-                </div>
-                <div style={{ height: 4, background: 'var(--bg-elevated)', borderRadius: 2, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${pct}%`, background: val.color, borderRadius: 2, transition: 'width 0.5s ease' }} />
+                <div className="card">
+                  <div className="card-title">Weekly Activity</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Candidates added per week (last 8 weeks)</div>
+                  <ActivityTimeline candidates={allCandidates} />
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </div>
+
+              {/* Row 2: Role breakdown + Locations */}
+              <div className="grid-2" style={{ marginBottom: 20 }}>
+                <div className="card">
+                  <div className="card-title">Candidates by Role</div>
+                  {analytics?.roleBreakdown.length ? (
+                    <BarChart
+                      data={analytics.roleBreakdown}
+                      colorFn={(_, i) => `hsl(${160 + i * 30}, 70%, 55%)`}
+                    />
+                  ) : <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No role data yet</div>}
+                </div>
+
+                <div className="card">
+                  <div className="card-title">Top Locations</div>
+                  {analytics?.locationBreakdown.length ? (
+                    <BarChart
+                      data={analytics.locationBreakdown}
+                      colorFn={(_, i) => `hsl(${200 + i * 20}, 65%, 55%)`}
+                    />
+                  ) : <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No location data yet</div>}
+                </div>
+              </div>
+
+              {/* Row 3: Recruiter performance */}
+              {analytics?.recruiterPerf.length > 0 && (
+                <div className="card" style={{ marginBottom: 20 }}>
+                  <div className="card-title">Recruiter Performance</div>
+                  <div className="table-wrap">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Recruiter</th>
+                          <th style={{ textAlign: 'center' }}>Total</th>
+                          <th style={{ textAlign: 'center' }}>In Progress</th>
+                          <th style={{ textAlign: 'center' }}>Success</th>
+                          <th style={{ textAlign: 'center' }}>Failed</th>
+                          <th style={{ textAlign: 'center' }}>Success Rate</th>
+                          <th>Pipeline</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analytics.recruiterPerf.map(r => (
+                          <tr key={r.id}>
+                            <td style={{ fontWeight: 600, fontSize: 13 }}>{r.name}</td>
+                            <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent)' }}>{r.total}</td>
+                            <td style={{ textAlign: 'center', color: 'var(--in-progress)' }}>{r.in_progress}</td>
+                            <td style={{ textAlign: 'center', color: 'var(--success)' }}>{r.success}</td>
+                            <td style={{ textAlign: 'center', color: 'var(--error)' }}>{r.failed}</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span style={{ fontWeight: 700, color: r.successRate >= 50 ? 'var(--success)' : r.successRate > 0 ? 'var(--warning)' : 'var(--text-muted)' }}>
+                                {r.successRate}%
+                              </span>
+                            </td>
+                            <td style={{ width: 120 }}>
+                              <div style={{ height: 6, background: 'var(--bg-elevated)', borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
+                                {[['success', '#00d4aa'], ['in_progress', '#4a9eff'], ['pending', '#f5a623'], ['failed', '#ff6b6b']].map(([key, color]) => (
+                                  r[key] > 0 && <div key={key} style={{ height: '100%', width: `${(r[key] / r.total) * 100}%`, background: color }} />
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Admin: User breakdown */}
+              {user?.isAdmin && analytics?.userBreakdown.length > 0 && (
+                <div className="card" style={{ marginBottom: 20 }}>
+                  <div className="card-title">Hiring Manager Performance</div>
+                  <div className="table-wrap">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Hiring Manager</th>
+                          <th style={{ textAlign: 'center' }}>Candidates</th>
+                          <th style={{ textAlign: 'center' }}>In Progress</th>
+                          <th style={{ textAlign: 'center' }}>Success</th>
+                          <th style={{ textAlign: 'center' }}>Success Rate</th>
+                          <th>Pipeline</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analytics.userBreakdown.map(u => (
+                          <tr key={u.id}>
+                            <td style={{ fontWeight: 600, fontSize: 13 }}>{u.name}</td>
+                            <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent)' }}>{u.total}</td>
+                            <td style={{ textAlign: 'center', color: 'var(--in-progress)' }}>{u.in_progress}</td>
+                            <td style={{ textAlign: 'center', color: 'var(--success)' }}>{u.success}</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span style={{ fontWeight: 700, color: u.successRate >= 50 ? 'var(--success)' : u.successRate > 0 ? 'var(--warning)' : 'var(--text-muted)' }}>
+                                {u.successRate}%
+                              </span>
+                            </td>
+                            <td style={{ width: 120 }}>
+                              <div style={{ height: 6, background: 'var(--bg-elevated)', borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
+                                {[['success', '#00d4aa'], ['in_progress', '#4a9eff'], ['pending', '#f5a623'], ['failed', '#ff6b6b']].map(([key, color]) => (
+                                  u[key] > 0 && <div key={key} style={{ height: '100%', width: `${(u[key] / u.total) * 100}%`, background: color }} />
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Quick actions */}
+              <div className="card">
+                <div className="card-title">Quick Actions</div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <Link to="/candidates" className="btn btn-secondary">◈ Add Candidate</Link>
+                  <Link to="/generate" className="btn btn-secondary">◎ Generate Scenario</Link>
+                  <Link to="/generate?tab=outreach" className="btn btn-secondary">✉ Create Outreach</Link>
+                  <Link to="/settings" className="btn btn-secondary">⚙ Settings</Link>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ══════════════ DEEP ANALYSIS TAB ══════════════ */}
+          {activeView === 'pipeline' && (
+            <>
+              {/* Conversion funnel */}
+              <div className="grid-2" style={{ marginBottom: 20 }}>
+                <div className="card">
+                  <div className="card-title">Conversion Funnel</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>How candidates progress through your pipeline</div>
+                  <FunnelChart stages={[
+                    { label: 'Added to Pipeline',  icon: '◈', value: total,                                        color: 'var(--accent)' },
+                    { label: 'Engaged (In Progress)', icon: '◑', value: (analytics?.statusCounts.in_progress || 0) + (analytics?.statusCounts.success || 0) + (analytics?.statusCounts.failed || 0), color: 'var(--in-progress)' },
+                    { label: 'Decision Reached',   icon: '⊕', value: (analytics?.statusCounts.success || 0) + (analytics?.statusCounts.failed || 0), color: 'var(--warning)' },
+                    { label: 'Successfully Hired', icon: '●', value: analytics?.statusCounts.success || 0,          color: 'var(--success)' },
+                  ]} />
+                  <div style={{ marginTop: 16, padding: '10px 14px', background: 'rgba(0,212,170,0.06)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(0,212,170,0.15)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Overall Conversion Rate</div>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--success)' }}>{analytics?.conversionRate || 0}%</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>of all candidates successfully hired</div>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="card-title">Monthly Trend</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Candidates added per month (last 6 months)</div>
+                  {analytics?.monthlyTrend && (
+                    <>
+                      <BarChart
+                        data={analytics.monthlyTrend}
+                        colorFn={(d, i) => `hsl(${160 + i * 10}, 70%, ${45 + i * 3}%)`}
+                      />
+                      <div style={{ marginTop: 14, fontSize: 12, color: 'var(--text-muted)' }}>
+                        Total this period: <strong style={{ color: 'var(--text-primary)' }}>{analytics.monthlyTrend.reduce((s, m) => s + m.value, 0)}</strong> candidates
+                        {analytics.monthlyTrend.length >= 2 && (() => {
+                          const last  = analytics.monthlyTrend[analytics.monthlyTrend.length - 1].value;
+                          const prev  = analytics.monthlyTrend[analytics.monthlyTrend.length - 2].value;
+                          const delta = prev > 0 ? Math.round(((last - prev) / prev) * 100) : null;
+                          return delta !== null ? (
+                            <span style={{ marginLeft: 8, color: delta >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                              {delta >= 0 ? '↑' : '↓'} {Math.abs(delta)}% vs last month
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Role × Status matrix */}
+              <div className="card" style={{ marginBottom: 20 }}>
+                <div className="card-title">Role × Status Breakdown</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>How each role is distributed across pipeline stages</div>
+                {analytics?.roleBreakdown.length > 0 ? (
+                  <div className="table-wrap">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Role</th>
+                          <th style={{ textAlign: 'center' }}>Total</th>
+                          <th style={{ textAlign: 'center', color: 'var(--pending)' }}>Pending</th>
+                          <th style={{ textAlign: 'center', color: 'var(--in-progress)' }}>In Progress</th>
+                          <th style={{ textAlign: 'center', color: 'var(--success)' }}>Success</th>
+                          <th style={{ textAlign: 'center', color: 'var(--error)' }}>Failed</th>
+                          <th style={{ textAlign: 'center' }}>Success Rate</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analytics.roleBreakdown.map(rb => {
+                          const roleCands = allCandidates.filter(c => roles.find(r => r.label === rb.label && r.value === c.role) || (roles.find(r => r.label === rb.label)?.value === c.role));
+                          const sc = { pending: 0, in_progress: 0, success: 0, failed: 0 };
+                          roleCands.forEach(c => { if (sc[c.status] !== undefined) sc[c.status]++; });
+                          const decided = sc.success + sc.failed;
+                          const sr = decided > 0 ? Math.round((sc.success / decided) * 100) : null;
+                          return (
+                            <tr key={rb.label}>
+                              <td style={{ fontWeight: 600 }}>{rb.label}</td>
+                              <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent)' }}>{rb.value}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--pending)' }}>{sc.pending}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--in-progress)' }}>{sc.in_progress}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--success)' }}>{sc.success}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--error)' }}>{sc.failed}</td>
+                              <td style={{ textAlign: 'center' }}>
+                                {sr !== null ? (
+                                  <span style={{ fontWeight: 700, color: sr >= 50 ? 'var(--success)' : sr > 0 ? 'var(--warning)' : 'var(--error)' }}>{sr}%</span>
+                                ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No data yet — assign roles to candidates to see this breakdown.</div>}
+              </div>
+
+              {/* Pending candidates — needs attention */}
+              {(() => {
+                const pending = allCandidates.filter(c => c.status === 'pending');
+                const stale   = pending.filter(c => {
+                  const days = (Date.now() - new Date(c.createdAt)) / (1000 * 60 * 60 * 24);
+                  return days > 7;
+                });
+                if (!stale.length) return null;
+                return (
+                  <div className="card" style={{ marginBottom: 20, border: '1px solid rgba(245,166,35,0.3)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                      <span style={{ fontSize: 18 }}>⚠️</span>
+                      <div>
+                        <div className="card-title" style={{ color: 'var(--warning)', marginBottom: 2 }}>Needs Attention — Stale Pending ({stale.length})</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Candidates pending for more than 7 days with no status update</div>
+                      </div>
+                    </div>
+                    <div className="table-wrap">
+                      <table className="data-table">
+                        <thead><tr><th></th><th>Candidate</th><th>Role</th><th>Added</th><th>Days Pending</th><th>Recruiter</th></tr></thead>
+                        <tbody>
+                          {stale.slice(0, 8).map(c => {
+                            const days = Math.floor((Date.now() - new Date(c.createdAt)) / (1000 * 60 * 60 * 24));
+                            const recruiter = getRecruiter(c.recruiterId);
+                            return (
+                              <tr key={c.id} onClick={() => window.location.href = `/candidates/${c.id}`} style={{ cursor: 'pointer' }}>
+                                <td><Avatar src={c.photoUrl} name={c.fullName} size={26} /></td>
+                                <td style={{ fontWeight: 600 }}>{c.fullName || '—'}</td>
+                                <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
+                                <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(c.createdAt).toLocaleDateString()}</td>
+                                <td>
+                                  <span style={{ color: days > 14 ? 'var(--error)' : 'var(--warning)', fontWeight: 700, fontSize: 13 }}>{days}d</span>
+                                </td>
+                                <td style={{ fontSize: 12 }}>{recruiter?.name || '—'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Recent successes */}
+              {analytics?.statusCounts.success > 0 && (
+                <div className="card">
+                  <div className="card-title" style={{ color: 'var(--success)' }}>● Recent Successes</div>
+                  <div className="table-wrap">
+                    <table className="data-table">
+                      <thead><tr><th></th><th>Candidate</th><th>Role</th><th>Recruiter</th><th>Added By</th><th>Date</th></tr></thead>
+                      <tbody>
+                        {allCandidates.filter(c => c.status === 'success').slice(0, 5).map(c => (
+                          <tr key={c.id} onClick={() => window.location.href = `/candidates/${c.id}`} style={{ cursor: 'pointer' }}>
+                            <td><Avatar src={c.photoUrl} name={c.fullName} size={26} /></td>
+                            <td style={{ fontWeight: 600, color: 'var(--success)' }}>{c.fullName || '—'}</td>
+                            <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
+                            <td style={{ fontSize: 12 }}>{getRecruiter(c.recruiterId)?.name || '—'}</td>
+                            <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.ownerName || '—'}</td>
+                            <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ══════════════ CANDIDATES TAB ══════════════ */}
+          {activeView === 'candidates' && (
+            <div className="card">
+              <div className="flex items-center justify-between mb-16">
+                <div className="card-title">
+                  {groupMode === 'none' ? 'Recent Candidates' : groupMode === 'recruiter' ? 'By Recruiter' : 'By Hiring Manager'}
+                </div>
+                <div className="flex gap-8">
+                  {groupButtons.map(b => (
+                    <button key={b.mode} className={`btn btn-sm ${groupMode === b.mode ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => setGroupMode(b.mode)}>{b.label}</button>
+                  ))}
+                  <Link to="/candidates" className="btn btn-secondary btn-sm">View All</Link>
+                </div>
+              </div>
+
+              {allCandidates.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-state-icon">◈</div>
+                  <div className="empty-state-title">No candidates yet</div>
+                  <Link to="/candidates" className="btn btn-primary">Add Candidate</Link>
+                </div>
+              ) : groupMode === 'none' ? (
+                <GroupTable candidates={recent} />
+              ) : groupMode === 'recruiter' ? (
+                <div>
+                  {recruiters.map(r => {
+                    const group = groupedByRecruiter[r.id] || [];
+                    if (!group.length) return null;
+                    return (
+                      <div key={r.id} style={{ marginBottom: 28 }}>
+                        <GroupHeader photoUrl={r.photoUrl} initial={(r.name||'?').charAt(0).toUpperCase()} name={r.name} subtitle={r.currentTitle} count={group.length} />
+                        <GroupTable candidates={group} />
+                      </div>
+                    );
+                  })}
+                  {(groupedByRecruiter['__none__'] || []).length > 0 && (
+                    <div style={{ marginBottom: 24 }}>
+                      <GroupHeader photoUrl={null} initial="—" name="No Recruiter Assigned" count={groupedByRecruiter['__none__'].length} />
+                      <GroupTable candidates={groupedByRecruiter['__none__']} />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  {allUsers.map(u => {
+                    const group = groupedByUser[u.id] || [];
+                    if (!group.length) return null;
+                    return (
+                      <div key={u.id} style={{ marginBottom: 28 }}>
+                        <GroupHeader photoUrl={null} initial={(u.displayName||u.username||'?').charAt(0).toUpperCase()} name={u.displayName||u.username} subtitle={u.isAdmin ? 'Administrator' : 'Hiring Manager'} count={group.length} />
+                        <GroupTable candidates={group} />
+                      </div>
+                    );
+                  })}
+                  {(groupedByUser['__none__']||[]).length > 0 && (
+                    <div style={{ marginBottom: 24 }}>
+                      <GroupHeader photoUrl={null} initial="?" name="No Owner" count={groupedByUser['__none__'].length} />
+                      <GroupTable candidates={groupedByUser['__none__']} />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
