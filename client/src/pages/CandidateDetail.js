@@ -1051,7 +1051,20 @@ function ProfileCard({ candidate }) {
                   ? <img src={recruiter.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   : recruiter.name.charAt(0)}
               </div>
-              <span>{recruiter.name}</span>
+              <span>Recruiter: {recruiter.name}</span>
+            </div>
+          )}
+          {candidate.ownerName && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-muted)' }}>
+              <div style={{
+                width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 9, fontWeight: 700, color: 'var(--text-muted)',
+              }}>
+                {candidate.ownerName.charAt(0).toUpperCase()}
+              </div>
+              <span>Added by: {candidate.ownerName}</span>
             </div>
           )}
         </div>

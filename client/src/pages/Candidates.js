@@ -190,21 +190,35 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Candidates page
 // ─────────────────────────────────────────────────────────────────────────────
+const FILTER_KEY = 'candidates_filters';
+function loadFilters() {
+  try { return JSON.parse(sessionStorage.getItem(FILTER_KEY)) || {}; }
+  catch { return {}; }
+}
+
 export default function Candidates() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { roles, recruiters } = useContext(AppContext);
+
+  const saved = loadFilters();
 
   const [candidates,      setCandidates]      = useState([]);
   const [total,           setTotal]            = useState(0);
   const [loading,         setLoading]          = useState(true);
   const [showAdd,         setShowAdd]          = useState(false);
   const [editCandidate,   setEditCandidate]    = useState(null); // candidate object to edit
-  const [search,          setSearch]           = useState('');
-  const [statusFilter,    setStatusFilter]     = useState('');
-  const [recruiterFilter, setRecruiterFilter]  = useState('');
-  const [ownerFilter,     setOwnerFilter]      = useState(''); // admin: filter by user
-  const [page,            setPage]             = useState(1);
+  const [search,          setSearch]           = useState(saved.search          || '');
+  const [statusFilter,    setStatusFilter]     = useState(saved.statusFilter    || '');
+  const [recruiterFilter, setRecruiterFilter]  = useState(saved.recruiterFilter || '');
+  const [ownerFilter,     setOwnerFilter]      = useState(saved.ownerFilter     || ''); // admin: filter by user
+  const [page,            setPage]             = useState(saved.page            || 1);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FILTER_KEY, JSON.stringify({ search, statusFilter, recruiterFilter, ownerFilter, page }));
+    } catch {}
+  }, [search, statusFilter, recruiterFilter, ownerFilter, page]);
 
   // For admin: list of all users to filter by
   const [allUsers, setAllUsers] = useState([]);
@@ -319,7 +333,7 @@ export default function Candidates() {
                     <th>Role</th>
                     <th>Location</th>
                     <th>Recruiter</th>
-                    {user?.isAdmin && <th>Added By</th>}
+                    <th>Added By</th>
                     <th>Status</th>
                     <th>Added</th>
                     <th></th>
@@ -357,17 +371,15 @@ export default function Candidates() {
                             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
                           )}
                         </td>
-                        {/* Admin: show which user added this candidate */}
-                        {user?.isAdmin && (
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                              <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, flexShrink: 0 }}>
-                                {(c.ownerName || '?').charAt(0).toUpperCase()}
-                              </div>
-                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.ownerName || '—'}</span>
+                        {/* User who added this candidate */}
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, flexShrink: 0 }}>
+                              {(c.ownerName || '?').charAt(0).toUpperCase()}
                             </div>
-                          </td>
-                        )}
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.ownerName || '—'}</span>
+                          </div>
+                        </td>
                         <td><span className={`status-badge status-${c.status}`}>{c.status?.replace('_', ' ')}</span></td>
                         <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(c.createdAt).toLocaleDateString()}</td>
                         <td>
