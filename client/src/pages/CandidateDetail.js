@@ -738,18 +738,8 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
         ) : (
           <div style={{ marginBottom: 16 }}>
             {history.map((msg, i) => (
-              <div key={i} className={`conversation-bubble bubble-${msg.role}`} style={{ position: 'relative' }}>
-                {/* Action buttons */}
-                <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4 }}>
-                  {editingIdx !== i && (
-                    <button onClick={() => startEdit(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, opacity: 0.5 }}
-                      onMouseEnter={e => e.target.style.opacity = 1} onMouseLeave={e => e.target.style.opacity = 0.5} title="Edit message">✎</button>
-                  )}
-                  <button onClick={() => deleteMsg(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12, opacity: 0.4 }}
-                    onMouseEnter={e => e.target.style.opacity = 1} onMouseLeave={e => e.target.style.opacity = 0.4} title="Delete message">✕</button>
-                </div>
-
-                <div className="bubble-label" style={{ display: 'flex', justifyContent: 'space-between', paddingRight: 44 }}>
+              <div key={i} className={`conversation-bubble bubble-${msg.role}`}>
+                <div className="bubble-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>
                     {msg.role === 'user'
                       ? <>
@@ -760,11 +750,26 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
                         </>
                       : 'You (Recruiter)'}
                   </span>
-                  {msg.timestamp && (
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>
-                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  )}
+                  <div className="flex gap-8" style={{ alignItems: 'center' }}>
+                    {msg.timestamp && (
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>
+                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
+                    {editingIdx === i ? (
+                      <>
+                        <button className="btn btn-primary btn-sm" onClick={() => saveEdit(i)} disabled={savingEdit}>
+                          {savingEdit ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Save'}
+                        </button>
+                        <button className="btn btn-secondary btn-sm" onClick={cancelEdit}>Cancel</button>
+                      </>
+                    ) : (
+                      <>
+                        <button className="btn btn-secondary btn-sm" onClick={() => startEdit(i)}>✎ Edit</button>
+                        <button onClick={() => deleteMsg(i)} className="btn btn-danger btn-sm">✕</button>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {msg.imageBase64 && (
@@ -776,16 +781,8 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
 
                 {/* Inline edit or display */}
                 {editingIdx === i ? (
-                  <div style={{ marginTop: 6 }}>
-                    <textarea className="form-textarea" style={{ minHeight: 80, fontSize: 13, marginBottom: 8 }}
-                      value={editText} onChange={e => setEditText(e.target.value)} autoFocus />
-                    <div className="flex gap-8">
-                      <button className="btn btn-primary btn-sm" onClick={() => saveEdit(i)} disabled={savingEdit}>
-                        {savingEdit ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Save'}
-                      </button>
-                      <button className="btn btn-secondary btn-sm" onClick={cancelEdit}>Cancel</button>
-                    </div>
-                  </div>
+                  <textarea className="form-textarea" style={{ minHeight: 80, fontSize: 13, marginTop: 6 }}
+                    value={editText} onChange={e => setEditText(e.target.value)} autoFocus />
                 ) : (
                   msg.content && (
                     <div className="markdown-output" style={{ fontSize: 13.5, lineHeight: 1.7 }}>
