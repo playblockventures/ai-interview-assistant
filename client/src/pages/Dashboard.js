@@ -336,10 +336,11 @@ export default function Dashboard() {
   ];
 
   // Candidate table rows
-  const CandidateRow = ({ c }) => {
+  const CandidateRow = ({ c, index }) => {
     const recruiter = getRecruiter(c.recruiterId);
     return (
       <tr onClick={() => window.location.href = `/candidates/${c.id}`} style={{ cursor: 'pointer' }}>
+        <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{index + 1}</td>
         <td><Avatar src={c.photoUrl} name={c.fullName} size={28} /></td>
         <td>
           <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{c.fullName || '—'}</div>
@@ -377,6 +378,7 @@ export default function Dashboard() {
   const TableHead = () => (
     <thead>
       <tr>
+        <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
         <th style={{ width: 34 }}></th>
         <th>Candidate</th><th>Email</th><th>Role</th><th>Location</th>
         <th>Recruiter</th>
@@ -390,7 +392,7 @@ export default function Dashboard() {
     <div className="table-wrap">
       <table className="data-table">
         <TableHead />
-        <tbody>{candidates.map(c => <CandidateRow key={c.id} c={c} />)}</tbody>
+        <tbody>{candidates.map((c, i) => <CandidateRow key={c.id} c={c} index={i} />)}</tbody>
       </table>
     </div>
   );
@@ -500,6 +502,7 @@ export default function Dashboard() {
                     <table className="data-table">
                       <thead>
                         <tr>
+                          <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
                           <th>Recruiter</th>
                           <th style={{ textAlign: 'center' }}>Total</th>
                           <th style={{ textAlign: 'center' }}>In Progress</th>
@@ -510,8 +513,9 @@ export default function Dashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {analytics.recruiterPerf.map(r => (
+                        {analytics.recruiterPerf.map((r, i) => (
                           <tr key={r.id}>
+                            <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                             <td style={{ fontWeight: 600, fontSize: 13 }}>{r.name}</td>
                             <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent)' }}>{r.total}</td>
                             <td style={{ textAlign: 'center', color: 'var(--in-progress)' }}>{r.in_progress}</td>
@@ -545,6 +549,7 @@ export default function Dashboard() {
                     <table className="data-table">
                       <thead>
                         <tr>
+                          <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
                           <th>Hiring Manager</th>
                           <th style={{ textAlign: 'center' }}>Candidates</th>
                           <th style={{ textAlign: 'center' }}>In Progress</th>
@@ -554,8 +559,9 @@ export default function Dashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {analytics.userBreakdown.map(u => (
+                        {analytics.userBreakdown.map((u, i) => (
                           <tr key={u.id}>
+                            <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                             <td style={{ fontWeight: 600, fontSize: 13 }}>{u.name}</td>
                             <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent)' }}>{u.total}</td>
                             <td style={{ textAlign: 'center', color: 'var(--in-progress)' }}>{u.in_progress}</td>
@@ -650,6 +656,7 @@ export default function Dashboard() {
                     <table className="data-table">
                       <thead>
                         <tr>
+                          <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
                           <th>Role</th>
                           <th style={{ textAlign: 'center' }}>Total</th>
                           <th style={{ textAlign: 'center', color: 'var(--pending)' }}>Pending</th>
@@ -660,7 +667,7 @@ export default function Dashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {analytics.roleBreakdown.map(rb => {
+                        {analytics.roleBreakdown.map((rb, i) => {
                           const roleCands = allCandidates.filter(c => roles.find(r => r.label === rb.label && r.value === c.role) || (roles.find(r => r.label === rb.label)?.value === c.role));
                           const sc = { pending: 0, in_progress: 0, success: 0, failed: 0 };
                           roleCands.forEach(c => { if (sc[c.status] !== undefined) sc[c.status]++; });
@@ -668,6 +675,7 @@ export default function Dashboard() {
                           const sr = decided > 0 ? Math.round((sc.success / decided) * 100) : null;
                           return (
                             <tr key={rb.label}>
+                              <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                               <td style={{ fontWeight: 600 }}>{rb.label}</td>
                               <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent)' }}>{rb.value}</td>
                               <td style={{ textAlign: 'center', color: 'var(--pending)' }}>{sc.pending}</td>
@@ -707,13 +715,14 @@ export default function Dashboard() {
                     </div>
                     <div className="table-wrap">
                       <table className="data-table">
-                        <thead><tr><th></th><th>Candidate</th><th>Role</th><th>Added</th><th>Days Pending</th><th>Recruiter</th></tr></thead>
+                        <thead><tr><th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th><th></th><th>Candidate</th><th>Role</th><th>Added</th><th>Days Pending</th><th>Recruiter</th></tr></thead>
                         <tbody>
-                          {stale.slice(0, 8).map(c => {
+                          {stale.slice(0, 8).map((c, i) => {
                             const days = Math.floor((Date.now() - new Date(c.createdAt)) / (1000 * 60 * 60 * 24));
                             const recruiter = getRecruiter(c.recruiterId);
                             return (
                               <tr key={c.id} onClick={() => window.location.href = `/candidates/${c.id}`} style={{ cursor: 'pointer' }}>
+                                <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                                 <td><Avatar src={c.photoUrl} name={c.fullName} size={26} /></td>
                                 <td style={{ fontWeight: 600 }}>{c.fullName || '—'}</td>
                                 <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
@@ -738,10 +747,11 @@ export default function Dashboard() {
                   <div className="card-title" style={{ color: 'var(--success)' }}>● Recent Successes</div>
                   <div className="table-wrap">
                     <table className="data-table">
-                      <thead><tr><th></th><th>Candidate</th><th>Role</th><th>Recruiter</th><th>Added By</th><th>Date</th></tr></thead>
+                      <thead><tr><th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th><th></th><th>Candidate</th><th>Role</th><th>Recruiter</th><th>Added By</th><th>Date</th></tr></thead>
                       <tbody>
-                        {allCandidates.filter(c => c.status === 'success').slice(0, 5).map(c => (
+                        {allCandidates.filter(c => c.status === 'success').slice(0, 5).map((c, i) => (
                           <tr key={c.id} onClick={() => window.location.href = `/candidates/${c.id}`} style={{ cursor: 'pointer' }}>
+                            <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                             <td><Avatar src={c.photoUrl} name={c.fullName} size={26} /></td>
                             <td style={{ fontWeight: 600, color: 'var(--success)' }}>{c.fullName || '—'}</td>
                             <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>

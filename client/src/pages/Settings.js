@@ -69,6 +69,7 @@ function RolesSection({ dbConnected }) {
       <div style={{ marginBottom: 14 }}>
         {localRoles.map((role, i) => (
           <div key={role.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', marginBottom: 5, border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, minWidth: 20 }}>{i + 1}</span>
             <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>{role.label}</span>
             <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>{role.value}</span>
             <button onClick={() => moveUp(i)} style={{ background: 'none', border: 'none', cursor: i === 0 ? 'default' : 'pointer', color: i === 0 ? 'var(--border)' : 'var(--text-muted)', fontSize: 14 }}>↑</button>
@@ -427,8 +428,9 @@ function KnowledgeSection({ dbConnected, targetUserId = null }) {
       {dbConnected && items.length > 0 && (
         <div style={{ marginTop: 24 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Stored Items ({items.length})</div>
-          {loading ? <span className="spinner" /> : items.map(item => (
+          {loading ? <span className="spinner" /> : items.map((item, i) => (
             <div key={item.id} className="flex items-center justify-between" style={{ padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', marginBottom: 6, gap: 12 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, flexShrink: 0, minWidth: 20 }}>{i + 1}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {item.type === 'url' ? '🔗 ' : item.type === 'file' ? '📄 ' : '📝 '}{item.name}

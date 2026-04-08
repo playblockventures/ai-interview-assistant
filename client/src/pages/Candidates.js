@@ -327,6 +327,7 @@ export default function Candidates() {
               <table className="data-table">
                 <thead>
                   <tr>
+                    <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
                     <th style={{ width: 40 }}></th>
                     <th>Name</th>
                     <th>Email</th>
@@ -344,6 +345,7 @@ export default function Candidates() {
                     const recruiter = getRecruiter(c.recruiterId);
                     return (
                       <tr key={c.id} onClick={() => navigate(`/candidates/${c.id}`)}>
+                        <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{(page - 1) * 20 + candidates.indexOf(c) + 1}</td>
                         {/* Avatar */}
                         <td>
                           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-elevated)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>

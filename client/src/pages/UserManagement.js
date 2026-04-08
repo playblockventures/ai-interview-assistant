@@ -154,13 +154,14 @@ export default function UserManagement() {
         <div style={{ textAlign: 'center', padding: 40 }}><span className="spinner" /></div>
       ) : (
         <div>
-          {users.map(u => (
+          {users.map((u, i) => (
             <div key={u.id} style={{
               display: 'flex', alignItems: 'center', gap: 12,
               padding: '12px 14px', background: 'var(--bg-elevated)',
               borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
               marginBottom: 8,
             }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, minWidth: 20, flexShrink: 0 }}>{i + 1}</span>
               {/* Avatar */}
               <div style={{
                 width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
