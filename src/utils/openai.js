@@ -55,11 +55,12 @@ const getKnowledgeContext = async (userId) => {
       return `### ${d.name} (${d.category || d.type})\n${truncated}`;
     });
 
-    return '\n\n--- COMPANY KNOWLEDGE BASE ---\n' +
-      'The following documents contain company information, project requirements, and instructions. ' +
-      'You MUST follow any requirements, processes, or instructions described in these documents. ' +
-      'Use this knowledge to guide and personalise all your responses:\n\n' +
-      sections.join('\n\n');
+    return '\n\n=== COMPANY KNOWLEDGE BASE (READ THIS FIRST — MANDATORY) ===\n' +
+      'The following documents define the company context, project requirements, technologies, and evaluation criteria. ' +
+      'You MUST read and apply this knowledge. Base your interview questions, assessments, and responses ' +
+      'directly on the specifics found here. Do NOT ignore this section.\n\n' +
+      sections.join('\n\n') +
+      '\n=== END OF KNOWLEDGE BASE ===';
   } catch (e) {
     console.error('[OpenAI] Knowledge context error:', e.message);
     return '';

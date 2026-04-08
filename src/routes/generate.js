@@ -116,7 +116,9 @@ router.post('/scenario', async (req, res) => {
     // ── System prompt: who the AI is + all context ────────────────────────────
     const systemPrompt = [
       `You are an expert technical recruiter and interview coach specialising in ${roleLabel} roles.`,
-      knowledgeContext,
+      knowledgeContext
+        ? `${knowledgeContext}\n\nIMPORTANT: You MUST base the interview scenario and questions directly on the requirements, technologies, and criteria described in the knowledge base above. Do not generate generic questions — tailor everything to the specifics found in those documents.`
+        : '',
       recruiterContext,
       userInstructions,
       // Company scenario is the MASTER INSTRUCTION for structure — it must be followed exactly
@@ -279,7 +281,9 @@ router.post('/conversation', async (req, res) => {
       `You are an expert recruiter conducting a ${roleLabel} interview conversation.`,
       `Maintain a ${toneLabel} tone throughout. Generate the next ideal recruiter response.`,
       `Be natural, engaging, concise and move the conversation forward productively.`,
-      knowledgeContext,
+      knowledgeContext
+        ? `${knowledgeContext}\n\nIMPORTANT: You MUST use the knowledge base above as the foundation for your interview questions and responses. Ask the candidate specifically about the technologies, requirements, and criteria described in those documents. Do not rely on generic interview questions.`
+        : '',
       recruiterContext,
       // Custom instructions from KB (user's saved instructions)
       userInstructions,
