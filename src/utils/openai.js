@@ -56,7 +56,9 @@ const getKnowledgeContext = async (userId) => {
     });
 
     return '\n\n--- COMPANY KNOWLEDGE BASE ---\n' +
-      'Use the following company information to personalise all responses:\n\n' +
+      'The following documents contain company information, project requirements, and instructions. ' +
+      'You MUST follow any requirements, processes, or instructions described in these documents. ' +
+      'Use this knowledge to guide and personalise all your responses:\n\n' +
       sections.join('\n\n');
   } catch (e) {
     console.error('[OpenAI] Knowledge context error:', e.message);

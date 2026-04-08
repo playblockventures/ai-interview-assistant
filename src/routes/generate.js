@@ -98,9 +98,9 @@ router.post('/scenario', async (req, res) => {
 
     const effectiveUserId  = await getEffectiveUserId(req, candidateId);
     const openai           = await getOpenAIClient(effectiveUserId);
-    const knowledgeContext = await getKnowledgeContext(effectiveUserId);
-    const userInstructions = await getCustomInstructions(effectiveUserId);
-    const companyScenario  = await getCompanyScenario(effectiveUserId);
+    const knowledgeContext = await getKnowledgeContext(req.user.id);
+    const userInstructions = await getCustomInstructions(req.user.id);
+    const companyScenario  = await getCompanyScenario(req.user.id);
     const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
 
     let candidate = null;
@@ -192,8 +192,8 @@ router.post('/outreach', async (req, res) => {
 
     const effectiveUserId  = await getEffectiveUserId(req, candidateId);
     const openai           = await getOpenAIClient(effectiveUserId);
-    const knowledgeContext = await getKnowledgeContext(effectiveUserId);
-    const userInstructions = await getCustomInstructions(effectiveUserId);
+    const knowledgeContext = await getKnowledgeContext(req.user.id);
+    const userInstructions = await getCustomInstructions(req.user.id);
     const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
 
     let candidate = null;
@@ -258,9 +258,9 @@ router.post('/conversation', async (req, res) => {
 
     const effectiveUserId  = await getEffectiveUserId(req, candidateId);
     const openai           = await getOpenAIClient(effectiveUserId);
-    const knowledgeContext = await getKnowledgeContext(effectiveUserId);
-    const userInstructions = await getCustomInstructions(effectiveUserId);
-    const companyScenario  = await getCompanyScenario(effectiveUserId);
+    const knowledgeContext = await getKnowledgeContext(req.user.id);
+    const userInstructions = await getCustomInstructions(req.user.id);
+    const companyScenario  = await getCompanyScenario(req.user.id);
     const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
 
     let candidate = null;
