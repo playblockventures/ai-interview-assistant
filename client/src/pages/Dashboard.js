@@ -20,13 +20,14 @@ function Avatar({ src, name, size = 32 }) {
   );
 }
 
-function StatCard({ icon, label, value, color, sub }) {
+function StatCard({ icon, label, value, color, sub, onClick }) {
   return (
-    <div className="stat-card" style={{ borderTop: `3px solid ${color}` }}>
+    <div className="stat-card" style={{ borderTop: `3px solid ${color}`, cursor: onClick ? 'pointer' : 'default' }} onClick={onClick}>
       <div style={{ color, fontSize: 22, marginBottom: 8 }}>{icon}</div>
       <div className="stat-value" style={{ color }}>{value}</div>
       <div className="stat-label">{label}</div>
       {sub && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{sub}</div>}
+      {onClick && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>Click to filter →</div>}
     </div>
   );
 }
@@ -238,6 +239,7 @@ export default function Dashboard() {
       .map(([val, count]) => ({
         label: roles.find(r => r.value === val)?.label || val,
         value: count,
+        roleValue: val,
       }));
 
     // Location breakdown — top 6
@@ -315,6 +317,27 @@ export default function Dashboard() {
   const total = allCandidates.length;
   const getRoleLabel = (val) => roles.find(r => r.value === val)?.label || val || '—';
   const getRecruiter = (id)  => recruiters.find(r => r.id === id) || null;
+
+  // Navigate to /candidates with pre-set filters via sessionStorage
+  const navigateFiltered = (filters) => {
+    try {
+      sessionStorage.setItem('candidates_filters', JSON.stringify({
+        search: '', statusFilter: '', recruiterFilter: '', ownerFilter: '', page: 1,
+        ...filters,
+      }));
+    } catch {}
+    window.location.href = '/candidates';
+  };
+
+  // Stale candidates — in_progress or pending with no message activity for 7+ days (visible to all users)
+  const staleCandidates = useMemo(() => {
+    return allCandidates.filter(c => {
+      if (c.status === 'success' || c.status === 'failed') return false;
+      const lastActivity = c.lastMessageAt || c.updatedAt || c.createdAt;
+      const days = (Date.now() - new Date(lastActivity)) / (1000 * 60 * 60 * 24);
+      return days > 7;
+    });
+  }, [allCandidates]);
 
   // Group helpers
   const groupedByRecruiter = useMemo(() => {
@@ -425,11 +448,14 @@ export default function Dashboard() {
             <>
               {/* KPI stat cards */}
               <div className="grid-4" style={{ marginBottom: 24 }}>
-                <StatCard icon="◈" label="Total Candidates" value={total} color="var(--accent)" />
+                <StatCard icon="◈" label="Total Candidates" value={total} color="var(--accent)"
+                  onClick={() => navigateFiltered({})} />
                 <StatCard icon="◑" label="In Progress" value={analytics?.statusCounts.in_progress || 0} color="var(--in-progress)"
-                  sub={total > 0 ? `${Math.round(((analytics?.statusCounts.in_progress || 0) / total) * 100)}% of pipeline` : ''} />
+                  sub={total > 0 ? `${Math.round(((analytics?.statusCounts.in_progress || 0) / total) * 100)}% of pipeline` : ''}
+                  onClick={() => navigateFiltered({ statusFilter: 'in_progress' })} />
                 <StatCard icon="●" label="Success Rate" value={`${analytics?.successRate || 0}%`} color="var(--success)"
-                  sub={`${analytics?.statusCounts.success || 0} hired of ${(analytics?.statusCounts.success || 0) + (analytics?.statusCounts.failed || 0)} decided`} />
+                  sub={`${analytics?.statusCounts.success || 0} hired of ${(analytics?.statusCounts.success || 0) + (analytics?.statusCounts.failed || 0)} decided`}
+                  onClick={() => navigateFiltered({ statusFilter: 'success' })} />
                 <StatCard icon="⏱" label="Avg. Time to Decision" value={analytics?.avgDays != null ? `${analytics.avgDays}d` : '—'} color="var(--warning)"
                   sub="days from add to outcome" />
               </div>
@@ -452,7 +478,10 @@ export default function Dashboard() {
                         const count = analytics?.statusCounts[key] || 0;
                         const pct   = total > 0 ? Math.round((count / total) * 100) : 0;
                         return (
-                          <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <div key={key} onClick={() => navigateFiltered({ statusFilter: key })}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, cursor: 'pointer', borderRadius: 6, padding: '2px 4px', transition: 'background 0.15s' }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                             <div style={{ width: 10, height: 10, borderRadius: '50%', background: val.hex, flexShrink: 0 }} />
                             <span style={{ fontSize: 12, flex: 1, color: 'var(--text-secondary)' }}>{val.label}</span>
                             <span style={{ fontSize: 12, fontWeight: 700, color: val.color }}>{count}</span>
@@ -479,6 +508,7 @@ export default function Dashboard() {
                     <BarChart
                       data={analytics.roleBreakdown}
                       colorFn={(_, i) => `hsl(${160 + i * 30}, 70%, 55%)`}
+                      onClickItem={(d) => navigateFiltered({ search: d.roleValue })}
                     />
                   ) : <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No role data yet</div>}
                 </div>
@@ -489,6 +519,7 @@ export default function Dashboard() {
                     <BarChart
                       data={analytics.locationBreakdown}
                       colorFn={(_, i) => `hsl(${200 + i * 20}, 65%, 55%)`}
+                      onClickItem={(d) => navigateFiltered({ search: d.label })}
                     />
                   ) : <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No location data yet</div>}
                 </div>
@@ -514,7 +545,7 @@ export default function Dashboard() {
                       </thead>
                       <tbody>
                         {analytics.recruiterPerf.map((r, i) => (
-                          <tr key={r.id}>
+                          <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => navigateFiltered({ recruiterFilter: r.id })}>
                             <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                             <td style={{ fontWeight: 600, fontSize: 13 }}>{r.name}</td>
                             <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent)' }}>{r.total}</td>
@@ -560,7 +591,7 @@ export default function Dashboard() {
                       </thead>
                       <tbody>
                         {analytics.userBreakdown.map((u, i) => (
-                          <tr key={u.id}>
+                          <tr key={u.id} style={{ cursor: 'pointer' }} onClick={() => navigateFiltered({ ownerFilter: u.id })}>
                             <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                             <td style={{ fontWeight: 600, fontSize: 13 }}>{u.name}</td>
                             <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent)' }}>{u.total}</td>
@@ -580,6 +611,44 @@ export default function Dashboard() {
                             </td>
                           </tr>
                         ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Stale candidates — visible to all users */}
+              {staleCandidates.length > 0 && (
+                <div className="card" style={{ marginBottom: 20, border: '1px solid rgba(245,166,35,0.3)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                    <span style={{ fontSize: 18 }}>⚠️</span>
+                    <div style={{ flex: 1 }}>
+                      <div className="card-title" style={{ color: 'var(--warning)', marginBottom: 2 }}>No Reply — Needs Attention ({staleCandidates.length})</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Candidates with no message activity for more than 7 days</div>
+                    </div>
+                  </div>
+                  <div className="table-wrap">
+                    <table className="data-table">
+                      <thead><tr>
+                        <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
+                        <th></th><th>Candidate</th><th>Role</th><th>Status</th><th>Last Activity</th><th>Days Idle</th>
+                      </tr></thead>
+                      <tbody>
+                        {staleCandidates.slice(0, 8).map((c, i) => {
+                          const lastActivity = c.lastMessageAt || c.updatedAt || c.createdAt;
+                          const days = Math.floor((Date.now() - new Date(lastActivity)) / (1000 * 60 * 60 * 24));
+                          return (
+                            <tr key={c.id} onClick={() => window.location.href = `/candidates/${c.id}`} style={{ cursor: 'pointer' }}>
+                              <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
+                              <td><Avatar src={c.photoUrl} name={c.fullName} size={26} /></td>
+                              <td style={{ fontWeight: 600 }}>{c.fullName || '—'}</td>
+                              <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
+                              <td><span className={`status-badge status-${c.status}`}>{STATUS_CONFIG[c.status]?.label || c.status}</span></td>
+                              <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(lastActivity).toLocaleDateString()}</td>
+                              <td><span style={{ color: days > 14 ? 'var(--error)' : 'var(--warning)', fontWeight: 700, fontSize: 13 }}>{days}d</span></td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -696,50 +765,45 @@ export default function Dashboard() {
                 ) : <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No data yet — assign roles to candidates to see this breakdown.</div>}
               </div>
 
-              {/* Pending candidates — needs attention */}
-              {(() => {
-                const pending = allCandidates.filter(c => c.status === 'pending');
-                const stale   = pending.filter(c => {
-                  const days = (Date.now() - new Date(c.createdAt)) / (1000 * 60 * 60 * 24);
-                  return days > 7;
-                });
-                if (!stale.length) return null;
-                return (
-                  <div className="card" style={{ marginBottom: 20, border: '1px solid rgba(245,166,35,0.3)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                      <span style={{ fontSize: 18 }}>⚠️</span>
-                      <div>
-                        <div className="card-title" style={{ color: 'var(--warning)', marginBottom: 2 }}>Needs Attention — Stale Pending ({stale.length})</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Candidates pending for more than 7 days with no status update</div>
-                      </div>
-                    </div>
-                    <div className="table-wrap">
-                      <table className="data-table">
-                        <thead><tr><th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th><th></th><th>Candidate</th><th>Role</th><th>Added</th><th>Days Pending</th><th>Recruiter</th></tr></thead>
-                        <tbody>
-                          {stale.slice(0, 8).map((c, i) => {
-                            const days = Math.floor((Date.now() - new Date(c.createdAt)) / (1000 * 60 * 60 * 24));
-                            const recruiter = getRecruiter(c.recruiterId);
-                            return (
-                              <tr key={c.id} onClick={() => window.location.href = `/candidates/${c.id}`} style={{ cursor: 'pointer' }}>
-                                <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
-                                <td><Avatar src={c.photoUrl} name={c.fullName} size={26} /></td>
-                                <td style={{ fontWeight: 600 }}>{c.fullName || '—'}</td>
-                                <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
-                                <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(c.createdAt).toLocaleDateString()}</td>
-                                <td>
-                                  <span style={{ color: days > 14 ? 'var(--error)' : 'var(--warning)', fontWeight: 700, fontSize: 13 }}>{days}d</span>
-                                </td>
-                                <td style={{ fontSize: 12 }}>{recruiter?.name || '—'}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+              {/* Stale candidates — no reply for 7+ days */}
+              {staleCandidates.length > 0 && (
+                <div className="card" style={{ marginBottom: 20, border: '1px solid rgba(245,166,35,0.3)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                    <span style={{ fontSize: 18 }}>⚠️</span>
+                    <div>
+                      <div className="card-title" style={{ color: 'var(--warning)', marginBottom: 2 }}>No Reply — Needs Attention ({staleCandidates.length})</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Candidates with no message activity for more than 7 days</div>
                     </div>
                   </div>
-                );
-              })()}
+                  <div className="table-wrap">
+                    <table className="data-table">
+                      <thead><tr>
+                        <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
+                        <th></th><th>Candidate</th><th>Role</th><th>Status</th><th>Last Activity</th><th>Days Idle</th><th>Recruiter</th>
+                      </tr></thead>
+                      <tbody>
+                        {staleCandidates.slice(0, 10).map((c, i) => {
+                          const lastActivity = c.lastMessageAt || c.updatedAt || c.createdAt;
+                          const days = Math.floor((Date.now() - new Date(lastActivity)) / (1000 * 60 * 60 * 24));
+                          const recruiter = getRecruiter(c.recruiterId);
+                          return (
+                            <tr key={c.id} onClick={() => window.location.href = `/candidates/${c.id}`} style={{ cursor: 'pointer' }}>
+                              <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
+                              <td><Avatar src={c.photoUrl} name={c.fullName} size={26} /></td>
+                              <td style={{ fontWeight: 600 }}>{c.fullName || '—'}</td>
+                              <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
+                              <td><span className={`status-badge status-${c.status}`}>{STATUS_CONFIG[c.status]?.label || c.status}</span></td>
+                              <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(lastActivity).toLocaleDateString()}</td>
+                              <td><span style={{ color: days > 14 ? 'var(--error)' : 'var(--warning)', fontWeight: 700, fontSize: 13 }}>{days}d</span></td>
+                              <td style={{ fontSize: 12 }}>{recruiter?.name || '—'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* Recent successes */}
               {analytics?.statusCounts.success > 0 && (
