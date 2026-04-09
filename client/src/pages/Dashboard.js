@@ -329,14 +329,41 @@ export default function Dashboard() {
     window.location.href = '/candidates';
   };
 
-  // Stale candidates — in_progress or pending with no message activity for 7+ days (visible to all users)
+  // Stale candidates — pending/in_progress with no message for 7+ days
+  // Use lastMessageAt (actual message time) or createdAt — NOT updatedAt (profile edits shouldn't reset the clock)
   const staleCandidates = useMemo(() => {
     return allCandidates.filter(c => {
       if (c.status === 'success' || c.status === 'failed') return false;
-      const lastActivity = c.lastMessageAt || c.updatedAt || c.createdAt;
+      const lastActivity = c.lastMessageAt || c.createdAt;
       const days = (Date.now() - new Date(lastActivity)) / (1000 * 60 * 60 * 24);
       return days > 7;
+    }).sort((a, b) => {
+      const aDays = (Date.now() - new Date(a.lastMessageAt || a.createdAt)) / 86400000;
+      const bDays = (Date.now() - new Date(b.lastMessageAt || b.createdAt)) / 86400000;
+      return bDays - aDays; // most overdue first
     });
+  }, [allCandidates]);
+
+  // Duplicate profiles — same name or same email
+  const duplicateGroups = useMemo(() => {
+    const nameMap = {}, emailMap = {};
+    allCandidates.forEach(c => {
+      const name  = (c.fullName || '').toLowerCase().trim();
+      const email = (c.email    || '').toLowerCase().trim();
+      if (name)  { if (!nameMap[name])   nameMap[name]  = []; nameMap[name].push(c);  }
+      if (email) { if (!emailMap[email]) emailMap[email] = []; emailMap[email].push(c); }
+    });
+    const seen = new Set(), result = [];
+    const addGroup = (group, reason) => {
+      if (group.length < 2) return;
+      const key = group.map(c => c.id).sort().join(',');
+      if (seen.has(key)) return;
+      seen.add(key);
+      result.push({ reason, value: group[0][reason === 'name' ? 'fullName' : 'email'], candidates: group });
+    };
+    Object.values(nameMap).forEach(g  => addGroup(g, 'name'));
+    Object.values(emailMap).forEach(g => addGroup(g, 'email'));
+    return result;
   }, [allCandidates]);
 
   // Group helpers
@@ -617,25 +644,62 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* Stale candidates — visible to all users */}
-              {staleCandidates.length > 0 && (
-                <div className="card" style={{ marginBottom: 20, border: '1px solid rgba(245,166,35,0.3)' }}>
+              {/* Duplicate profiles */}
+              {duplicateGroups.length > 0 && (
+                <div className="card" style={{ marginBottom: 20, border: '1px solid rgba(255,107,107,0.3)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                     <span style={{ fontSize: 18 }}>⚠️</span>
                     <div style={{ flex: 1 }}>
-                      <div className="card-title" style={{ color: 'var(--warning)', marginBottom: 2 }}>No Reply — Needs Attention ({staleCandidates.length})</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Candidates with no message activity for more than 7 days</div>
+                      <div className="card-title" style={{ color: 'var(--error)', marginBottom: 2 }}>Duplicate Profiles ({duplicateGroups.length} group{duplicateGroups.length !== 1 ? 's' : ''})</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Candidates sharing the same name or email address</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {duplicateGroups.map((group, gi) => (
+                      <div key={gi} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+                          {group.reason === 'name' ? '👤 Same name:' : '✉ Same email:'}{' '}
+                          <span style={{ color: 'var(--error)', fontWeight: 600 }}>{group.value}</span>
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                          {group.candidates.map(c => (
+                            <div key={c.id} onClick={() => window.location.href = `/candidates/${c.id}`}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', cursor: 'pointer', minWidth: 200 }}>
+                              <Avatar src={c.photoUrl} name={c.fullName} size={24} />
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.fullName || '—'}</div>
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {c.email || '—'} · <span className={`status-badge status-${c.status}`} style={{ padding: '1px 6px', fontSize: 9 }}>{STATUS_CONFIG[c.status]?.label || c.status}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* No-reply candidates — visible to all users */}
+              {staleCandidates.length > 0 && (
+                <div className="card" style={{ marginBottom: 20, border: '1px solid rgba(245,166,35,0.3)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                    <span style={{ fontSize: 18 }}>⏰</span>
+                    <div style={{ flex: 1 }}>
+                      <div className="card-title" style={{ color: 'var(--warning)', marginBottom: 2 }}>No Reply — Needs Follow-up ({staleCandidates.length})</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Active candidates with no message activity for more than 7 days</div>
                     </div>
                   </div>
                   <div className="table-wrap">
                     <table className="data-table">
                       <thead><tr>
                         <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
-                        <th></th><th>Candidate</th><th>Role</th><th>Status</th><th>Last Activity</th><th>Days Idle</th>
+                        <th></th><th>Candidate</th><th>Role</th><th>Status</th><th>Last Message</th><th>Days Idle</th>
                       </tr></thead>
                       <tbody>
-                        {staleCandidates.slice(0, 8).map((c, i) => {
-                          const lastActivity = c.lastMessageAt || c.updatedAt || c.createdAt;
+                        {staleCandidates.slice(0, 10).map((c, i) => {
+                          const lastActivity = c.lastMessageAt || c.createdAt;
                           const days = Math.floor((Date.now() - new Date(lastActivity)) / (1000 * 60 * 60 * 24));
                           return (
                             <tr key={c.id} onClick={() => window.location.href = `/candidates/${c.id}`} style={{ cursor: 'pointer' }}>
@@ -644,7 +708,9 @@ export default function Dashboard() {
                               <td style={{ fontWeight: 600 }}>{c.fullName || '—'}</td>
                               <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
                               <td><span className={`status-badge status-${c.status}`}>{STATUS_CONFIG[c.status]?.label || c.status}</span></td>
-                              <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(lastActivity).toLocaleDateString()}</td>
+                              <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                {c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleDateString() : 'No messages yet'}
+                              </td>
                               <td><span style={{ color: days > 14 ? 'var(--error)' : 'var(--warning)', fontWeight: 700, fontSize: 13 }}>{days}d</span></td>
                             </tr>
                           );
