@@ -444,7 +444,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
   useEffect(() => {
     if (appliedScenario) {
       setShowInstructions(true);
-      setConfig(p => ({ ...p, customInstructions: `Follow this interview scenario:\n\n${appliedScenario.substring(0, 800)}` }));
+      // Don't overwrite customInstructions — scenario is sent to AI separately via appliedScenario
       toast.success('Scenario applied — instructions updated');
     }
   }, [appliedScenario]);
@@ -676,16 +676,34 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
         </div>
 
         {showInstructions && (
-          <div className="form-group" style={{ marginTop: 12, marginBottom: 0 }}>
-            <label className="form-label">Custom Instructions</label>
-            <textarea
-              className="form-textarea" style={{ minHeight: 80 }}
-              placeholder="e.g. Focus on blockchain experience. Follow the applied scenario strictly. Ask technical questions about DeFi..."
-              value={config.customInstructions}
-              onChange={e => set('customInstructions', e.target.value)}
-            />
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-              These instructions apply to all AI replies, including regenerated ones. Update here then click ↺ Regen Reply.
+          <div style={{ marginTop: 12 }}>
+            {candidate.appliedScenario && (
+              <div style={{ marginBottom: 12 }}>
+                <label className="form-label" style={{ marginBottom: 6 }}>Applied Scenario</label>
+                <div style={{
+                  background: 'var(--bg-deep)', border: '1px solid rgba(108,99,255,0.25)',
+                  borderRadius: 'var(--radius-sm)', padding: '10px 14px',
+                  maxHeight: 220, overflowY: 'auto', fontSize: 12, color: 'var(--text-secondary)',
+                  lineHeight: 1.6, whiteSpace: 'pre-wrap',
+                }}>
+                  {candidate.appliedScenario}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                  This full scenario is sent to the AI on every reply. Use the field below for additional notes only.
+                </div>
+              </div>
+            )}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Additional Instructions</label>
+              <textarea
+                className="form-textarea" style={{ minHeight: 80 }}
+                placeholder="e.g. Focus on blockchain experience. Ask technical questions about DeFi..."
+                value={config.customInstructions}
+                onChange={e => set('customInstructions', e.target.value)}
+              />
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                These instructions apply to all AI replies, including regenerated ones. Update here then click ↺ Regen Reply.
+              </div>
             </div>
           </div>
         )}
