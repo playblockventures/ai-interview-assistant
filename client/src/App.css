@@ -135,7 +135,7 @@ body {
 /* Page layouts */
 .page {
   padding: 32px;
-  max-width: 1200px;
+  width: 100%;
 }
 
 .page-header {
