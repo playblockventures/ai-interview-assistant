@@ -336,7 +336,7 @@ export default function Candidates() {
                     <th>Recruiter</th>
                     <th>Added By</th>
                     <th>Status</th>
-                    <th>Added</th>
+                    <th>Last Message</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -383,7 +383,9 @@ export default function Candidates() {
                           </div>
                         </td>
                         <td><span className={`status-badge status-${c.status}`}>{c.status?.replace('_', ' ')}</span></td>
-                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(c.createdAt).toLocaleDateString()}</td>
+                        <td style={{ fontSize: 11, color: c.lastMessageAt ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+                          {c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                        </td>
                         <td>
                           <div className="flex gap-8" onClick={e => e.stopPropagation()}>
                             <button className="btn btn-secondary btn-sm"

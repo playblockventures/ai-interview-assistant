@@ -19,7 +19,21 @@ const Candidate = {
       if (ownerId) docs = docs.filter(d => d.ownerId === ownerId);
     }
 
-    docs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    // Compute lastMessageAt = latest timestamp across conversation + outreach messages
+    docs = docs.map(d => {
+      const times = [
+        ...(d.conversationHistory || []).map(m => m.timestamp || m.editedAt || ''),
+        ...(d.outreachMessages    || []).map(m => m.createdAt  || m.editedAt || ''),
+      ].filter(Boolean);
+      const lastMessageAt = times.length ? times.reduce((a, b) => a > b ? a : b) : '';
+      return { ...d, lastMessageAt };
+    });
+
+    docs.sort((a, b) => {
+      const aTime = a.lastMessageAt || a.updatedAt || a.createdAt || '';
+      const bTime = b.lastMessageAt || b.updatedAt || b.createdAt || '';
+      return bTime.localeCompare(aTime);
+    });
 
     if (status)      docs = docs.filter(d => d.status === status);
     if (recruiterId) docs = docs.filter(d => d.recruiterId === recruiterId);
