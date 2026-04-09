@@ -74,6 +74,20 @@ export const settingsApi = {
   deleteKnowledge:     (id)           => api.delete(`/settings/knowledge/${id}`),
 };
 
+export const exportApi = {
+  exportData: (scope) => axios.get('/api/export', {
+    params: { scope },
+    responseType: 'blob',
+    timeout: 120000,
+    headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
+  }),
+  importData: (formData, mode) => api.post('/export', formData, {
+    params: { mode },
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000,
+  }),
+};
+
 export const interviewApi = {
   getHistory:            (id)            => api.get(`/interviews/${id}`),
   clearConversation:     (id)            => api.delete(`/interviews/${id}/conversation`),

@@ -84,12 +84,12 @@ const Candidate = {
       recruiterName:  data.recruiterName  || '',
       ownerId:        data.ownerId        || '',  // hiring manager who created this
       ownerName:      data.ownerName      || '',
-      outreachMessages:    [],
-      interviewScenarios:  [],
-      conversationHistory: [],
-      appliedScenario:     '',
-      createdAt: ts,
-      updatedAt: ts,
+      outreachMessages:    Array.isArray(data.outreachMessages)    ? data.outreachMessages    : [],
+      interviewScenarios:  Array.isArray(data.interviewScenarios)  ? data.interviewScenarios  : [],
+      conversationHistory: Array.isArray(data.conversationHistory) ? data.conversationHistory : [],
+      appliedScenario:     data.appliedScenario || '',
+      createdAt: data.createdAt || ts,
+      updatedAt: data.updatedAt || ts,
     };
     const ref = await db.collection(COL).add(payload);
     return { id: ref.id, ...payload };

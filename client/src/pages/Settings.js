@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useContext, useRef } from 'rea
 import { useLocation } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import toast from 'react-hot-toast';
-import { settingsApi, candidateApi, authApi } from '../utils/api';
+import { settingsApi, candidateApi, authApi, exportApi } from '../utils/api';
 import { AppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import UserManagement from './UserManagement';
@@ -736,9 +736,208 @@ function AdminUserResources({ dbConnected }) {
 }
 
 // ── Main Settings Page ────────────────────────────────────────────────────────
+// ── Backup Section ────────────────────────────────────────────────────────────
+function BackupSection({ dbConnected }) {
+  const { user } = useAuth();
+
+  // Export
+  const [exportScope,    setExportScope]    = useState('user');
+  const [exporting,      setExporting]      = useState(false);
+
+  // Import
+  const [importFile,     setImportFile]     = useState(null);   // File object
+  const [importPreview,  setImportPreview]  = useState(null);   // parsed header
+  const [importMode,     setImportMode]     = useState('merge');
+  const [importing,      setImporting]      = useState(false);
+  const [importResult,   setImportResult]   = useState(null);
+  const importInputRef = useRef(null);
+
+  const handleExport = async () => {
+    if (!dbConnected) return toast.error('Database not connected');
+    setExporting(true);
+    try {
+      const response = await exportApi.exportData(exportScope);
+      // Derive filename from Content-Disposition or build one
+      const cd = response.headers?.['content-disposition'] || '';
+      const match = cd.match(/filename="?([^";\n]+)"?/);
+      const filename = match ? match[1] : `interviewai-${exportScope}-${new Date().toISOString().slice(0, 10)}.json`;
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      window.URL.revokeObjectURL(url);
+      toast.success('Export downloaded');
+    } catch (e) { toast.error(e.message); }
+    finally { setExporting(false); }
+  };
+
+  const handleFilePick = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFile(file);
+    setImportResult(null);
+    // Parse just the header for preview
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target.result);
+        setImportPreview({
+          version:    parsed.version,
+          exportedAt: parsed.exportedAt,
+          exportedBy: parsed.exportedBy?.displayName || parsed.exportedBy?.username || '?',
+          scope:      parsed.scope,
+          candidates: parsed.candidates?.length || 0,
+          knowledge:  parsed.knowledge?.length  || 0,
+          hasSettings: !!(parsed.companyScenario || parsed.recruiters?.length || parsed.usersSettings),
+          hasRoles:   !!parsed.customRoles?.length,
+        });
+      } catch { setImportPreview(null); toast.error('Could not parse file — is it a valid export?'); }
+    };
+    reader.readAsText(file);
+    if (importInputRef.current) importInputRef.current.value = '';
+  };
+
+  const handleImport = async () => {
+    if (!importFile || !dbConnected) return;
+    if (importMode === 'replace' && !window.confirm(
+      'Replace mode will DELETE all your existing candidates and knowledge base items before importing.\n\nThis cannot be undone. Continue?'
+    )) return;
+
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', importFile);
+      const result = await exportApi.importData(fd, importMode);
+      setImportResult(result);
+      setImportFile(null);
+      setImportPreview(null);
+      toast.success(`Imported ${result.candidatesCreated} candidates, ${result.knowledgeCreated} KB items`);
+    } catch (e) { toast.error(e.message); }
+    finally { setImporting(false); }
+  };
+
+  return (
+    <>
+      {/* Export */}
+      <div className="card mb-16">
+        <div className="card-title">Export Data</div>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+          Download a JSON backup of your candidates, knowledge base, and settings.
+          {user?.isAdmin && ' As admin, you can export the entire database.'}
+        </p>
+
+        {user?.isAdmin && (
+          <div className="form-group">
+            <label className="form-label">Export Scope</label>
+            <div className="flex gap-8">
+              {[['user', 'My Data Only'], ['full', 'Full Database (All Users)']].map(([val, label]) => (
+                <button key={val} className={`btn btn-sm ${exportScope === val ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setExportScope(val)}>{label}</button>
+              ))}
+            </div>
+            {exportScope === 'full' && (
+              <div style={{ marginTop: 8, fontSize: 12, color: 'var(--warning)' }}>
+                ⚠ Full export includes all users' candidates, knowledge bases, and settings.
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ padding: '12px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: 16, fontSize: 12, color: 'var(--text-muted)' }}>
+          Includes: candidates (with full conversation history, scenarios, outreach), knowledge base documents, recruiters, company scenario{user?.isAdmin && exportScope === 'full' ? ', and all users' settings' : ''}.<br />
+          <span style={{ color: 'var(--text-muted)' }}>Note: OpenAI API keys are never exported.</span>
+        </div>
+
+        <button className="btn btn-primary" onClick={handleExport} disabled={exporting || !dbConnected}>
+          {exporting ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Exporting...</> : '↓ Download Export'}
+        </button>
+      </div>
+
+      {/* Import */}
+      <div className="card">
+        <div className="card-title">Import Data</div>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+          Restore from a previously exported JSON file. Choose <strong>Merge</strong> to add alongside existing data, or <strong>Replace</strong> to wipe and restore.
+        </p>
+
+        <div className="form-group">
+          <label className="form-label">Import Mode</label>
+          <div className="flex gap-8">
+            {[['merge', 'Merge — add to existing data'], ['replace', 'Replace — delete existing first']].map(([val, label]) => (
+              <button key={val} className={`btn btn-sm ${importMode === val ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setImportMode(val)}>{label}</button>
+            ))}
+          </div>
+          {importMode === 'replace' && (
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--error)' }}>
+              ⚠ Replace will permanently delete your existing candidates and knowledge base before importing.
+            </div>
+          )}
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Select Export File</label>
+          <input ref={importInputRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={handleFilePick} />
+          <button className="btn btn-secondary" onClick={() => importInputRef.current?.click()}>
+            📂 Choose File
+          </button>
+          {importFile && (
+            <span style={{ marginLeft: 10, fontSize: 12, color: 'var(--text-muted)' }}>{importFile.name}</span>
+          )}
+        </div>
+
+        {/* Preview */}
+        {importPreview && (
+          <div style={{ padding: '12px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 10 }}>File Preview</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 20px', fontSize: 12, color: 'var(--text-secondary)' }}>
+              <div>Exported by: <strong>{importPreview.exportedBy}</strong></div>
+              <div>Scope: <strong>{importPreview.scope || '?'}</strong></div>
+              <div>Exported at: <strong>{importPreview.exportedAt ? new Date(importPreview.exportedAt).toLocaleString() : '?'}</strong></div>
+              <div>Version: <strong>{importPreview.version || '?'}</strong></div>
+              <div>Candidates: <strong style={{ color: 'var(--accent)' }}>{importPreview.candidates}</strong></div>
+              <div>Knowledge items: <strong style={{ color: 'var(--accent)' }}>{importPreview.knowledge}</strong></div>
+              <div>Settings: <strong>{importPreview.hasSettings ? 'Included' : 'None'}</strong></div>
+              <div>Custom roles: <strong>{importPreview.hasRoles ? 'Included' : 'None'}</strong></div>
+            </div>
+            {importPreview.scope === 'full' && !user?.isAdmin && (
+              <div style={{ marginTop: 8, fontSize: 11, color: 'var(--warning)' }}>
+                ⚠ This is a full-scope export. As a non-admin, candidates will be assigned to your account.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Result */}
+        {importResult && (
+          <div style={{ padding: '12px 14px', background: 'rgba(0,212,170,0.06)', border: '1px solid rgba(0,212,170,0.25)', borderRadius: 'var(--radius-sm)', marginBottom: 16, fontSize: 12 }}>
+            <div style={{ fontWeight: 600, color: 'var(--success)', marginBottom: 6 }}>✓ Import Complete</div>
+            <div>Candidates created: <strong>{importResult.candidatesCreated}</strong></div>
+            <div>Knowledge items created: <strong>{importResult.knowledgeCreated}</strong></div>
+            {importResult.errors?.length > 0 && (
+              <div style={{ marginTop: 8, color: 'var(--error)' }}>
+                {importResult.errors.length} error(s):
+                {importResult.errors.map((e, i) => <div key={i} style={{ marginLeft: 10, fontSize: 11 }}>· {e}</div>)}
+              </div>
+            )}
+          </div>
+        )}
+
+        <button className="btn btn-primary" onClick={handleImport}
+          disabled={importing || !importFile || !importPreview || !dbConnected}>
+          {importing
+            ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Importing...</>
+            : '↑ Import'}
+        </button>
+      </div>
+    </>
+  );
+}
+
 const TABS = [
   { key: 'general',  label: '⚙ General' },
   { key: 'account',  label: '👤 Account' },
+  { key: 'backup',   label: '💾 Backup' },
   { key: 'users',    label: '👥 Users', adminOnly: true },
 ];
 
@@ -821,6 +1020,11 @@ export default function Settings() {
           <AccountSection />
           <KnowledgeSection dbConnected={dbConnected} />
         </>
+      )}
+
+      {/* ── Backup tab ── */}
+      {activeTab === 'backup' && (
+        <BackupSection dbConnected={dbConnected} />
       )}
 
       {/* ── Users tab (admin only) ── */}
