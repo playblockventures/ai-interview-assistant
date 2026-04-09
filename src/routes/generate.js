@@ -256,6 +256,7 @@ router.post('/conversation', async (req, res) => {
     const {
       candidateId, candidateReply, role, tone = 'professional',
       history = [], recruiterId, customInstructions, imageBase64, imageMimeType,
+      attachedFileName, attachedFileText,
     } = req.body;
 
     const effectiveUserId  = await getEffectiveUserId(req, candidateId);
@@ -303,6 +304,15 @@ router.post('/conversation', async (req, res) => {
       `\nIf the candidate sent an image, describe what you observe and respond appropriately.`,
     ].filter(Boolean).join('');
 
+    // Combine file text + typed content for a history entry (for AI context)
+    const buildMsgContent = (h) => {
+      const filePrefix = h.attachedFileText
+        ? `[Attached file: ${h.attachedFileName || 'file'}]\n\n${h.attachedFileText}`
+        : '';
+      const typed = h.content || '';
+      return [filePrefix, typed].filter(Boolean).join('\n\n') || '';
+    };
+
     const messages = [
       { role: 'system', content: systemPrompt },
       ...history.map(h => ({
@@ -310,22 +320,28 @@ router.post('/conversation', async (req, res) => {
         content: h.imageBase64
           ? [
               { type: 'image_url', image_url: { url: `data:${h.imageMimeType || 'image/jpeg'};base64,${h.imageBase64}` } },
-              ...(h.content ? [{ type: 'text', text: h.content }] : []),
+              ...(buildMsgContent(h) ? [{ type: 'text', text: buildMsgContent(h) }] : []),
             ]
-          : h.content,
+          : buildMsgContent(h),
       })),
     ];
+
+    // Build current user message content for AI
+    const currentFilePrefix = attachedFileText
+      ? `[Attached file: ${attachedFileName || 'file'}]\n\n${attachedFileText}`
+      : '';
+    const currentContent = [currentFilePrefix, candidateReply].filter(Boolean).join('\n\n');
 
     if (imageBase64) {
       messages.push({
         role: 'user',
         content: [
           { type: 'image_url', image_url: { url: `data:${imageMimeType || 'image/jpeg'};base64,${imageBase64}` } },
-          ...(candidateReply ? [{ type: 'text', text: candidateReply }] : []),
+          ...(currentContent ? [{ type: 'text', text: currentContent }] : []),
         ],
       });
-    } else if (candidateReply) {
-      messages.push({ role: 'user', content: candidateReply });
+    } else if (currentContent) {
+      messages.push({ role: 'user', content: currentContent });
     }
 
     const completion = await openai.chat.completions.create({
@@ -339,8 +355,15 @@ router.post('/conversation', async (req, res) => {
 
     if (candidate) {
       const entries = [];
-      if (imageBase64 || candidateReply) {
-        entries.push({ role: 'user', content: candidateReply || '', imageBase64: imageBase64 || null, imageMimeType: imageMimeType || null });
+      if (imageBase64 || candidateReply || attachedFileText) {
+        entries.push({
+          role: 'user',
+          content: candidateReply || '',
+          imageBase64: imageBase64 || null,
+          imageMimeType: imageMimeType || null,
+          attachedFileName: attachedFileName || null,
+          attachedFileText: attachedFileText || null,
+        });
       }
       entries.push({ role: 'assistant', content: response });
       await Candidate.pushConversation(candidateId, entries);

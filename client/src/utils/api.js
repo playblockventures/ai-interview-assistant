@@ -44,7 +44,8 @@ export const candidateApi = {
   update:       (id, formData) => api.put(`/candidates/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   updateStatus: (id, status, notes) => api.patch(`/candidates/${id}/status`, { status, notes }),
   delete:       (id)       => api.delete(`/candidates/${id}`),
-  extract:      (formData) => api.post('/candidates/extract', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  extract:          (formData) => api.post('/candidates/extract', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  parseAttachment:  (formData) => api.post('/candidates/parse-attachment', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
 };
 
 export const generateApi = {

@@ -16,6 +16,12 @@ const upload = multer({
   },
 });
 
+// Permissive upload for conversation attachments — accepts any file type
+const attachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+});
+
 router.use(requireAuth);
 
 // GET all — scoped by user unless admin
@@ -101,6 +107,15 @@ router.delete('/:id', async (req, res) => {
     if (!Candidate.canAccess(existing, req.user)) return res.status(403).json({ error: 'Access denied' });
     await Candidate.delete(req.params.id);
     res.json({ message: 'Candidate deleted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST parse-attachment — extract text from any file (for conversation attachments)
+router.post('/parse-attachment', attachmentUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+    const text = await extractTextFromBuffer(req.file.buffer, req.file.originalname);
+    res.json({ text, filename: req.file.originalname });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

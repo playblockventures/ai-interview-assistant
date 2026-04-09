@@ -409,21 +409,25 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
   });
   const [history, setHistory] = useState(
     (candidate.conversationHistory || []).map((m, originalIdx) => ({
-      role:          m.role === 'assistant' ? 'assistant' : 'user',
-      content:       m.content,
-      timestamp:     m.timestamp,
-      imageBase64:   m.imageBase64   || null,
-      imageMimeType: m.imageMimeType || null,
-      _origIdx:      originalIdx,   // track Firestore index
+      role:              m.role === 'assistant' ? 'assistant' : 'user',
+      content:           m.content,
+      timestamp:         m.timestamp,
+      imageBase64:       m.imageBase64       || null,
+      imageMimeType:     m.imageMimeType     || null,
+      attachedFileName:  m.attachedFileName  || null,
+      attachedFileText:  m.attachedFileText  || null,
+      _origIdx:          originalIdx,
     }))
   );
   const [input, setInput] = useState('');
   const [pendingImage, setPendingImage] = useState(null);
+  const [pendingFile, setPendingFile] = useState(null);   // { name, text, size }
+  const [pendingFileLoading, setPendingFileLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const bottomRef = useRef(null);
-  const imageInputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Manual message insertion
   const [showManual,   setShowManual]   = useState(false);
@@ -449,37 +453,81 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
     }
   }, [appliedScenario]);
 
-  const handleImagePick = (e) => {
+  const handleFilePick = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) return toast.error('Please select an image file');
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target.result;
-      setPendingImage({ base64: dataUrl.split(',')[1], mimeType: file.type, preview: dataUrl });
-    };
-    reader.readAsDataURL(file);
+
+    // Images → vision API (base64 preview)
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target.result;
+        setPendingImage({ base64: dataUrl.split(',')[1], mimeType: file.type, preview: dataUrl });
+        setPendingFile(null);
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    // Non-image files → extract text
+    setPendingFile(null);
+    setPendingImage(null);
+    setPendingFileLoading(true);
+    try {
+      const isBinary = /\.(pdf|doc|docx)$/i.test(file.name);
+      let text = '';
+      if (isBinary) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const result = await candidateApi.parseAttachment(fd);
+        text = result.text || '';
+      } else {
+        // Read as plain text on the client (txt, csv, json, code files, etc.)
+        text = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = ev => resolve(ev.target.result || '');
+          reader.onerror = reject;
+          reader.readAsText(file);
+        });
+      }
+      if (!text.trim()) toast('File attached (no text extracted — content will be noted)');
+      setPendingFile({ name: file.name, text, size: file.size });
+    } catch (err) {
+      toast.error('Could not read file: ' + err.message);
+    } finally {
+      setPendingFileLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const clearImage = () => {
     setPendingImage(null);
-    if (imageInputRef.current) imageInputRef.current.value = '';
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const buildPayload = (historySnapshot, userMsg, imgData) => ({
+  const clearFile = () => {
+    setPendingFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const buildPayload = (historySnapshot, userMsg, imgData, fileData) => ({
     candidateId:        candidate.id,
     candidateReply:     userMsg,
     role:               config.role,
     tone:               config.tone,
     recruiterId:        config.recruiterId,
     customInstructions: config.customInstructions,
-    imageBase64:        imgData?.base64   || undefined,
-    imageMimeType:      imgData?.mimeType || undefined,
+    imageBase64:        imgData?.base64    || undefined,
+    imageMimeType:      imgData?.mimeType  || undefined,
+    attachedFileName:   fileData?.name     || undefined,
+    attachedFileText:   fileData?.text     || undefined,
     history: historySnapshot.map(m => ({
-      role:          m.role,
-      content:       m.content,
-      imageBase64:   m.imageBase64   || undefined,
-      imageMimeType: m.imageMimeType || undefined,
+      role:             m.role,
+      content:          m.content,
+      imageBase64:      m.imageBase64      || undefined,
+      imageMimeType:    m.imageMimeType    || undefined,
+      attachedFileName: m.attachedFileName || undefined,
+      attachedFileText: m.attachedFileText || undefined,
     })),
   });
 
@@ -520,21 +568,26 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
   const send = async () => {
     const userMsg = input.trim();
     const imgData = pendingImage;
-    if (!userMsg && !imgData) return;
+    const fileData = pendingFile;
+    if (!userMsg && !imgData && !fileData) return;
 
     setInput('');
     clearImage();
+    clearFile();
 
     const userEntry = {
       role: 'user', content: userMsg, timestamp: new Date().toISOString(),
-      imageBase64: imgData?.base64 || null, imageMimeType: imgData?.mimeType || null,
+      imageBase64:      imgData?.base64    || null,
+      imageMimeType:    imgData?.mimeType  || null,
+      attachedFileName: fileData?.name     || null,
+      attachedFileText: fileData?.text     || null,
     };
     const newHistory = [...history, userEntry];
     setHistory(newHistory);
     setLoading(true);
 
     try {
-      const data = await generateApi.conversation(buildPayload(newHistory, userMsg, imgData));
+      const data = await generateApi.conversation(buildPayload(newHistory, userMsg, imgData, fileData));
       setHistory(h => [...h, { role: 'assistant', content: data.response, timestamp: new Date().toISOString(), _origIdx: h.length }]);
       // Reflect auto status change: pending → in_progress
       if (candidate.status === 'pending' && onStatusChange) onStatusChange('in_progress');
@@ -572,7 +625,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
       setHistory(reindexed);
 
       // Step 3: Generate new reply — server will append it to Firestore
-      const data = await generateApi.conversation(buildPayload(reindexed, lastUser.content, null));
+      const data = await generateApi.conversation(buildPayload(reindexed, lastUser.content, null, null));
       setHistory(h => [...h, {
         role: 'assistant',
         content: data.response,
@@ -751,7 +804,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
           <div className="empty-state" style={{ padding: 40 }}>
             <div className="empty-state-icon">💬</div>
             <div className="empty-state-title">Start the conversation</div>
-            <div className="empty-state-desc">Type the candidate's message or attach a screenshot</div>
+            <div className="empty-state-desc">Type the candidate's message or attach a file (image, PDF, doc, etc.)</div>
           </div>
         ) : (
           <div style={{ marginBottom: 16 }}>
@@ -796,6 +849,15 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
                       alt="attachment" style={{ maxWidth: '100%', maxHeight: 240, borderRadius: 8, border: '1px solid var(--border)' }} />
                   </div>
                 )}
+                {msg.attachedFileName && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, padding: '4px 10px', background: 'var(--bg-elevated)', borderRadius: 6, border: '1px solid var(--border)', width: 'fit-content', fontSize: 11, color: 'var(--text-secondary)' }}>
+                    <span>📎</span>
+                    <span style={{ fontWeight: 500 }}>{msg.attachedFileName}</span>
+                    {msg.attachedFileText && (
+                      <span style={{ color: 'var(--text-muted)' }}>· {Math.round(msg.attachedFileText.length / 1000)}k chars</span>
+                    )}
+                  </div>
+                )}
 
                 {/* Inline edit or display */}
                 {editingIdx === i ? (
@@ -832,15 +894,39 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
           </div>
         )}
 
+        {pendingFile && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '8px 12px', background: 'var(--bg-elevated)',
+            borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: 8,
+          }}>
+            <span style={{ fontSize: 20 }}>📎</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pendingFile.name}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {pendingFile.text ? `${Math.round(pendingFile.text.length / 1000)}k chars extracted` : 'No text extracted'}
+                {pendingFile.size ? ` · ${(pendingFile.size / 1024).toFixed(0)} KB` : ''}
+              </div>
+            </div>
+            <button onClick={clearFile} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: 16 }}>✕</button>
+          </div>
+        )}
+
+        {pendingFileLoading && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', marginBottom: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+            <span className="spinner" style={{ width: 14, height: 14 }} /> Extracting file content...
+          </div>
+        )}
+
         <div className="flex gap-8" style={{ marginTop: 8, alignItems: 'flex-end' }}>
           <div>
-            <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImagePick} />
+            <input ref={fileInputRef} type="file" accept="*" style={{ display: 'none' }} onChange={handleFilePick} />
             <button className="btn btn-secondary" style={{ padding: '10px 12px', flexShrink: 0 }}
-              onClick={() => imageInputRef.current?.click()} title="Attach image">📎</button>
+              onClick={() => fileInputRef.current?.click()} title="Attach file (image, PDF, doc, txt, csv…)">📎</button>
           </div>
           <textarea
             className="form-textarea"
-            placeholder={`Type ${candidate.fullName || 'candidate'}'s reply, or attach a screenshot…`}
+            placeholder={`Type ${candidate.fullName || 'candidate'}'s reply, or attach a file…`}
             value={input}
             onChange={e => setInput(e.target.value)}
             style={{ minHeight: 70, flex: 1 }}
