@@ -274,10 +274,15 @@ export default function Candidates() {
         {/* ── Filter bar ── */}
         <div className="flex gap-12 mb-16" style={{ flexWrap: 'wrap' }}>
           {/* Search */}
-          <div className="input-wrap" style={{ flex: 1, minWidth: 200 }}>
+          <div className="input-wrap" style={{ flex: 1, minWidth: 200, position: 'relative' }}>
             <span className="input-icon">🔍</span>
             <input className="form-input" placeholder="Search by name, email, role, location..."
               value={search} onChange={e => { setSearch(e.target.value); resetPage(); }} />
+            {search && (
+              <button onClick={() => { setSearch(''); resetPage(); }}
+                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16, lineHeight: 1, padding: 0 }}
+                title="Clear search">✕</button>
+            )}
           </div>
 
           {/* Status filter */}

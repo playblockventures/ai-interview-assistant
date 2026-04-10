@@ -100,6 +100,7 @@ export const interviewApi = {
   editOutreachMsg:       (id, idx, content) => api.patch(`/interviews/${id}/outreach/${idx}`, { content }),
   deleteOutreachMsg:     (id, idx)       => api.delete(`/interviews/${id}/outreach/${idx}`),
   // Scenario
+  editScenario:          (id, idx, content) => api.patch(`/interviews/${id}/scenario/${idx}`, { content }),
   deleteScenario:        (id, idx)       => api.delete(`/interviews/${id}/scenario/${idx}`),
 };
 

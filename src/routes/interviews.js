@@ -107,6 +107,18 @@ router.patch('/:candidateId/outreach/:index', async (req, res) => {
 
 // ── Scenario ────────────────────────────────────────────────────────────────────
 
+// PATCH — edit a single scenario
+router.patch('/:candidateId/scenario/:index', async (req, res) => {
+  try {
+    const [, err, code] = await getOwned(req, req.params.candidateId);
+    if (err) return res.status(code).json({ error: err });
+    const { content } = req.body;
+    if (!content?.trim()) return res.status(400).json({ error: 'Content is required' });
+    await Candidate.updateScenario(req.params.candidateId, parseInt(req.params.index), content.trim());
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.delete('/:candidateId/scenario/:index', async (req, res) => {
   try {
     const [, err, code] = await getOwned(req, req.params.candidateId);

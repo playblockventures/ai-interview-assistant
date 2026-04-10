@@ -179,6 +179,15 @@ const Candidate = {
     await db.collection(COL).doc(id).update({ conversationHistory: arr, updatedAt: new Date().toISOString() });
   },
 
+  async updateScenario(id, index, newContent) {
+    const db = getDB();
+    const doc = await db.collection(COL).doc(id).get();
+    const arr = [...(doc.data().interviewScenarios || [])];
+    if (index < 0 || index >= arr.length) throw new Error('Scenario index out of range');
+    arr[index] = { ...arr[index], content: newContent, editedAt: new Date().toISOString() };
+    await db.collection(COL).doc(id).update({ interviewScenarios: arr, updatedAt: new Date().toISOString() });
+  },
+
   async updateOutreachMessage(id, index, newContent) {
     const db = getDB();
     const doc = await db.collection(COL).doc(id).get();

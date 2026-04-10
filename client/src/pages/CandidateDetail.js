@@ -54,7 +54,25 @@ function ScenarioTab({ candidate, onScenarioApplied }) {
   const [loading, setLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [editingIdx, setEditingIdx] = useState(null);
+  const [editText,   setEditText]   = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
   const set = (k, v) => setConfig(p => ({ ...p, [k]: v }));
+
+  const startEdit  = (i) => { setEditingIdx(i); setEditText(history[i].content); };
+  const cancelEdit = ()  => { setEditingIdx(null); setEditText(''); };
+
+  const saveEdit = async (i) => {
+    if (!editText.trim()) return;
+    setSavingEdit(true);
+    try {
+      await interviewApi.editScenario(candidate.id, i, editText.trim());
+      setHistory(h => h.map((s, idx) => idx === i ? { ...s, content: editText.trim() } : s));
+      setEditingIdx(null);
+      toast.success('Scenario updated');
+    } catch (e) { toast.error(e.message); }
+    finally { setSavingEdit(false); }
+  };
 
   const generate = async () => {
     setLoading(true);
@@ -162,18 +180,33 @@ function ScenarioTab({ candidate, onScenarioApplied }) {
           {showHistory && history.map((s, i) => (
             <div key={i} style={{ borderTop: i > 0 ? '1px solid var(--border)' : undefined, paddingTop: i > 0 ? 12 : 0, marginTop: i > 0 ? 12 : 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.role} · {new Date(s.createdAt).toLocaleString()}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {s.role} · {new Date(s.createdAt).toLocaleString()}
+                  {s.editedAt && <span style={{ marginLeft: 6 }}>(edited)</span>}
+                </div>
                 <div className="flex gap-8">
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    style={{ fontSize: 10 }}
-                    onClick={() => applyScenario(s.content)}
-                    disabled={applying}
-                  >▶ Apply</button>
-                  <button onClick={() => deleteScenario(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: 14 }} title="Delete">✕</button>
+                  {editingIdx === i ? (
+                    <>
+                      <button className="btn btn-primary btn-sm" onClick={() => saveEdit(i)} disabled={savingEdit}>
+                        {savingEdit ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Save'}
+                      </button>
+                      <button className="btn btn-secondary btn-sm" onClick={cancelEdit}>Cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="btn btn-secondary btn-sm" onClick={() => applyScenario(s.content)} disabled={applying} style={{ fontSize: 10 }}>▶ Apply</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => startEdit(i)}>✎ Edit</button>
+                      <button onClick={() => deleteScenario(i)} className="btn btn-danger btn-sm">✕</button>
+                    </>
+                  )}
                 </div>
               </div>
-              <div className="markdown-output" style={{ fontSize: 12 }}><ReactMarkdown>{s.content}</ReactMarkdown></div>
+              {editingIdx === i ? (
+                <textarea className="form-textarea" style={{ minHeight: 200, fontSize: 12 }}
+                  value={editText} onChange={e => setEditText(e.target.value)} autoFocus />
+              ) : (
+                <div className="markdown-output" style={{ fontSize: 12 }}><ReactMarkdown>{s.content}</ReactMarkdown></div>
+              )}
             </div>
           ))}
         </div>
