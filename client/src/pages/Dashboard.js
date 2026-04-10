@@ -662,18 +662,34 @@ export default function Dashboard() {
                           <span style={{ color: 'var(--error)', fontWeight: 600 }}>{group.value}</span>
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                          {group.candidates.map(c => (
-                            <div key={c.id} onClick={() => window.location.href = `/candidates/${c.id}`}
-                              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', cursor: 'pointer', minWidth: 200 }}>
-                              <Avatar src={c.photoUrl} name={c.fullName} size={24} />
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.fullName || '—'}</div>
-                                <div style={{ fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {c.email || '—'} · <span className={`status-badge status-${c.status}`} style={{ padding: '1px 6px', fontSize: 9 }}>{STATUS_CONFIG[c.status]?.label || c.status}</span>
+                          {group.candidates.map(c => {
+                            const recruiter = getRecruiter(c.recruiterId);
+                            return (
+                              <div key={c.id} onClick={() => window.location.href = `/candidates/${c.id}`}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', cursor: 'pointer', minWidth: 220 }}>
+                                <Avatar src={c.photoUrl} name={c.fullName} size={28} />
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.fullName || '—'}</div>
+                                  <div style={{ fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
+                                    {c.email || '—'}
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                                    <span className={`status-badge status-${c.status}`} style={{ padding: '1px 6px', fontSize: 9 }}>{STATUS_CONFIG[c.status]?.label || c.status}</span>
+                                    {recruiter && (
+                                      <span style={{ fontSize: 9, color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                                        ◈ {recruiter.name}
+                                      </span>
+                                    )}
+                                    {c.ownerName && (
+                                      <span style={{ fontSize: 9, color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                                        👤 {c.ownerName}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     ))}
