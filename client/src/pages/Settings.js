@@ -94,13 +94,24 @@ function RolesSection({ dbConnected }) {
 
 // ── Company Interview Scenario ────────────────────────────────────────────────
 function CompanyScenarioSection({ dbConnected }) {
-  const { companies, companyScenarios, refreshSettings } = useContext(AppContext);
-  // local map: { '': 'default', 'co_123': '...' }
-  const [local,      setLocal]      = useState(companyScenarios || {});
-  const [selected,   setSelected]   = useState(''); // '' = default/no company
-  const [saving,     setSaving]     = useState(false);
+  const { companies, companyScenarios, companyScenario: legacyScenario, refreshSettings } = useContext(AppContext);
 
-  useEffect(() => { setLocal(companyScenarios || {}); }, [companyScenarios]);
+  // Seed helper: if the new map is empty but the legacy single-value exists,
+  // show it under the Default ('') tab so existing data is not lost.
+  const seedMap = (map, legacy) => {
+    const hasNew = map && Object.values(map).some(Boolean);
+    if (!hasNew && legacy) return { '': legacy };
+    return map || {};
+  };
+
+  // local map: { '': 'default', 'co_123': '...' }
+  const [local,    setLocal]    = useState(() => seedMap(companyScenarios, legacyScenario));
+  const [selected, setSelected] = useState(''); // '' = default/no company
+  const [saving,   setSaving]   = useState(false);
+
+  useEffect(() => {
+    setLocal(seedMap(companyScenarios, legacyScenario));
+  }, [companyScenarios, legacyScenario]); // seedMap is stable (defined outside effect)
 
   const currentScenario = local[selected] || '';
   const setScenario = (val) => setLocal(prev => ({ ...prev, [selected]: val }));
