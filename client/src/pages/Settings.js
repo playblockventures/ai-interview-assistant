@@ -202,9 +202,10 @@ function RecruitersSection({ dbConnected }) {
   const [localRecruiters, setLocalRecruiters] = useState(recruiters);
   const [filterUserId, setFilterUserId] = useState(''); // '' = all
   const blankForm = { name: '', email: '', phone: '', linkedinUrl: '', location: '', currentTitle: '', profile: '', photoUrl: '' };
-  const [form, setForm]     = useState(blankForm);
-  const [editId, setEditId] = useState(null);
-  const [saving, setSaving] = useState(false);
+  const [form, setForm]         = useState(blankForm);
+  const [editId, setEditId]     = useState(null);
+  const [editOwnerUserId, setEditOwnerUserId] = useState(null); // whose list is being edited
+  const [saving, setSaving]     = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [expanded, setExpanded]     = useState(null);
 
@@ -250,22 +251,28 @@ function RecruitersSection({ dbConnected }) {
     },
   });
 
-  // Save own recruiters (admin adds to their own list)
   const save = async () => {
     if (!dbConnected) return toast.error('Connect Firebase first');
     setSaving(true);
     try {
-      // Work only with the current user's own entries
-      const ownEntries = user?.isAdmin
-        ? localRecruiters.filter(r => !r._ownerUserId || r._ownerUserId === user.id)
-        : localRecruiters;
+      // Determine which user's list we're saving into
+      const targetUserId = editOwnerUserId || user.id;
+      const isOtherUser  = user?.isAdmin && targetUserId !== user.id;
+
+      // Get the full list for that specific user (strip internal admin fields)
+      const userEntries = localRecruiters
+        .filter(r => (r._ownerUserId || user.id) === targetUserId)
+        .map(({ _ownerKey, _ownerUserId, _ownerName, ...rest }) => rest);
+
       const updated = editId
-        ? ownEntries.map(r => r.id === editId ? { ...r, ...form } : r)
-        : [...ownEntries, { id: 'r_' + Date.now(), ...form }];
-      await settingsApi.saveRecruiters(updated);
+        ? userEntries.map(r => r.id === editId ? { ...r, ...form } : r)
+        : [...userEntries, { id: 'r_' + Date.now(), ...form }];
+
+      await settingsApi.saveRecruiters(updated, isOtherUser ? targetUserId : undefined);
       await refreshSettings();
       setForm(blankForm);
       setEditId(null);
+      setEditOwnerUserId(null);
       toast.success(editId ? 'Recruiter updated' : 'Recruiter added');
     } catch (e) { toast.error(e.message); }
     finally { setSaving(false); }
@@ -290,10 +297,11 @@ function RecruitersSection({ dbConnected }) {
 
   const startEdit = (r) => {
     setEditId(r.id);
+    setEditOwnerUserId(r._ownerUserId || user.id);
     setForm({ name: r.name||'', email: r.email||'', phone: r.phone||'', linkedinUrl: r.linkedinUrl||'', location: r.location||'', currentTitle: r.currentTitle||'', profile: r.profile||'', photoUrl: r.photoUrl||'' });
     setTimeout(() => editFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   };
-  const cancelEdit = () => { setEditId(null); setForm(blankForm); };
+  const cancelEdit = () => { setEditId(null); setEditOwnerUserId(null); setForm(blankForm); };
   const sf = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   return (
@@ -338,7 +346,7 @@ function RecruitersSection({ dbConnected }) {
                 {(r.currentTitle || r.email) && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{[r.currentTitle, r.email].filter(Boolean).join(' · ')}</div>}
               </div>
               <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }} onClick={() => setExpanded(expanded === r.id ? null : r.id)}>{expanded === r.id ? '▲' : '▼'}</button>
-              {isOwn && <button className="btn btn-secondary btn-sm" onClick={() => startEdit(r)}>Edit</button>}
+              <button className="btn btn-secondary btn-sm" onClick={() => startEdit(r)}>Edit</button>
               <button className="btn btn-danger btn-sm" onClick={() => remove(r)}>Remove</button>
             </div>
             {expanded === r.id && r.profile && (
@@ -356,7 +364,11 @@ function RecruitersSection({ dbConnected }) {
 
       {/* Add / Edit form — always adds to current user's own list */}
       <div ref={editFormRef} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: `1px solid ${editId ? 'var(--accent)' : 'var(--border)'}`, padding: 14, marginTop: 12, transition: 'border-color 0.2s' }}>
-        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', marginBottom: 12 }}>{editId ? '✎ Edit Recruiter' : '+ Add Recruiter'}</div>
+        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', marginBottom: 12 }}>
+          {editId
+            ? <>✎ Edit Recruiter{editOwnerUserId && editOwnerUserId !== user?.id && <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 8 }}>({userList.find(u => u.id === editOwnerUserId)?.name || editOwnerUserId})</span>}</>
+            : '+ Add Recruiter'}
+        </div>
 
         <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-start' }}>
           <div style={{ width: 56, height: 56, borderRadius: '50%', flexShrink: 0, background: 'var(--bg-card)', border: '2px solid var(--border)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>

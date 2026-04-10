@@ -176,15 +176,66 @@ router.post('/knowledge/url', requireAuth, async (req, res) => {
   if (!isConnected()) return res.status(503).json({ error: 'Firebase not connected.' });
   try {
     const { url, category = 'company_docs', companyId = '', companyName = '' } = req.body;
-    let text = '', siteName = '';
-    const response = await axios.get(url, {
-      timeout: 15000,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; InterviewAI/1.0)' },
-    });
+    let text = '', siteName = new URL(url).hostname;
+
+    const BROWSER_HEADERS = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+      'Cache-Control': 'max-age=0',
+    };
+
+    let fetchError = null;
+    let response   = null;
+
+    // First attempt — full browser headers
+    try {
+      response = await axios.get(url, { timeout: 20000, headers: BROWSER_HEADERS, maxRedirects: 5 });
+    } catch (e) {
+      fetchError = e;
+    }
+
+    // Second attempt — minimal headers (some servers reject Accept-Encoding)
+    if (!response && fetchError) {
+      try {
+        response = await axios.get(url, {
+          timeout: 20000,
+          headers: { 'User-Agent': BROWSER_HEADERS['User-Agent'], 'Accept': 'text/html,*/*' },
+          maxRedirects: 5,
+          decompress: false,
+        });
+        fetchError = null;
+      } catch (e2) {
+        // Surface the original error if both attempts fail
+      }
+    }
+
+    if (!response) {
+      const status = fetchError?.response?.status;
+      const friendlyErrors = {
+        401: 'The page requires authentication — try copying the text manually.',
+        403: 'Access denied by the website — it blocks automated requests.',
+        404: 'Page not found (404). Check the URL.',
+        429: 'The website is rate-limiting requests — try again in a few minutes.',
+        451: 'The website is unavailable for legal/geo reasons (HTTP 451). Try a different URL or paste the content as custom instructions instead.',
+        503: 'The website is temporarily unavailable — try again later.',
+      };
+      const msg = friendlyErrors[status] || fetchError?.message || 'Could not fetch the URL';
+      return res.status(422).json({ error: msg });
+    }
+
     const $ = cheerio.load(response.data);
     $('script,style,nav,footer,header,aside,iframe,noscript').remove();
-    siteName = $('title').text().trim() || new URL(url).hostname;
+    siteName = $('title').text().trim() || siteName;
     text = $('body').text().replace(/\s+/g, ' ').trim().substring(0, 8000);
+
+    if (!text) {
+      return res.status(422).json({ error: 'No readable text found on this page. The site may require JavaScript to render. Try pasting the content as custom instructions instead.' });
+    }
+
     const item = await getKB().create({
       name: siteName, type: 'url', content: text, url, category, companyId, companyName,
       ownerId: req.user.id, ownerName: req.user.displayName || req.user.username,
