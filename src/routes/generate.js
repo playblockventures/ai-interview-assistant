@@ -94,7 +94,7 @@ function buildCandidateContext(candidate, resumeLength = 2000) {
 // ── POST /generate/scenario ───────────────────────────────────────────────────
 router.post('/scenario', async (req, res) => {
   try {
-    const { candidateId, role, goal, tone = 'professional', customInstructions, recruiterId } = req.body;
+    const { candidateId, role, goal, tone = 'professional', customInstructions, recruiterId, companyId: companyIdOverride } = req.body;
 
     let candidate = null;
     if (candidateId) {
@@ -103,7 +103,7 @@ router.post('/scenario', async (req, res) => {
     }
 
     const effectiveUserId  = await getEffectiveUserId(req, candidateId);
-    const companyId        = candidate?.companyId || null;
+    const companyId        = companyIdOverride ?? candidate?.companyId ?? null;
     const openai           = await getOpenAIClient(effectiveUserId);
     const knowledgeContext = await getKnowledgeContext(req.user.id, companyId);
     const userInstructions = await getCustomInstructions(req.user.id);
@@ -184,7 +184,7 @@ Structure the scenario with:
 // ── POST /generate/outreach ───────────────────────────────────────────────────
 router.post('/outreach', async (req, res) => {
   try {
-    const { candidateId, role, messageType = 'outreach', tone = 'professional', goal, customInstructions, recruiterId } = req.body;
+    const { candidateId, role, messageType = 'outreach', tone = 'professional', goal, customInstructions, recruiterId, companyId: companyIdOverride } = req.body;
 
     const MESSAGE_TYPE_LABELS = {
       outreach:  'initial outreach',
@@ -200,7 +200,7 @@ router.post('/outreach', async (req, res) => {
     }
 
     const effectiveUserId  = await getEffectiveUserId(req, candidateId);
-    const companyId        = candidate?.companyId || null;
+    const companyId        = companyIdOverride ?? candidate?.companyId ?? null;
     const openai           = await getOpenAIClient(effectiveUserId);
     const knowledgeContext = await getKnowledgeContext(req.user.id, companyId);
     const userInstructions = await getCustomInstructions(req.user.id);
@@ -258,7 +258,7 @@ router.post('/conversation', async (req, res) => {
     const {
       candidateId, candidateReply, role, tone = 'professional',
       history = [], recruiterId, customInstructions, imageBase64, imageMimeType,
-      attachedFileName, attachedFileText,
+      attachedFileName, attachedFileText, companyId: companyIdOverride,
     } = req.body;
 
     let candidate = null;
@@ -268,7 +268,7 @@ router.post('/conversation', async (req, res) => {
     }
 
     const effectiveUserId  = await getEffectiveUserId(req, candidateId);
-    const companyId        = candidate?.companyId || null;
+    const companyId        = companyIdOverride ?? candidate?.companyId ?? null;
     const openai           = await getOpenAIClient(effectiveUserId);
     const knowledgeContext = await getKnowledgeContext(req.user.id, companyId);
     const userInstructions = await getCustomInstructions(req.user.id);

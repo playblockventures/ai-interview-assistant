@@ -42,12 +42,45 @@ function RecruiterSelect({ value, onChange }) {
   );
 }
 
+function CompanySelect({ value, onChange }) {
+  const { companies } = useContext(AppContext);
+  if (!companies.length) return null;
+  return (
+    <div className="form-group">
+      <label className="form-label">Company Context</label>
+      <select className="form-select" value={value} onChange={e => onChange(e.target.value)}>
+        <option value="">Default (no company)</option>
+        {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+        Selects which company&apos;s knowledge base and interview scenario to use.
+      </div>
+    </div>
+  );
+}
+
+// Compact inline version for the conversation config bar
+function CompanySelectInline({ value, onChange }) {
+  const { companies } = useContext(AppContext);
+  if (!companies.length) return null;
+  return (
+    <div className="form-group" style={{ flex: 1, minWidth: 160, margin: 0 }}>
+      <label className="form-label">Company</label>
+      <select className="form-select" value={value} onChange={e => onChange(e.target.value)}>
+        <option value="">Default</option>
+        {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+    </div>
+  );
+}
+
 // ── Scenario Tab ──────────────────────────────────────────────────────────────
 function ScenarioTab({ candidate, onScenarioApplied }) {
   const { roles } = useContext(AppContext);
   const [config, setConfig] = useState({
     role: candidate.role || '', goal: '', tone: 'professional',
     customInstructions: '', recruiterId: candidate.recruiterId || '',
+    companyId: candidate.companyId || '',
   });
   const [scenario, setScenario] = useState('');
   const [history, setHistory] = useState(candidate.interviewScenarios || []);
@@ -144,6 +177,7 @@ function ScenarioTab({ candidate, onScenarioApplied }) {
             value={config.goal} onChange={e => set('goal', e.target.value)} />
         </div>
         <RecruiterSelect value={config.recruiterId} onChange={v => set('recruiterId', v)} />
+        <CompanySelect value={config.companyId} onChange={v => set('companyId', v)} />
         <div className="form-group">
           <label className="form-label">Custom Instructions</label>
           <textarea className="form-textarea" placeholder="Any specific topics or instructions..."
@@ -221,6 +255,7 @@ function OutreachTab({ candidate }) {
   const [config, setConfig] = useState({
     role: candidate.role || '', messageType: 'outreach', tone: 'professional',
     goal: '', customInstructions: '', recruiterId: candidate.recruiterId || '',
+    companyId: candidate.companyId || '',
   });
   const [message,     setMessage]     = useState('');
   const [history,     setHistory]     = useState(
@@ -328,6 +363,7 @@ function OutreachTab({ candidate }) {
           </div>
         </div>
         <RecruiterSelect value={config.recruiterId} onChange={v => set('recruiterId', v)} />
+        <CompanySelect value={config.companyId} onChange={v => set('companyId', v)} />
         <div className="form-group">
           <label className="form-label">Custom Instructions</label>
           <textarea className="form-textarea" placeholder="Additional context or instructions..."
@@ -439,6 +475,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
     role: candidate.role || '', tone: 'professional',
     recruiterId: candidate.recruiterId || '',
     customInstructions: '',
+    companyId: candidate.companyId || '',
   });
   const [history, setHistory] = useState(
     (candidate.conversationHistory || []).map((m, originalIdx) => ({
@@ -550,6 +587,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
     tone:               config.tone,
     recruiterId:        config.recruiterId,
     customInstructions: config.customInstructions,
+    companyId:          config.companyId   || undefined,
     imageBase64:        imgData?.base64    || undefined,
     imageMimeType:      imgData?.mimeType  || undefined,
     attachedFileName:   fileData?.name     || undefined,
@@ -737,6 +775,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
               </select>
             </div>
           )}
+          <CompanySelectInline value={config.companyId} onChange={v => set('companyId', v)} />
           <div style={{ alignSelf: 'flex-end', display: 'flex', gap: 8, paddingBottom: 1 }}>
             <button className="btn btn-secondary btn-sm" onClick={() => setShowInstructions(v => !v)} style={{ whiteSpace: 'nowrap' }}>
               {showInstructions ? '▲ Instructions' : '✎ Instructions'}
