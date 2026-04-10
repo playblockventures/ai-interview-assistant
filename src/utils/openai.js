@@ -41,9 +41,10 @@ const getKnowledgeContext = async (userId, companyId = null) => {
   try {
     const KnowledgeBase = require('../models/KnowledgeBase');
     const allDocs = await KnowledgeBase.findByUser(userId);
-    // Filter by company if specified; otherwise use all docs
+    // Filter by company if specified: include company-specific docs AND general (no company) docs.
+    // General docs (no companyId) are always included as shared context.
     const docs = companyId
-      ? allDocs.filter(d => d.companyId === companyId)
+      ? allDocs.filter(d => d.companyId === companyId || !d.companyId)
       : allDocs;
     if (!docs.length) return '';
 

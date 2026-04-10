@@ -28,16 +28,18 @@ const KnowledgeBase = {
     const db = getDB();
     const ts = now();
     const payload = {
-      name:      data.name      || '',
-      type:      data.type      || 'custom_instructions',
-      content:   data.content   || '',
-      url:       data.url       || '',
-      fileName:  data.fileName  || '',
-      category:  data.category  || 'company_docs',
-      ownerId:   data.ownerId   || '',
-      ownerName: data.ownerName || '',
-      createdAt: ts,
-      updatedAt: ts,
+      name:        data.name        || '',
+      type:        data.type        || 'custom_instructions',
+      content:     data.content     || '',
+      url:         data.url         || '',
+      fileName:    data.fileName    || '',
+      category:    data.category    || 'company_docs',
+      companyId:   data.companyId   || '',
+      companyName: data.companyName || '',
+      ownerId:     data.ownerId     || '',
+      ownerName:   data.ownerName   || '',
+      createdAt:   ts,
+      updatedAt:   ts,
     };
     const ref = await db.collection(COL).add(payload);
     return { id: ref.id, ...payload };

@@ -52,15 +52,26 @@ router.get('/', async (req, res) => {
             companies        = all[companiesKey(userId)] || [];
 
             if (payload.isAdmin) {
-              // Admin sees ALL users' recruiters merged
+              // Admin sees ALL users' recruiters merged, with owner info attached
+              const User = require('../models/User');
+              const users = await User.findAll().catch(() => []);
+              const userMap = {};
+              users.forEach(u => { userMap[u.id] = u.displayName || u.username; });
+
               const allRecruiterKeys = Object.keys(all).filter(k => k.startsWith('recruiters_'));
               const merged = [];
               const seen   = new Set();
               allRecruiterKeys.forEach(k => {
+                const ownerUserId = k.replace('recruiters_', '');
                 (all[k] || []).forEach(r => {
                   if (!seen.has(r.id)) {
                     seen.add(r.id);
-                    merged.push({ ...r, _ownerKey: k });
+                    merged.push({
+                      ...r,
+                      _ownerKey:    k,
+                      _ownerUserId: ownerUserId,
+                      _ownerName:   userMap[ownerUserId] || ownerUserId,
+                    });
                   }
                 });
               });
@@ -120,7 +131,8 @@ router.put('/company-scenarios', requireAuth, async (req, res) => {
 // ── PUT /api/settings/recruiters ─────────────────────────────────────────────
 router.put('/recruiters', requireAuth, async (req, res) => {
   try {
-    await getSettings().set(recruiterKey(req.user.id), req.body.recruiters || []);
+    const targetUserId = (req.user.isAdmin && req.query.userId) ? req.query.userId : req.user.id;
+    await getSettings().set(recruiterKey(targetUserId), req.body.recruiters || []);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

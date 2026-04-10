@@ -197,8 +197,10 @@ function CompanyScenarioSection({ dbConnected }) {
 // ── Recruiter Profiles ────────────────────────────────────────────────────────
 function RecruitersSection({ dbConnected }) {
   const { recruiters, refreshSettings } = useContext(AppContext);
+  const { user } = useAuth();
   const editFormRef = useRef(null);
   const [localRecruiters, setLocalRecruiters] = useState(recruiters);
+  const [filterUserId, setFilterUserId] = useState(''); // '' = all
   const blankForm = { name: '', email: '', phone: '', linkedinUrl: '', location: '', currentTitle: '', profile: '', photoUrl: '' };
   const [form, setForm]     = useState(blankForm);
   const [editId, setEditId] = useState(null);
@@ -207,6 +209,19 @@ function RecruitersSection({ dbConnected }) {
   const [expanded, setExpanded]     = useState(null);
 
   useEffect(() => { setLocalRecruiters(recruiters); }, [recruiters]);
+
+  // Build unique user list from recruiter metadata (admin only)
+  const userList = user?.isAdmin
+    ? [...new Map(
+        localRecruiters
+          .filter(r => r._ownerUserId)
+          .map(r => [r._ownerUserId, { id: r._ownerUserId, name: r._ownerName || r._ownerUserId }])
+      ).values()]
+    : [];
+
+  const visibleRecruiters = (user?.isAdmin && filterUserId)
+    ? localRecruiters.filter(r => r._ownerUserId === filterUserId)
+    : localRecruiters;
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: { 'application/pdf': ['.pdf'], 'application/msword': ['.doc'], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'], 'text/plain': ['.txt'] },
@@ -235,13 +250,18 @@ function RecruitersSection({ dbConnected }) {
     },
   });
 
+  // Save own recruiters (admin adds to their own list)
   const save = async () => {
     if (!dbConnected) return toast.error('Connect Firebase first');
     setSaving(true);
     try {
+      // Work only with the current user's own entries
+      const ownEntries = user?.isAdmin
+        ? localRecruiters.filter(r => !r._ownerUserId || r._ownerUserId === user.id)
+        : localRecruiters;
       const updated = editId
-        ? localRecruiters.map(r => r.id === editId ? { ...r, ...form } : r)
-        : [...localRecruiters, { id: 'r_' + Date.now(), ...form }];
+        ? ownEntries.map(r => r.id === editId ? { ...r, ...form } : r)
+        : [...ownEntries, { id: 'r_' + Date.now(), ...form }];
       await settingsApi.saveRecruiters(updated);
       await refreshSettings();
       setForm(blankForm);
@@ -251,12 +271,18 @@ function RecruitersSection({ dbConnected }) {
     finally { setSaving(false); }
   };
 
-  const remove = async (id) => {
+  const remove = async (r) => {
     if (!window.confirm('Remove this recruiter?')) return;
     if (!dbConnected) return toast.error('Connect Firebase first');
     try {
-      const updated = localRecruiters.filter(r => r.id !== id);
-      await settingsApi.saveRecruiters(updated);
+      const targetUserId = r._ownerUserId || user.id;
+      // Get the full list for that user, then filter out this entry
+      const userEntries = localRecruiters.filter(x =>
+        (x._ownerUserId || user.id) === targetUserId && x.id !== r.id
+      );
+      // Strip internal admin-only fields before saving
+      const clean = userEntries.map(({ _ownerKey, _ownerUserId, _ownerName, ...rest }) => rest);
+      await settingsApi.saveRecruiters(clean, user?.isAdmin && targetUserId !== user.id ? targetUserId : undefined);
       await refreshSettings();
       toast.success('Recruiter removed');
     } catch (e) { toast.error(e.message); }
@@ -278,29 +304,57 @@ function RecruitersSection({ dbConnected }) {
         Upload a LinkedIn PDF or resume to auto-extract details.
       </p>
 
-      {localRecruiters.map(r => (
-        <div key={r.id} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: 8, overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, background: r.photoUrl ? undefined : 'var(--accent-dim)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 14, border: '1.5px solid var(--border)' }}>
-              {r.photoUrl ? <img src={r.photoUrl} alt={r.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (r.name||'?').charAt(0).toUpperCase()}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{r.name}</div>
-              {(r.currentTitle || r.email) && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{[r.currentTitle, r.email].filter(Boolean).join(' · ')}</div>}
-            </div>
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }} onClick={() => setExpanded(expanded === r.id ? null : r.id)}>{expanded === r.id ? '▲' : '▼'}</button>
-            <button className="btn btn-secondary btn-sm" onClick={() => startEdit(r)}>Edit</button>
-            <button className="btn btn-danger btn-sm" onClick={() => remove(r.id)}>Remove</button>
-          </div>
-          {expanded === r.id && r.profile && (
-            <div style={{ padding: '0 14px 12px', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-              <pre style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{r.profile}</pre>
-            </div>
-          )}
+      {/* Admin user filter tabs */}
+      {user?.isAdmin && userList.length > 0 && (
+        <div className="tabs" style={{ marginBottom: 14 }}>
+          <button className={`tab ${filterUserId === '' ? 'active' : ''}`} onClick={() => setFilterUserId('')}>
+            All ({localRecruiters.length})
+          </button>
+          {userList.map(u => (
+            <button key={u.id} className={`tab ${filterUserId === u.id ? 'active' : ''}`} onClick={() => setFilterUserId(u.id)}>
+              {u.name} ({localRecruiters.filter(r => r._ownerUserId === u.id).length})
+            </button>
+          ))}
         </div>
-      ))}
+      )}
 
-      {/* Add / Edit form */}
+      {visibleRecruiters.map(r => {
+        const isOwn = !r._ownerUserId || r._ownerUserId === user?.id;
+        return (
+          <div key={r.id} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: 8, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, background: r.photoUrl ? undefined : 'var(--accent-dim)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 14, border: '1.5px solid var(--border)' }}>
+                {r.photoUrl ? <img src={r.photoUrl} alt={r.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (r.name||'?').charAt(0).toUpperCase()}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {r.name}
+                  {r._ownerName && (
+                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '1px 7px' }}>
+                      👤 {r._ownerName}
+                    </span>
+                  )}
+                </div>
+                {(r.currentTitle || r.email) && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{[r.currentTitle, r.email].filter(Boolean).join(' · ')}</div>}
+              </div>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }} onClick={() => setExpanded(expanded === r.id ? null : r.id)}>{expanded === r.id ? '▲' : '▼'}</button>
+              {isOwn && <button className="btn btn-secondary btn-sm" onClick={() => startEdit(r)}>Edit</button>}
+              <button className="btn btn-danger btn-sm" onClick={() => remove(r)}>Remove</button>
+            </div>
+            {expanded === r.id && r.profile && (
+              <div style={{ padding: '0 14px 12px', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                <pre style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{r.profile}</pre>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {visibleRecruiters.length === 0 && filterUserId && (
+        <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '12px 0' }}>No recruiters for this user.</div>
+      )}
+
+      {/* Add / Edit form — always adds to current user's own list */}
       <div ref={editFormRef} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: `1px solid ${editId ? 'var(--accent)' : 'var(--border)'}`, padding: 14, marginTop: 12, transition: 'border-color 0.2s' }}>
         <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', marginBottom: 12 }}>{editId ? '✎ Edit Recruiter' : '+ Add Recruiter'}</div>
 
