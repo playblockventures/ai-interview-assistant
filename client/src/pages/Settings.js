@@ -94,63 +94,99 @@ function RolesSection({ dbConnected }) {
 
 // ── Company Interview Scenario ────────────────────────────────────────────────
 function CompanyScenarioSection({ dbConnected }) {
-  const { companyScenario, refreshSettings } = useContext(AppContext);
-  const [scenario, setScenario] = useState(companyScenario || '');
-  const [saving, setSaving]     = useState(false);
+  const { companies, companyScenarios, refreshSettings } = useContext(AppContext);
+  // local map: { '': 'default', 'co_123': '...' }
+  const [local,      setLocal]      = useState(companyScenarios || {});
+  const [selected,   setSelected]   = useState(''); // '' = default/no company
+  const [saving,     setSaving]     = useState(false);
 
-  useEffect(() => { setScenario(companyScenario || ''); }, [companyScenario]);
+  useEffect(() => { setLocal(companyScenarios || {}); }, [companyScenarios]);
+
+  const currentScenario = local[selected] || '';
+  const setScenario = (val) => setLocal(prev => ({ ...prev, [selected]: val }));
 
   const save = async () => {
     if (!dbConnected) return toast.error('Connect Firebase first');
     setSaving(true);
     try {
-      await settingsApi.saveCompanyScenario(scenario);
+      await settingsApi.saveCompanyScenarios(local);
       await refreshSettings();
-      toast.success('Company scenario saved — it will be applied to all conversations');
+      const label = selected ? (companies.find(c => c.id === selected)?.name || selected) : 'Default';
+      toast.success(`Scenario saved for "${label}"`);
     } catch (e) { toast.error(e.message); }
     finally { setSaving(false); }
   };
 
   const clear = async () => {
-    if (!window.confirm('Clear the company scenario?')) return;
+    const label = selected ? (companies.find(c => c.id === selected)?.name || selected) : 'Default';
+    if (!window.confirm(`Clear the scenario for "${label}"?`)) return;
     setSaving(true);
     try {
-      await settingsApi.saveCompanyScenario('');
-      setScenario('');
+      const updated = { ...local, [selected]: '' };
+      await settingsApi.saveCompanyScenarios(updated);
+      setLocal(updated);
       await refreshSettings();
-      toast.success('Company scenario cleared');
+      toast.success('Scenario cleared');
     } catch (e) { toast.error(e.message); }
     finally { setSaving(false); }
   };
 
+  const activeCount = Object.values(local).filter(Boolean).length;
+
   return (
     <div className="card mt-16">
-      <div className="card-title">Company Interview Scenario</div>
+      <div className="card-title">Interview Scenario / Framework</div>
       <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-        Define a global interview scenario or framework that will be automatically applied to all conversations.
-        When set, the AI will follow this structure across all candidate conversations.
+        Define interview structures per company. When a candidate is linked to a company, the AI will follow that company&apos;s scenario.
+        The <strong>Default</strong> scenario applies to candidates with no company assigned.
+        {activeCount > 0 && <span style={{ color: 'var(--success)', marginLeft: 8 }}>✓ {activeCount} scenario{activeCount !== 1 ? 's' : ''} active</span>}
       </p>
-      {companyScenario && (
+
+      {/* Company selector tabs */}
+      <div className="tabs" style={{ marginBottom: 16 }}>
+        <button className={`tab ${selected === '' ? 'active' : ''}`} onClick={() => setSelected('')}>
+          Default
+        </button>
+        {companies.map(c => (
+          <button key={c.id} className={`tab ${selected === c.id ? 'active' : ''}`} onClick={() => setSelected(c.id)}>
+            {c.name}
+            {local[c.id] && <span style={{ marginLeft: 5, color: 'var(--success)', fontSize: 10 }}>●</span>}
+          </button>
+        ))}
+      </div>
+
+      {local[selected] && (
         <div style={{ background: 'rgba(0,212,170,0.06)', border: '1px solid rgba(0,212,170,0.2)', borderRadius: 'var(--radius-sm)', padding: '8px 14px', marginBottom: 14, fontSize: 12, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span>✓</span><span>A company scenario is active — all conversations will follow this structure.</span>
+          <span>✓</span>
+          <span>
+            Scenario active for <strong>{selected ? (companies.find(c => c.id === selected)?.name || selected) : 'all candidates without a company'}</strong>.
+          </span>
         </div>
       )}
+
       <div className="form-group">
-        <label className="form-label">Scenario / Interview Framework</label>
+        <label className="form-label">
+          Scenario / Interview Framework
+          {selected === '' && companies.length > 0 && (
+            <span style={{ marginLeft: 8, fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}>
+              — used when no company is assigned
+            </span>
+          )}
+        </label>
         <textarea
           className="form-textarea" style={{ minHeight: 180 }}
-          placeholder={`Define your company's standard interview structure. For example:\n\n1. Introduction (5 min) — Ask about the candidate's background and current role\n2. Technical Assessment (20 min) — Ask 3-4 role-specific technical questions\n3. Cultural Fit (10 min) — Ask about teamwork, values, remote work experience\n4. Candidate Questions (5 min) — Invite questions about the role and company\n5. Closing — Explain next steps and timeline\n\nKey things to assess: passion for Web3, problem-solving approach, communication clarity`}
-          value={scenario}
+          placeholder={`Define your${selected ? ` ${companies.find(c => c.id === selected)?.name || ''}` : ''} standard interview structure. For example:\n\n1. Introduction (5 min) — Ask about the candidate's background\n2. Technical Assessment (20 min) — 3-4 role-specific questions\n3. Cultural Fit (10 min) — Teamwork, values, remote work\n4. Candidate Questions (5 min)\n5. Closing — Explain next steps`}
+          value={currentScenario}
           onChange={e => setScenario(e.target.value)}
           disabled={!dbConnected}
         />
       </div>
       <div className="flex gap-8">
         <button className="btn btn-primary" onClick={save} disabled={saving || !dbConnected}>
-          {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving...</> : '▶ Save & Apply to All Conversations'}
+          {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving...</> : '▶ Save Scenario'}
         </button>
-        {companyScenario && (
-          <button className="btn btn-danger" onClick={clear} disabled={saving}>Clear Scenario</button>
+        {currentScenario && (
+          <button className="btn btn-danger" onClick={clear} disabled={saving}>Clear</button>
         )}
       </div>
       {!dbConnected && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--warning)' }}>⚠ Requires database connection.</div>}

@@ -18,17 +18,19 @@ export const AppContext = createContext({
   recruiters: [],
   companies: [],
   companyScenario: '',
+  companyScenarios: {},
   dbConnected: false,
   refreshSettings: () => {},
 });
 
 export function AppProvider({ children }) {
   const authCtx = useContext(AuthContext);
-  const [roles,           setRoles]           = useState(DEFAULT_ROLES);
-  const [recruiters,      setRecruiters]       = useState([]);
-  const [companies,       setCompanies]        = useState([]);
-  const [companyScenario, setCompanyScenario]  = useState('');
-  const [dbConnected,     setDbConnected]      = useState(false);
+  const [roles,             setRoles]             = useState(DEFAULT_ROLES);
+  const [recruiters,        setRecruiters]         = useState([]);
+  const [companies,         setCompanies]          = useState([]);
+  const [companyScenario,   setCompanyScenario]    = useState('');
+  const [companyScenarios,  setCompanyScenarios]   = useState({});
+  const [dbConnected,       setDbConnected]        = useState(false);
 
   const refreshSettings = useCallback(async () => {
     try {
@@ -38,6 +40,7 @@ export function AppProvider({ children }) {
       setRecruiters(Array.isArray(data.recruiters) ? data.recruiters : []);
       setCompanies(Array.isArray(data.companies) ? data.companies : []);
       setCompanyScenario(data.companyScenario || '');
+      setCompanyScenarios(data.companyScenarios && typeof data.companyScenarios === 'object' ? data.companyScenarios : {});
     } catch (_) {}
   }, []);
 
@@ -47,7 +50,7 @@ export function AppProvider({ children }) {
   }, [authCtx?.user, refreshSettings]);
 
   return (
-    <AppContext.Provider value={{ roles, DEFAULT_ROLES, recruiters, companies, companyScenario, dbConnected, refreshSettings }}>
+    <AppContext.Provider value={{ roles, DEFAULT_ROLES, recruiters, companies, companyScenario, companyScenarios, dbConnected, refreshSettings }}>
       {children}
     </AppContext.Provider>
   );

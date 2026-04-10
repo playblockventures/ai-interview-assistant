@@ -82,11 +82,21 @@ const getCustomInstructions = async (userId) => {
   } catch (_) { return ''; }
 };
 
-// Get company scenario for a user
-const getCompanyScenario = async (userId) => {
+// Get company scenario for a user, optionally scoped to a companyId
+// Looks up per-company first, then falls back to the default (no-company) scenario
+const getCompanyScenario = async (userId, companyId = null) => {
   if (!isConnected() || !userId) return '';
   try {
     const Settings = require('../models/Settings');
+    // Try new per-company scenarios map first
+    const scenariosMap = await Settings.getForUser(userId, 'company_scenarios').catch(() => null);
+    if (scenariosMap && typeof scenariosMap === 'object') {
+      const specific = companyId && scenariosMap[companyId] ? scenariosMap[companyId] : '';
+      const fallback = scenariosMap[''] || '';
+      const value = specific || fallback;
+      return value ? `\n\n--- COMPANY INTERVIEW SCENARIO (follow this structure) ---\n${value}` : '';
+    }
+    // Fall back to legacy single-value key
     const value = await Settings.getForUser(userId, 'company_scenario');
     return value ? `\n\n--- COMPANY INTERVIEW SCENARIO (follow this structure) ---\n${value}` : '';
   } catch (_) { return ''; }

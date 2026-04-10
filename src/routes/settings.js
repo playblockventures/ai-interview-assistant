@@ -17,13 +17,14 @@ const companiesKey = (userId) => `companies_${userId}`;
 // ── GET /api/settings ──────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    let hasFirebase     = !!process.env.FIREBASE_SERVICE_ACCOUNT;
-    let roles           = null;
-    let recruiters      = [];
-    let companies       = [];
-    let companyScenario = '';
-    let hasOpenAI       = !!process.env.OPENAI_API_KEY;
-    let userOpenAIKey   = '';
+    let hasFirebase       = !!process.env.FIREBASE_SERVICE_ACCOUNT;
+    let roles             = null;
+    let recruiters        = [];
+    let companies         = [];
+    let companyScenario   = '';
+    let companyScenarios  = {};
+    let hasOpenAI         = !!process.env.OPENAI_API_KEY;
+    let userOpenAIKey     = '';
 
     if (isConnected()) {
       const S   = getSettings();
@@ -46,8 +47,9 @@ router.get('/', async (req, res) => {
             userOpenAIKey   = ownKey ? '••••••••' : '';
             if (ownKey) hasOpenAI = true;
 
-            companyScenario = await S.getForUser(userId, 'company_scenario').catch(() => '') || '';
-            companies       = all[companiesKey(userId)] || [];
+            companyScenario  = await S.getForUser(userId, 'company_scenario').catch(() => '') || '';
+            companyScenarios = await S.getForUser(userId, 'company_scenarios').catch(() => null) || {};
+            companies        = all[companiesKey(userId)] || [];
 
             if (payload.isAdmin) {
               // Admin sees ALL users' recruiters merged
@@ -71,9 +73,9 @@ router.get('/', async (req, res) => {
       }
     }
 
-    res.json({ hasOpenAI, hasFirebase, userOpenAIKey, dbConnected: isConnected(), roles, recruiters, companies, companyScenario });
+    res.json({ hasOpenAI, hasFirebase, userOpenAIKey, dbConnected: isConnected(), roles, recruiters, companies, companyScenario, companyScenarios });
   } catch (err) {
-    res.json({ hasOpenAI: !!process.env.OPENAI_API_KEY, hasFirebase: !!process.env.FIREBASE_SERVICE_ACCOUNT, dbConnected: false, roles: null, recruiters: [], companies: [], companyScenario: '', userOpenAIKey: '' });
+    res.json({ hasOpenAI: !!process.env.OPENAI_API_KEY, hasFirebase: !!process.env.FIREBASE_SERVICE_ACCOUNT, dbConnected: false, roles: null, recruiters: [], companies: [], companyScenario: '', companyScenarios: {}, userOpenAIKey: '' });
   }
 });
 
@@ -98,9 +100,19 @@ router.delete('/openai-key', requireAuth, async (req, res) => {
 });
 
 // ── PUT /api/settings/company-scenario ───────────────────────────────────────
+// Legacy single-scenario endpoint (kept for backward compat)
 router.put('/company-scenario', requireAuth, async (req, res) => {
   try {
     await getSettings().setForUser(req.user.id, 'company_scenario', req.body.scenario || '');
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── PUT /api/settings/company-scenarios ──────────────────────────────────────
+// Saves the full map: { '': 'default scenario', 'co_123': 'Acme scenario', ... }
+router.put('/company-scenarios', requireAuth, async (req, res) => {
+  try {
+    await getSettings().setForUser(req.user.id, 'company_scenarios', req.body.scenarios || {});
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

@@ -107,7 +107,7 @@ router.post('/scenario', async (req, res) => {
     const openai           = await getOpenAIClient(effectiveUserId);
     const knowledgeContext = await getKnowledgeContext(req.user.id, companyId);
     const userInstructions = await getCustomInstructions(req.user.id);
-    const companyScenario  = await getCompanyScenario(req.user.id);
+    const companyScenario  = await getCompanyScenario(req.user.id, companyId);
     const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
 
     const roleLabel = await resolveRoleLabel(role);
@@ -272,7 +272,7 @@ router.post('/conversation', async (req, res) => {
     const openai           = await getOpenAIClient(effectiveUserId);
     const knowledgeContext = await getKnowledgeContext(req.user.id, companyId);
     const userInstructions = await getCustomInstructions(req.user.id);
-    const companyScenario  = await getCompanyScenario(req.user.id);
+    const companyScenario  = await getCompanyScenario(req.user.id, companyId);
     const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
 
     const roleLabel    = await resolveRoleLabel(role);
