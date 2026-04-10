@@ -12,6 +12,7 @@ const upload      = multer({ storage: multer.memoryStorage(), limits: { fileSize
 const { extractTextFromBuffer } = require('../utils/fileParser');
 
 const recruiterKey = (userId) => `recruiters_${userId}`;
+const companiesKey = (userId) => `companies_${userId}`;
 
 // ── GET /api/settings ──────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
@@ -19,6 +20,7 @@ router.get('/', async (req, res) => {
     let hasFirebase     = !!process.env.FIREBASE_SERVICE_ACCOUNT;
     let roles           = null;
     let recruiters      = [];
+    let companies       = [];
     let companyScenario = '';
     let hasOpenAI       = !!process.env.OPENAI_API_KEY;
     let userOpenAIKey   = '';
@@ -45,6 +47,7 @@ router.get('/', async (req, res) => {
             if (ownKey) hasOpenAI = true;
 
             companyScenario = await S.getForUser(userId, 'company_scenario').catch(() => '') || '';
+            companies       = all[companiesKey(userId)] || [];
 
             if (payload.isAdmin) {
               // Admin sees ALL users' recruiters merged
@@ -68,9 +71,9 @@ router.get('/', async (req, res) => {
       }
     }
 
-    res.json({ hasOpenAI, hasFirebase, userOpenAIKey, dbConnected: isConnected(), roles, recruiters, companyScenario });
+    res.json({ hasOpenAI, hasFirebase, userOpenAIKey, dbConnected: isConnected(), roles, recruiters, companies, companyScenario });
   } catch (err) {
-    res.json({ hasOpenAI: !!process.env.OPENAI_API_KEY, hasFirebase: !!process.env.FIREBASE_SERVICE_ACCOUNT, dbConnected: false, roles: null, recruiters: [], companyScenario: '', userOpenAIKey: '' });
+    res.json({ hasOpenAI: !!process.env.OPENAI_API_KEY, hasFirebase: !!process.env.FIREBASE_SERVICE_ACCOUNT, dbConnected: false, roles: null, recruiters: [], companies: [], companyScenario: '', userOpenAIKey: '' });
   }
 });
 
@@ -110,6 +113,14 @@ router.put('/recruiters', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── PUT /api/settings/companies ───────────────────────────────────────────────
+router.put('/companies', requireAuth, async (req, res) => {
+  try {
+    await getSettings().setForUser(req.user.id, 'companies', req.body.companies || []);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── GET /api/settings/knowledge/list ─────────────────────────────────────────
 router.get('/knowledge/list', requireAuth, async (req, res) => {
   if (!isConnected()) return res.json([]);
@@ -125,11 +136,11 @@ router.post('/knowledge/file', requireAuth, upload.single('file'), async (req, r
   if (!isConnected()) return res.status(503).json({ error: 'Firebase not connected.' });
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const { category = 'company_docs' } = req.body;
+    const { category = 'company_docs', companyId = '', companyName = '' } = req.body;
     const text = await extractTextFromBuffer(req.file.buffer, req.file.originalname);
     const item = await getKB().create({
       name: req.file.originalname, type: 'file', content: text,
-      fileName: req.file.originalname, category,
+      fileName: req.file.originalname, category, companyId, companyName,
       ownerId: req.user.id, ownerName: req.user.displayName || req.user.username,
     });
     res.json(item);
@@ -140,7 +151,7 @@ router.post('/knowledge/file', requireAuth, upload.single('file'), async (req, r
 router.post('/knowledge/url', requireAuth, async (req, res) => {
   if (!isConnected()) return res.status(503).json({ error: 'Firebase not connected.' });
   try {
-    const { url, category = 'company_docs' } = req.body;
+    const { url, category = 'company_docs', companyId = '', companyName = '' } = req.body;
     let text = '', siteName = '';
     const response = await axios.get(url, {
       timeout: 15000,
@@ -151,7 +162,7 @@ router.post('/knowledge/url', requireAuth, async (req, res) => {
     siteName = $('title').text().trim() || new URL(url).hostname;
     text = $('body').text().replace(/\s+/g, ' ').trim().substring(0, 8000);
     const item = await getKB().create({
-      name: siteName, type: 'url', content: text, url, category,
+      name: siteName, type: 'url', content: text, url, category, companyId, companyName,
       ownerId: req.user.id, ownerName: req.user.displayName || req.user.username,
     });
     res.json({ ...item, charCount: text.length });
@@ -162,10 +173,10 @@ router.post('/knowledge/url', requireAuth, async (req, res) => {
 router.post('/knowledge/instructions', requireAuth, async (req, res) => {
   if (!isConnected()) return res.status(503).json({ error: 'Firebase not connected.' });
   try {
-    const { content, name = 'Custom Instructions' } = req.body;
+    const { content, name = 'Custom Instructions', companyId = '', companyName = '' } = req.body;
     const item = await getKB().create({
       name, type: 'custom_instructions', content,
-      category: 'instructions',
+      category: 'instructions', companyId, companyName,
       ownerId: req.user.id, ownerName: req.user.displayName || req.user.username,
     });
     await getSettings().setForUser(req.user.id, 'custom_instructions', content);

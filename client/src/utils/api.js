@@ -66,10 +66,11 @@ export const settingsApi = {
   deleteOpenAIKey:     ()             => api.delete('/settings/openai-key'),
   saveRecruiters:      (recruiters)   => api.put('/settings/recruiters', { recruiters }),
   saveCompanyScenario: (scenario)     => api.put('/settings/company-scenario', { scenario }),
+  saveCompanies:       (companies)    => api.put('/settings/companies', { companies }),
   getKnowledge:        (params)       => api.get('/settings/knowledge/list', { params }),
   uploadFile:          (formData)     => api.post('/settings/knowledge/file', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  addUrl:              (url, category) => api.post('/settings/knowledge/url', { url, category }),
-  addInstructions:     (content, name) => api.post('/settings/knowledge/instructions', { content, name }),
+  addUrl:              (url, category, companyId, companyName) => api.post('/settings/knowledge/url', { url, category, companyId, companyName }),
+  addInstructions:     (content, name, companyId, companyName) => api.post('/settings/knowledge/instructions', { content, name, companyId, companyName }),
   testInstructions:    (instructions, prompt) => api.post('/settings/knowledge/test-instructions', { instructions, prompt }),
   deleteKnowledge:     (id)           => api.delete(`/settings/knowledge/${id}`),
 };

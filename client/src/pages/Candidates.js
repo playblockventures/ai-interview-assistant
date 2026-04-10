@@ -13,7 +13,7 @@ const STATUS_OPTIONS = ['pending', 'in_progress', 'success', 'failed'];
 // ─────────────────────────────────────────────────────────────────────────────
 function CandidateModal({ onClose, onSaved, initial = null }) {
   const isEdit = !!initial;
-  const { roles, recruiters } = useContext(AppContext);
+  const { roles, recruiters, companies } = useContext(AppContext);
 
   const [form, setForm] = useState({
     fullName:     initial?.fullName     || '',
@@ -25,6 +25,7 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
     role:         initial?.role         || '',
     resumeUrl:    initial?.resumeUrl    || '',
     recruiterId:  initial?.recruiterId  || '',
+    companyId:    initial?.companyId    || '',
     notes:        initial?.notes        || '',
   });
   const [photoPreview, setPhotoPreview] = useState(initial?.photoUrl || '');
@@ -94,6 +95,7 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
   };
 
   const getRecruiterName = (id) => recruiters.find(r => r.id === id)?.name || '';
+  const getCompanyName   = (id) => companies.find(c => c.id === id)?.name  || '';
 
   const handleSubmit = async () => {
     setSaving(true);
@@ -101,6 +103,7 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => fd.append(k, v || ''));
       fd.set('recruiterName', getRecruiterName(form.recruiterId));
+      fd.set('companyName',   getCompanyName(form.companyId));
       if (photoData) fd.append('photoUrl', photoData);
       if (resumeFile) fd.append('resume', resumeFile);
       if (isEdit) {
@@ -167,6 +170,19 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
               {recruiters.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
           </div>
+
+          {companies.length > 0 && (
+            <div className="form-group">
+              <label className="form-label">Company</label>
+              <select className="form-select" value={form.companyId} onChange={e => set('companyId', e.target.value)}>
+                <option value="">No company assigned</option>
+                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                The AI will use only this company&apos;s knowledge base when generating content.
+              </div>
+            </div>
+          )}
         </div>
 
         {!resumeFile && (

@@ -35,12 +35,16 @@ const getOpenAIClient = async (userId) => {
 };
 
 // Build full knowledge base context for a user
-// Includes ALL their uploaded docs, URLs and custom instructions
-const getKnowledgeContext = async (userId) => {
+// If companyId is provided, only include docs for that company
+const getKnowledgeContext = async (userId, companyId = null) => {
   if (!isConnected() || !userId) return '';
   try {
     const KnowledgeBase = require('../models/KnowledgeBase');
-    const docs = await KnowledgeBase.findByUser(userId);
+    const allDocs = await KnowledgeBase.findByUser(userId);
+    // Filter by company if specified; otherwise use all docs
+    const docs = companyId
+      ? allDocs.filter(d => d.companyId === companyId)
+      : allDocs;
     if (!docs.length) return '';
 
     // Budget: 12000 chars total across all docs (fits comfortably in GPT-4o context)
@@ -52,7 +56,8 @@ const getKnowledgeContext = async (userId) => {
       const truncated = content.length > perDoc
         ? content.substring(0, perDoc) + '... [truncated]'
         : content;
-      return `### ${d.name} (${d.category || d.type})\n${truncated}`;
+      const label = d.companyName ? `${d.name} — ${d.companyName}` : d.name;
+      return `### ${label} (${d.category || d.type})\n${truncated}`;
     });
 
     return '\n\n=== COMPANY KNOWLEDGE BASE (READ THIS FIRST — MANDATORY) ===\n' +

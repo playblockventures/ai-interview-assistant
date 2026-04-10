@@ -16,6 +16,7 @@ const DEFAULT_ROLES = [
 export const AppContext = createContext({
   roles: DEFAULT_ROLES, DEFAULT_ROLES,
   recruiters: [],
+  companies: [],
   companyScenario: '',
   dbConnected: false,
   refreshSettings: () => {},
@@ -25,6 +26,7 @@ export function AppProvider({ children }) {
   const authCtx = useContext(AuthContext);
   const [roles,           setRoles]           = useState(DEFAULT_ROLES);
   const [recruiters,      setRecruiters]       = useState([]);
+  const [companies,       setCompanies]        = useState([]);
   const [companyScenario, setCompanyScenario]  = useState('');
   const [dbConnected,     setDbConnected]      = useState(false);
 
@@ -34,6 +36,7 @@ export function AppProvider({ children }) {
       setDbConnected(data.dbConnected || false);
       setRoles(data.roles?.length ? data.roles : DEFAULT_ROLES);
       setRecruiters(Array.isArray(data.recruiters) ? data.recruiters : []);
+      setCompanies(Array.isArray(data.companies) ? data.companies : []);
       setCompanyScenario(data.companyScenario || '');
     } catch (_) {}
   }, []);
@@ -44,7 +47,7 @@ export function AppProvider({ children }) {
   }, [authCtx?.user, refreshSettings]);
 
   return (
-    <AppContext.Provider value={{ roles, DEFAULT_ROLES, recruiters, companyScenario, dbConnected, refreshSettings }}>
+    <AppContext.Provider value={{ roles, DEFAULT_ROLES, recruiters, companies, companyScenario, dbConnected, refreshSettings }}>
       {children}
     </AppContext.Provider>
   );

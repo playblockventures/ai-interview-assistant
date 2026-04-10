@@ -305,8 +305,94 @@ function RecruitersSection({ dbConnected }) {
   );
 }
 
+// ── Companies ─────────────────────────────────────────────────────────────────
+function CompaniesSection({ dbConnected }) {
+  const { companies, refreshSettings } = useContext(AppContext);
+  const [local, setLocal] = useState(companies);
+  const [form, setForm]   = useState({ name: '', description: '' });
+  const [editId, setEditId] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setLocal(companies); }, [companies]);
+
+  const save = async () => {
+    if (!form.name.trim()) return toast.error('Company name is required');
+    if (!dbConnected) return toast.error('Connect Firebase first');
+    setSaving(true);
+    try {
+      const updated = editId
+        ? local.map(c => c.id === editId ? { ...c, ...form } : c)
+        : [...local, { id: 'co_' + Date.now(), name: form.name.trim(), description: form.description.trim() }];
+      await settingsApi.saveCompanies(updated);
+      await refreshSettings();
+      setForm({ name: '', description: '' });
+      setEditId(null);
+      toast.success(editId ? 'Company updated' : 'Company added');
+    } catch (e) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm('Remove this company? KB documents linked to it will remain but lose the company link.')) return;
+    try {
+      await settingsApi.saveCompanies(local.filter(c => c.id !== id));
+      await refreshSettings();
+      toast.success('Company removed');
+    } catch (e) { toast.error(e.message); }
+  };
+
+  const startEdit = (c) => { setEditId(c.id); setForm({ name: c.name, description: c.description || '' }); };
+  const cancel    = ()  => { setEditId(null); setForm({ name: '', description: '' }); };
+
+  return (
+    <div className="card mt-16">
+      <div className="card-title">Companies</div>
+      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+        Define companies you recruit for. Knowledge base documents can be linked to a company so the AI uses only that company's context when generating content for a candidate.
+      </p>
+
+      {local.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          {local.map((c, i) => (
+            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', marginBottom: 6, border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, minWidth: 20 }}>{i + 1}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{c.name}</div>
+                {c.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.description}</div>}
+              </div>
+              <button className="btn btn-secondary btn-sm" onClick={() => startEdit(c)}>Edit</button>
+              <button className="btn btn-danger btn-sm" onClick={() => remove(c.id)}>Remove</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: `1px solid ${editId ? 'var(--accent)' : 'var(--border)'}`, padding: 14 }}>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12 }}>{editId ? '✎ Edit Company' : '+ Add Company'}</div>
+        <div className="grid-2" style={{ gap: '0 16px' }}>
+          <div className="form-group">
+            <label className="form-label">Company Name</label>
+            <input className="form-input" placeholder="e.g. Acme Corp" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Description <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
+            <input className="form-input" placeholder="e.g. Blockchain startup, Series A" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
+          </div>
+        </div>
+        <div className="flex gap-8">
+          <button className="btn btn-primary" onClick={save} disabled={saving || !dbConnected || !form.name.trim()}>
+            {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving...</> : editId ? 'Update' : 'Add Company'}
+          </button>
+          {editId && <button className="btn btn-secondary" onClick={cancel}>Cancel</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Knowledge Base ────────────────────────────────────────────────────────────
 function KnowledgeSection({ dbConnected, targetUserId = null }) {
+  const { companies } = useContext(AppContext);
   const [items, setItems]               = useState([]);
   const [loading, setLoading]           = useState(false);
   const [urlInput, setUrlInput]         = useState('');
@@ -314,11 +400,15 @@ function KnowledgeSection({ dbConnected, targetUserId = null }) {
   const [testPrompt, setTestPrompt]     = useState('');
   const [aiReply, setAiReply]           = useState('');
   const [category, setCategory]         = useState('company_docs');
+  const [selectedCompanyId, setSelectedCompanyId] = useState('');
+  const [filterCompanyId,   setFilterCompanyId]   = useState('');
   const [uploading, setUploading]       = useState(false);
   const [addingUrl, setAddingUrl]       = useState(false);
   const [savingInstr, setSavingInstr]   = useState(false);
   const [testingInstr, setTestingInstr] = useState(false);
   const [kbTab, setKbTab]               = useState(0);
+
+  const getCompanyName = (id) => companies.find(c => c.id === id)?.name || '';
 
   const fetchItems = useCallback(async () => {
     if (!dbConnected) { setItems([]); return; }
@@ -334,19 +424,33 @@ function KnowledgeSection({ dbConnected, targetUserId = null }) {
     if (!dbConnected) { toast.error('Connect Firebase first'); return; }
     setUploading(true);
     try {
-      for (const f of files) { const fd = new FormData(); fd.append('file', f); fd.append('category', category); await settingsApi.uploadFile(fd); }
+      const companyName = getCompanyName(selectedCompanyId);
+      for (const f of files) {
+        const fd = new FormData();
+        fd.append('file', f);
+        fd.append('category', category);
+        fd.append('companyId', selectedCompanyId);
+        fd.append('companyName', companyName);
+        await settingsApi.uploadFile(fd);
+      }
       toast.success(`${files.length} file(s) uploaded`);
       fetchItems();
     } catch (e) { toast.error(e.message); }
     finally { setUploading(false); }
-  }, [category, dbConnected, fetchItems]);
+  }, [category, selectedCompanyId, dbConnected, fetchItems]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, accept: { 'application/pdf': ['.pdf'], 'application/msword': ['.doc'], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'], 'text/plain': ['.txt'] } });
 
   const addUrl = async () => {
     if (!dbConnected) { toast.error('Connect Firebase first'); return; }
     setAddingUrl(true);
-    try { const r = await settingsApi.addUrl(urlInput.trim(), category); toast.success(`URL added — ${r.charCount || 0} chars learned`); setUrlInput(''); fetchItems(); }
+    try {
+      const companyName = getCompanyName(selectedCompanyId);
+      const r = await settingsApi.addUrl(urlInput.trim(), category, selectedCompanyId, companyName);
+      toast.success(`URL added — ${r.charCount || 0} chars learned`);
+      setUrlInput('');
+      fetchItems();
+    }
     catch (e) { toast.error(e.message); }
     finally { setAddingUrl(false); }
   };
@@ -354,7 +458,12 @@ function KnowledgeSection({ dbConnected, targetUserId = null }) {
   const saveInstructions = async () => {
     if (!dbConnected) { toast.error('Connect Firebase first'); return; }
     setSavingInstr(true);
-    try { await settingsApi.addInstructions(instructions); toast.success('Instructions saved'); fetchItems(); }
+    try {
+      const companyName = getCompanyName(selectedCompanyId);
+      await settingsApi.addInstructions(instructions, undefined, selectedCompanyId, companyName);
+      toast.success('Instructions saved');
+      fetchItems();
+    }
     catch (e) { toast.error(e.message); }
     finally { setSavingInstr(false); }
   };
@@ -384,6 +493,17 @@ function KnowledgeSection({ dbConnected, targetUserId = null }) {
           <button key={t} className={`tab ${kbTab === i ? 'active' : ''}`} onClick={() => setKbTab(i)}>{t}</button>
         ))}
       </div>
+
+      {/* Company selector — shown on all tabs if companies exist */}
+      {companies.length > 0 && (
+        <div className="form-group">
+          <label className="form-label">Link to Company <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
+          <select className="form-select" value={selectedCompanyId} onChange={e => setSelectedCompanyId(e.target.value)}>
+            <option value="">— No specific company —</option>
+            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+      )}
 
       {kbTab === 0 && (
         <>
@@ -427,24 +547,46 @@ function KnowledgeSection({ dbConnected, targetUserId = null }) {
 
       {dbConnected && items.length > 0 && (
         <div style={{ marginTop: 24 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Stored Items ({items.length})</div>
-          {loading ? <span className="spinner" /> : items.map((item, i) => (
-            <div key={item.id} className="flex items-center justify-between" style={{ padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', marginBottom: 6, gap: 12 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, flexShrink: 0, minWidth: 20 }}>{i + 1}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {item.type === 'url' ? '🔗 ' : item.type === 'file' ? '📄 ' : '📝 '}{item.name}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  {CATEGORY_LABELS[item.category]} · {item.type}
-                  {item.url && <> · <a href={item.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>view ↗</a></>}
-                  {' · '}{new Date(item.createdAt).toLocaleDateString()}
-                  {item.content && <> · {Math.ceil(item.content.length / 4)} tokens</>}
-                </div>
-              </div>
-              <button className="btn btn-danger btn-sm" onClick={() => deleteItem(item.id)}>Remove</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', flex: 1 }}>
+              Stored Items ({items.length})
             </div>
-          ))}
+            {companies.length > 0 && (
+              <select className="form-select" style={{ width: 180, fontSize: 12 }} value={filterCompanyId} onChange={e => setFilterCompanyId(e.target.value)}>
+                <option value="">All companies</option>
+                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                <option value="__none__">No company</option>
+              </select>
+            )}
+          </div>
+          {loading ? <span className="spinner" /> : items
+            .filter(item => {
+              if (!filterCompanyId) return true;
+              if (filterCompanyId === '__none__') return !item.companyId;
+              return item.companyId === filterCompanyId;
+            })
+            .map((item, i) => (
+              <div key={item.id} className="flex items-center justify-between" style={{ padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', marginBottom: 6, gap: 12 }}>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, flexShrink: 0, minWidth: 20 }}>{i + 1}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.type === 'url' ? '🔗 ' : item.type === 'file' ? '📄 ' : '📝 '}{item.name}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span>{CATEGORY_LABELS[item.category]} · {item.type}</span>
+                    {item.url && <><span>·</span><a href={item.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>view ↗</a></>}
+                    <span>· {new Date(item.createdAt).toLocaleDateString()}</span>
+                    {item.content && <span>· {Math.ceil(item.content.length / 4)} tokens</span>}
+                    {item.companyName && (
+                      <span style={{ background: 'var(--accent-dim)', color: 'var(--accent)', borderRadius: 8, padding: '1px 7px', fontSize: 10, fontWeight: 600 }}>
+                        🏢 {item.companyName}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button className="btn btn-danger btn-sm" onClick={() => deleteItem(item.id)}>Remove</button>
+              </div>
+            ))}
         </div>
       )}
     </div>
@@ -1062,6 +1204,7 @@ export default function Settings() {
             </div>
           </div>}
 
+          <CompaniesSection dbConnected={dbConnected} />
           <RolesSection dbConnected={dbConnected} />
           <CompanyScenarioSection dbConnected={dbConnected} />
           <RecruitersSection dbConnected={dbConnected} />

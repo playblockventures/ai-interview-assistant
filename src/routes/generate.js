@@ -96,18 +96,19 @@ router.post('/scenario', async (req, res) => {
   try {
     const { candidateId, role, goal, tone = 'professional', customInstructions, recruiterId } = req.body;
 
-    const effectiveUserId  = await getEffectiveUserId(req, candidateId);
-    const openai           = await getOpenAIClient(effectiveUserId);
-    const knowledgeContext = await getKnowledgeContext(req.user.id);
-    const userInstructions = await getCustomInstructions(req.user.id);
-    const companyScenario  = await getCompanyScenario(req.user.id);
-    const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
-
     let candidate = null;
     if (candidateId) {
       candidate = await Candidate.findById(candidateId);
       if (!Candidate.canAccess(candidate, req.user)) candidate = null;
     }
+
+    const effectiveUserId  = await getEffectiveUserId(req, candidateId);
+    const companyId        = candidate?.companyId || null;
+    const openai           = await getOpenAIClient(effectiveUserId);
+    const knowledgeContext = await getKnowledgeContext(req.user.id, companyId);
+    const userInstructions = await getCustomInstructions(req.user.id);
+    const companyScenario  = await getCompanyScenario(req.user.id);
+    const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
 
     const roleLabel = await resolveRoleLabel(role);
     const toneLabel = TONES[tone] || tone;
@@ -192,17 +193,18 @@ router.post('/outreach', async (req, res) => {
       followup:  'follow-up',
     };
 
-    const effectiveUserId  = await getEffectiveUserId(req, candidateId);
-    const openai           = await getOpenAIClient(effectiveUserId);
-    const knowledgeContext = await getKnowledgeContext(req.user.id);
-    const userInstructions = await getCustomInstructions(req.user.id);
-    const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
-
     let candidate = null;
     if (candidateId) {
       candidate = await Candidate.findById(candidateId);
       if (!Candidate.canAccess(candidate, req.user)) candidate = null;
     }
+
+    const effectiveUserId  = await getEffectiveUserId(req, candidateId);
+    const companyId        = candidate?.companyId || null;
+    const openai           = await getOpenAIClient(effectiveUserId);
+    const knowledgeContext = await getKnowledgeContext(req.user.id, companyId);
+    const userInstructions = await getCustomInstructions(req.user.id);
+    const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
 
     const roleLabel     = await resolveRoleLabel(role);
     const toneLabel     = TONES[tone] || tone;
@@ -259,18 +261,19 @@ router.post('/conversation', async (req, res) => {
       attachedFileName, attachedFileText,
     } = req.body;
 
-    const effectiveUserId  = await getEffectiveUserId(req, candidateId);
-    const openai           = await getOpenAIClient(effectiveUserId);
-    const knowledgeContext = await getKnowledgeContext(req.user.id);
-    const userInstructions = await getCustomInstructions(req.user.id);
-    const companyScenario  = await getCompanyScenario(req.user.id);
-    const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
-
     let candidate = null;
     if (candidateId) {
       candidate = await Candidate.findById(candidateId);
       if (!Candidate.canAccess(candidate, req.user)) candidate = null;
     }
+
+    const effectiveUserId  = await getEffectiveUserId(req, candidateId);
+    const companyId        = candidate?.companyId || null;
+    const openai           = await getOpenAIClient(effectiveUserId);
+    const knowledgeContext = await getKnowledgeContext(req.user.id, companyId);
+    const userInstructions = await getCustomInstructions(req.user.id);
+    const companyScenario  = await getCompanyScenario(req.user.id);
+    const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
 
     const roleLabel    = await resolveRoleLabel(role);
     const toneLabel    = TONES[tone] || tone;

@@ -82,6 +82,8 @@ const Candidate = {
       role:           data.role           || '',
       recruiterId:    data.recruiterId    || '',
       recruiterName:  data.recruiterName  || '',
+      companyId:      data.companyId      || '',
+      companyName:    data.companyName    || '',
       ownerId:        data.ownerId        || '',  // hiring manager who created this
       ownerName:      data.ownerName      || '',
       outreachMessages:    Array.isArray(data.outreachMessages)    ? data.outreachMessages    : [],
