@@ -844,7 +844,7 @@ function BackupSection({ dbConnected }) {
         )}
 
         <div style={{ padding: '12px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: 16, fontSize: 12, color: 'var(--text-muted)' }}>
-          Includes: candidates (with full conversation history, scenarios, outreach), knowledge base documents, recruiters, company scenario{user?.isAdmin && exportScope === 'full' ? ', and all users' settings' : ''}.<br />
+          Includes: candidates (with full conversation history, scenarios, outreach), knowledge base documents, recruiters, company scenario{user?.isAdmin && exportScope === 'full' ? ', and all users\u2019 settings' : ''}.<br />
           <span style={{ color: 'var(--text-muted)' }}>Note: OpenAI API keys are never exported.</span>
         </div>
 
