@@ -375,6 +375,23 @@ router.post('/conversation', async (req, res) => {
       if (candidate.status === 'pending') {
         await Candidate.update(candidateId, { status: 'in_progress' });
       }
+
+      // Notify the candidate's owner when someone else replies in their conversation
+      if (candidate.ownerId && candidate.ownerId !== req.user.id) {
+        try {
+          const Notification = require('../models/Notification');
+          await Notification.create({
+            userId:          candidate.ownerId,
+            type:            'conversation',
+            title:           'New conversation reply',
+            message:         `${req.user.displayName || req.user.username} replied in ${candidate.fullName || 'a candidate'}\u2019s conversation.`,
+            candidateId:     candidateId,
+            candidateName:   candidate.fullName || '',
+            createdBy:       req.user.id,
+            createdByName:   req.user.displayName || req.user.username,
+          });
+        } catch (_) { /* non-critical */ }
+      }
     }
 
     res.json({ response });

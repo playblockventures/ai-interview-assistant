@@ -2,9 +2,10 @@ import React, { useEffect, useState, useRef, useCallback, useContext } from 'rea
 import { useParams, Link, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import toast from 'react-hot-toast';
-import { candidateApi, generateApi, interviewApi } from '../utils/api';
+import { candidateApi, generateApi, interviewApi, notificationApi } from '../utils/api';
 import { useDropzone } from 'react-dropzone';
 import { AppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 
 const TONES = [
   { value: 'professional', label: 'Professional' },
@@ -471,6 +472,7 @@ function OutreachTab({ candidate }) {
 // ── Conversation Tab ──────────────────────────────────────────────────────────
 function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
   const { roles, recruiters } = useContext(AppContext);
+  const { user } = useAuth();
   const [config, setConfig] = useState({
     role: candidate.role || '', tone: 'professional',
     recruiterId: candidate.recruiterId || '',
@@ -736,6 +738,31 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
 
   const hasLastAssistant = history.some(m => m.role === 'assistant');
 
+  // Admin: send tip state
+  const [showTipModal, setShowTipModal] = useState(false);
+  const [tipMsg, setTipMsg]             = useState('');
+  const [tipTitle, setTipTitle]         = useState('');
+  const [sendingTip, setSendingTip]     = useState(false);
+
+  const sendTip = async () => {
+    if (!tipMsg.trim()) return toast.error('Enter a message');
+    setSendingTip(true);
+    try {
+      await notificationApi.send({
+        userIds:       [candidate.ownerId],
+        title:         tipTitle.trim() || 'Guide Tip',
+        message:       tipMsg.trim(),
+        candidateId:   candidate.id,
+        candidateName: candidate.fullName || '',
+      });
+      toast.success('Tip sent');
+      setShowTipModal(false);
+      setTipMsg('');
+      setTipTitle('');
+    } catch (e) { toast.error(e.message); }
+    finally { setSendingTip(false); }
+  };
+
   return (
     <div>
       {/* Applied scenario banner */}
@@ -794,11 +821,46 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
                 {regenerating ? <span className="spinner" style={{ width: 12, height: 12 }} /> : '↺ Regen Reply'}
               </button>
             )}
+            {user?.isAdmin && candidate.ownerId && (
+              <button className="btn btn-secondary btn-sm" onClick={() => setShowTipModal(true)} title="Send a guide tip to this candidate's owner" style={{ whiteSpace: 'nowrap' }}>
+                💡 Send Tip
+              </button>
+            )}
             {history.length > 0 && (
               <button className="btn btn-danger btn-sm" onClick={clearHistory}>Clear All</button>
             )}
           </div>
         </div>
+
+        {/* Admin: Send Tip modal */}
+        {showTipModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+            onClick={() => setShowTipModal(false)}>
+            <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 24, width: 420, maxWidth: '90vw' }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>💡 Send Guide Tip</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+                This will appear as a notification for <strong>{candidate.ownerName || 'the candidate owner'}</strong>.
+              </div>
+              <div className="form-group">
+                <label className="form-label">Title <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span></label>
+                <input className="form-input" placeholder="Guide Tip" value={tipTitle} onChange={e => setTipTitle(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Message</label>
+                <textarea className="form-textarea" style={{ minHeight: 90 }}
+                  placeholder={`e.g. For ${candidate.fullName || 'this candidate'}, focus on asking about system design experience...`}
+                  value={tipMsg} onChange={e => setTipMsg(e.target.value)} autoFocus />
+              </div>
+              <div className="flex gap-8">
+                <button className="btn btn-primary" onClick={sendTip} disabled={sendingTip || !tipMsg.trim()}>
+                  {sendingTip ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Sending...</> : '▶ Send Tip'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => setShowTipModal(false)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showInstructions && (
           <div style={{ marginTop: 12 }}>

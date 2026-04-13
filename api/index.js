@@ -10,7 +10,8 @@ const interviewRoutes = require('../src/routes/interviews');
 const settingsRoutes  = require('../src/routes/settings');
 const generateRoutes  = require('../src/routes/generate');
 const extractRoutes   = require('../src/routes/extract');
-const exportRoutes    = require('../src/routes/export');
+const exportRoutes         = require('../src/routes/export');
+const notificationRoutes   = require('../src/routes/notifications');
 
 const app = express();
 
@@ -41,6 +42,7 @@ app.use('/api/interviews',         requireDB, interviewRoutes);
 app.use('/api/settings',           settingsRoutes);
 app.use('/api/generate',           requireDB, generateRoutes);
 app.use('/api/export',             requireDB, exportRoutes);
+app.use('/api/notifications',      requireDB, notificationRoutes);
 
 // ── Health check ───────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

@@ -90,6 +90,16 @@ export const exportApi = {
   }),
 };
 
+export const notificationApi = {
+  getAll:      (params)     => api.get('/notifications', { params }),
+  getCount:    ()           => api.get('/notifications/count'),
+  getUsers:    ()           => api.get('/notifications/users'),
+  send:        (data)       => api.post('/notifications', data),
+  markRead:    (id)         => api.patch(`/notifications/${id}/read`),
+  markAllRead: ()           => api.patch('/notifications/read-all'),
+  remove:      (id)         => api.delete(`/notifications/${id}`),
+};
+
 export const interviewApi = {
   getHistory:            (id)            => api.get(`/interviews/${id}`),
   clearConversation:     (id)            => api.delete(`/interviews/${id}/conversation`),
