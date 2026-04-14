@@ -41,7 +41,7 @@ router.post('/:candidateId/conversation', async (req, res) => {
     if (err) return res.status(code).json({ error: err });
     const { role, content } = req.body;
     if (!content?.trim()) return res.status(400).json({ error: 'Content is required' });
-    if (!['user', 'assistant'].includes(role)) return res.status(400).json({ error: 'Role must be user or assistant' });
+    if (!['user', 'assistant', 'call_script'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
     await Candidate.pushConversation(req.params.candidateId, [{ role, content: content.trim() }]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }

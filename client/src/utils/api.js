@@ -57,10 +57,7 @@ export const generateApi = {
     responseType: 'blob', timeout: 30000,
     headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
   }),
-  callScript:    (data) => axios.post('/api/generate/call-script', data, {
-    responseType: 'blob', timeout: 60000,
-    headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
-  }),
+  callScript:    (data) => api.post('/generate/call-script', data),
 };
 
 export const settingsApi = {

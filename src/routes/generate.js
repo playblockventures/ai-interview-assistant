@@ -318,7 +318,7 @@ router.post('/conversation', async (req, res) => {
 
     const messages = [
       { role: 'system', content: systemPrompt },
-      ...history.map(h => ({
+      ...history.filter(h => h.role !== 'call_script').map(h => ({
         role: h.role === 'assistant' ? 'assistant' : 'user',
         content: h.imageBase64
           ? [
@@ -446,10 +446,12 @@ router.post('/recommend-role', async (req, res) => {
 });
 
 // ── POST /generate/call-script ───────────────────────────────────────────────
+// Returns JSON { script } — client saves it as a conversation message then
+// downloads a PDF via /export-pdf when the user clicks ↓ PDF.
 router.post('/call-script', async (req, res) => {
   try {
     const {
-      candidateId, messageContent, messageIndex,
+      candidateId, history = [],
       role, customInstructions = '', companyId: companyIdOverride,
     } = req.body;
 
@@ -463,30 +465,50 @@ router.post('/call-script', async (req, res) => {
     const companyId        = companyIdOverride ?? candidate?.companyId ?? null;
     const openai           = await getOpenAIClient(effectiveUserId);
     const knowledgeContext = await getKnowledgeContext(req.user.id, companyId);
+    const userInstructions = await getCustomInstructions(req.user.id);
     const companyScenario  = await getCompanyScenario(req.user.id, companyId);
     const roleLabel        = await resolveRoleLabel(role || candidate?.role);
-    const candidateContext = buildCandidateContext(candidate, 1000);
+    const candidateContext = buildCandidateContext(candidate, 1500);
+
+    // Summarise conversation history for context (skip call_script entries)
+    const convoSummary = history
+      .filter(h => h.role !== 'call_script' && h.content)
+      .slice(-20) // last 20 messages
+      .map(h => `${h.role === 'assistant' ? 'Recruiter' : 'Candidate'}: ${h.content}`)
+      .join('\n');
 
     const systemPrompt = [
-      `You are an expert recruiter writing a structured call script for a ${roleLabel || 'professional'} interview or follow-up call.`,
+      `You are an expert recruiter writing a structured phone/video call script for a ${roleLabel || 'professional'} position.`,
       knowledgeContext,
       companyScenario,
+      userInstructions,
       candidateContext ? `\n\n--- CANDIDATE ---\n${candidateContext}` : '',
     ].filter(Boolean).join('');
 
     const userPrompt = [
-      `Generate a detailed, structured call script based on the following recruiter message or conversation step:`,
-      `\n\n"${messageContent}"`,
+      `Generate a detailed, structured call script for the next recruiter call with this candidate, based on the conversation so far.`,
+      convoSummary ? `\n\n--- CONVERSATION SO FAR ---\n${convoSummary}\n---` : '',
       customInstructions ? `\n\nCustom Instructions:\n${customInstructions}` : '',
-      `\n\nThe call script should include:
-1. **Opening** — How to introduce yourself and set the tone
-2. **Purpose of the call** — What you'll cover in this call
-3. **Key talking points** — Bullet points directly based on the message above
-4. **Questions to ask** — 3-5 targeted questions for this step
-5. **Handling common responses** — How to address hesitation, questions, or pushback
-6. **Closing** — Next steps and how to wrap up the call
+      `\n\nStructure the call script with these sections:
+## 1. Opening
+How to greet and set the tone for the call.
 
-Make it conversational, specific to the candidate and role, and easy to follow during a live call.`,
+## 2. Purpose of the Call
+What you'll cover and why you're calling.
+
+## 3. Key Talking Points
+Bullet points tailored to the current conversation stage and candidate profile.
+
+## 4. Questions to Ask
+5-7 targeted questions for this specific stage of the conversation.
+
+## 5. Handling Common Responses
+How to address hesitation, competing offers, or pushback.
+
+## 6. Closing
+How to wrap up, confirm next steps, and keep momentum.
+
+Make it natural, specific, and easy to follow live on a call.`,
     ].filter(Boolean).join('');
 
     const completion = await openai.chat.completions.create({
@@ -501,55 +523,15 @@ Make it conversational, specific to the candidate and role, and easy to follow d
 
     const script = completion.choices[0].message.content;
 
-    // Stream as PDF
-    const candidateName = candidate?.fullName || '';
-    const stepLabel     = messageIndex !== undefined ? ` — Step ${messageIndex + 1}` : '';
-    const pdfTitle      = `Call Script${stepLabel}`;
-
-    const doc = new PDFDocument({ margin: 50 });
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="call_script${stepLabel.replace(/\s/g, '_')}.pdf"`);
-    doc.pipe(res);
-
-    // Header
-    doc.fontSize(20).font('Helvetica-Bold').text(pdfTitle, { align: 'center' });
-    if (candidateName) {
-      doc.fontSize(12).font('Helvetica').moveDown(0.3).text(`Candidate: ${candidateName}`, { align: 'center' });
-    }
-    if (roleLabel) {
-      doc.fontSize(11).font('Helvetica').text(`Role: ${roleLabel}`, { align: 'center' });
-    }
-    doc.moveDown().moveTo(50, doc.y).lineTo(550, doc.y).stroke().moveDown();
-
-    // Body — parse markdown-style headers and render them as bold
-    const lines = script.split('\n');
-    lines.forEach(line => {
-      if (/^#{1,3}\s/.test(line)) {
-        // Heading
-        const text = line.replace(/^#{1,3}\s/, '');
-        doc.fontSize(13).font('Helvetica-Bold').text(text, { lineGap: 2 });
-        doc.moveDown(0.3);
-      } else if (/^\*\*(.+)\*\*/.test(line)) {
-        // Bold line
-        const text = line.replace(/\*\*/g, '');
-        doc.fontSize(11).font('Helvetica-Bold').text(text, { lineGap: 3 });
-      } else if (/^[-*•]\s/.test(line)) {
-        // Bullet
-        const text = line.replace(/^[-*•]\s/, '');
-        doc.fontSize(11).font('Helvetica').text(`  • ${text}`, { lineGap: 3 });
-      } else if (line.trim() === '') {
-        doc.moveDown(0.5);
-      } else {
-        doc.fontSize(11).font('Helvetica').text(line, { lineGap: 3 });
-      }
-    });
-
-    if (customInstructions) {
-      doc.moveDown().moveTo(50, doc.y).lineTo(550, doc.y).stroke().moveDown();
-      doc.fontSize(9).font('Helvetica').fillColor('#888888').text(`Custom instructions: ${customInstructions}`);
+    // Save to conversation history as a call_script entry
+    if (candidate) {
+      await Candidate.pushConversation(candidateId, [{
+        role: 'call_script',
+        content: script,
+      }]);
     }
 
-    doc.end();
+    res.json({ script });
   } catch (err) {
     console.error('[Call script]', err.message);
     res.status(500).json({ error: err.message });

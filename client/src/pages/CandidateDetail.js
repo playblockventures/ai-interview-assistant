@@ -751,29 +751,44 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
 
   const hasLastAssistant = history.some(m => m.role === 'assistant');
 
-  // Call script modal state
-  const [callScriptTarget, setCallScriptTarget] = useState(null); // { content, index }
-  const [callScriptInstr,  setCallScriptInstr]  = useState('');
-  const [generatingScript, setGeneratingScript] = useState(false);
+  // Call script state
+  const [showCallScriptModal, setShowCallScriptModal] = useState(false);
+  const [callScriptInstr,     setCallScriptInstr]     = useState('');
+  const [generatingScript,    setGeneratingScript]    = useState(false);
 
   const generateCallScript = async () => {
-    if (!callScriptTarget) return;
     setGeneratingScript(true);
     try {
-      const res = await generateApi.callScript({
+      const data = await generateApi.callScript({
         candidateId:        candidate.id,
-        messageContent:     callScriptTarget.content,
-        messageIndex:       callScriptTarget.index,
+        history:            history.map(m => ({ role: m.role, content: m.content })),
         role:               config.role,
         companyId:          config.companyId || undefined,
         customInstructions: callScriptInstr.trim() || undefined,
       });
-      downloadBlob(res, `call_script_step_${(callScriptTarget.index || 0) + 1}.pdf`);
-      setCallScriptTarget(null);
+      // Push into local history as call_script entry
+      setHistory(h => [...h, {
+        role: 'call_script',
+        content: data.script,
+        timestamp: new Date().toISOString(),
+        _origIdx: h.length,
+      }]);
+      setShowCallScriptModal(false);
       setCallScriptInstr('');
-      toast.success('Call script downloaded!');
+      toast.success('Call script generated!');
     } catch (e) { toast.error(e.message); }
     finally { setGeneratingScript(false); }
+  };
+
+  const downloadCallScriptPdf = async (content) => {
+    try {
+      const res = await generateApi.exportPdf({
+        content,
+        title: `Call Script — ${candidate.fullName || 'Candidate'}`,
+        candidateName: candidate.fullName,
+      });
+      downloadBlob(res, `call_script_${(candidate.fullName || 'candidate').replace(/\s+/g, '_')}.pdf`);
+    } catch (e) { toast.error('PDF export failed: ' + e.message); }
   };
 
   // Admin: send tip state
@@ -848,6 +863,9 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
             <button className="btn btn-secondary btn-sm" onClick={() => setShowManual(v => !v)} style={{ whiteSpace: 'nowrap' }}>
               + Manual Message
             </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowCallScriptModal(true)} style={{ whiteSpace: 'nowrap' }} title="Generate a call script based on the full conversation">
+              📞 Call Script
+            </button>
             {hasLastAssistant && (
               <button
                 className="btn btn-secondary btn-sm"
@@ -871,21 +889,14 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
         </div>
 
         {/* Call Script modal */}
-        {callScriptTarget && (
+        {showCallScriptModal && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
-            onClick={() => !generatingScript && setCallScriptTarget(null)}>
+            onClick={() => !generatingScript && setShowCallScriptModal(false)}>
             <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 24, width: 480, maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }}
               onClick={e => e.stopPropagation()}>
               <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>📞 Generate Call Script</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-                AI will generate a structured call script based on this conversation step and export it as a PDF.
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Based on message</label>
-                <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontSize: 12, color: 'var(--text-secondary)', maxHeight: 120, overflowY: 'auto', lineHeight: 1.6, border: '1px solid var(--border)' }}>
-                  {callScriptTarget.content?.substring(0, 400)}{callScriptTarget.content?.length > 400 ? '…' : ''}
-                </div>
+                AI will generate a structured call script based on the full conversation and all candidate resources.
               </div>
 
               <div className="form-group">
@@ -905,10 +916,10 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
               <div className="flex gap-8">
                 <button className="btn btn-primary" onClick={generateCallScript} disabled={generatingScript}>
                   {generatingScript
-                    ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Generating PDF...</>
-                    : '↓ Generate & Download PDF'}
+                    ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Generating...</>
+                    : '📞 Generate Call Script'}
                 </button>
-                <button className="btn btn-secondary" onClick={() => { setCallScriptTarget(null); setCallScriptInstr(''); }} disabled={generatingScript}>Cancel</button>
+                <button className="btn btn-secondary" onClick={() => { setShowCallScriptModal(false); setCallScriptInstr(''); }} disabled={generatingScript}>Cancel</button>
               </div>
             </div>
           </div>
@@ -1024,76 +1035,114 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
           </div>
         ) : (
           <div style={{ marginBottom: 16 }}>
-            {history.map((msg, i) => (
-              <div key={i} className={`conversation-bubble bubble-${msg.role}`}>
-                <div className="bubble-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>
-                    {msg.role === 'user'
-                      ? <>
-                          {candidate.photoUrl && (
-                            <img src={candidate.photoUrl} alt="" style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover', marginRight: 5, verticalAlign: 'middle' }} />
-                          )}
-                          {candidate.fullName || 'Candidate'} (Candidate)
-                        </>
-                      : 'You (Recruiter)'}
-                  </span>
-                  <div className="flex gap-8" style={{ alignItems: 'center' }}>
-                    {msg.timestamp && (
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>
-                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    )}
-                    {editingIdx === i ? (
-                      <>
-                        <button className="btn btn-primary btn-sm" onClick={() => saveEdit(i)} disabled={savingEdit}>
-                          {savingEdit ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Save'}
-                        </button>
-                        <button className="btn btn-secondary btn-sm" onClick={cancelEdit}>Cancel</button>
-                      </>
-                    ) : (
-                      <>
-                        <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(msg.content); toast.success('Copied!'); }}>Copy</button>
-                        {msg.role === 'assistant' && msg.content && (
-                          <button className="btn btn-secondary btn-sm" onClick={() => setCallScriptTarget({ content: msg.content, index: i })} title="Generate call script PDF for this message">
-                            📞 Call Script
-                          </button>
+            {history.map((msg, i) => {
+              if (msg.role === 'call_script') {
+                return (
+                  <div key={i} style={{ margin: '12px 0', padding: '14px 18px', border: '2px solid #0d9488', borderRadius: 12, background: 'rgba(13,148,136,0.06)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: '#0d9488' }}>📞 Call Script</span>
+                      <div className="flex gap-8" style={{ alignItems: 'center' }}>
+                        {msg.timestamp && (
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>
+                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
                         )}
-                        <button className="btn btn-secondary btn-sm" onClick={() => startEdit(i)}>✎ Edit</button>
-                        <button onClick={() => deleteMsg(i)} className="btn btn-danger btn-sm">✕</button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {msg.imageBase64 && (
-                  <div style={{ marginBottom: 6 }}>
-                    <img src={`data:${msg.imageMimeType || 'image/jpeg'};base64,${msg.imageBase64}`}
-                      alt="attachment" style={{ maxWidth: '100%', maxHeight: 240, borderRadius: 8, border: '1px solid var(--border)' }} />
-                  </div>
-                )}
-                {msg.attachedFileName && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, padding: '4px 10px', background: 'var(--bg-elevated)', borderRadius: 6, border: '1px solid var(--border)', width: 'fit-content', fontSize: 11, color: 'var(--text-secondary)' }}>
-                    <span>📎</span>
-                    <span style={{ fontWeight: 500 }}>{msg.attachedFileName}</span>
-                    {msg.attachedFileText && (
-                      <span style={{ color: 'var(--text-muted)' }}>· {Math.round(msg.attachedFileText.length / 1000)}k chars</span>
-                    )}
-                  </div>
-                )}
-
-                {/* Inline edit or display */}
-                {editingIdx === i ? (
-                  <textarea className="form-textarea" style={{ minHeight: 80, fontSize: 13, marginTop: 6 }}
-                    value={editText} onChange={e => setEditText(e.target.value)} autoFocus />
-                ) : (
-                  msg.content && (
-                    <div className="markdown-output" style={{ fontSize: 13.5, lineHeight: 1.7 }}>
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        {editingIdx === i ? (
+                          <>
+                            <button className="btn btn-primary btn-sm" onClick={() => saveEdit(i)} disabled={savingEdit}>
+                              {savingEdit ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Save'}
+                            </button>
+                            <button className="btn btn-secondary btn-sm" onClick={cancelEdit}>Cancel</button>
+                          </>
+                        ) : (
+                          <>
+                            <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(msg.content); toast.success('Copied!'); }}>Copy</button>
+                            <button className="btn btn-secondary btn-sm" onClick={() => downloadCallScriptPdf(msg.content)}>↓ PDF</button>
+                            <button className="btn btn-secondary btn-sm" onClick={() => startEdit(i)}>✎ Edit</button>
+                            <button onClick={() => deleteMsg(i)} className="btn btn-danger btn-sm">✕</button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  )
-                )}
-              </div>
-            ))}
+                    {editingIdx === i ? (
+                      <textarea className="form-textarea" style={{ minHeight: 120, fontSize: 13, marginTop: 6 }}
+                        value={editText} onChange={e => setEditText(e.target.value)} autoFocus />
+                    ) : (
+                      msg.content && (
+                        <div className="markdown-output" style={{ fontSize: 13.5, lineHeight: 1.7 }}>
+                          <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        </div>
+                      )
+                    )}
+                  </div>
+                );
+              }
+              return (
+                <div key={i} className={`conversation-bubble bubble-${msg.role}`}>
+                  <div className="bubble-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>
+                      {msg.role === 'user'
+                        ? <>
+                            {candidate.photoUrl && (
+                              <img src={candidate.photoUrl} alt="" style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover', marginRight: 5, verticalAlign: 'middle' }} />
+                            )}
+                            {candidate.fullName || 'Candidate'} (Candidate)
+                          </>
+                        : 'You (Recruiter)'}
+                    </span>
+                    <div className="flex gap-8" style={{ alignItems: 'center' }}>
+                      {msg.timestamp && (
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>
+                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                      {editingIdx === i ? (
+                        <>
+                          <button className="btn btn-primary btn-sm" onClick={() => saveEdit(i)} disabled={savingEdit}>
+                            {savingEdit ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Save'}
+                          </button>
+                          <button className="btn btn-secondary btn-sm" onClick={cancelEdit}>Cancel</button>
+                        </>
+                      ) : (
+                        <>
+                          <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(msg.content); toast.success('Copied!'); }}>Copy</button>
+                          <button className="btn btn-secondary btn-sm" onClick={() => startEdit(i)}>✎ Edit</button>
+                          <button onClick={() => deleteMsg(i)} className="btn btn-danger btn-sm">✕</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {msg.imageBase64 && (
+                    <div style={{ marginBottom: 6 }}>
+                      <img src={`data:${msg.imageMimeType || 'image/jpeg'};base64,${msg.imageBase64}`}
+                        alt="attachment" style={{ maxWidth: '100%', maxHeight: 240, borderRadius: 8, border: '1px solid var(--border)' }} />
+                    </div>
+                  )}
+                  {msg.attachedFileName && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, padding: '4px 10px', background: 'var(--bg-elevated)', borderRadius: 6, border: '1px solid var(--border)', width: 'fit-content', fontSize: 11, color: 'var(--text-secondary)' }}>
+                      <span>📎</span>
+                      <span style={{ fontWeight: 500 }}>{msg.attachedFileName}</span>
+                      {msg.attachedFileText && (
+                        <span style={{ color: 'var(--text-muted)' }}>· {Math.round(msg.attachedFileText.length / 1000)}k chars</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Inline edit or display */}
+                  {editingIdx === i ? (
+                    <textarea className="form-textarea" style={{ minHeight: 80, fontSize: 13, marginTop: 6 }}
+                      value={editText} onChange={e => setEditText(e.target.value)} autoFocus />
+                  ) : (
+                    msg.content && (
+                      <div className="markdown-output" style={{ fontSize: 13.5, lineHeight: 1.7 }}>
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      </div>
+                    )
+                  )}
+                </div>
+              );
+            })}
             {(loading || regenerating) && (
               <div className="conversation-bubble bubble-assistant">
                 <div className="bubble-label">You (Recruiter)</div>
