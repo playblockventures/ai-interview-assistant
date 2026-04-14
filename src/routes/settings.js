@@ -187,7 +187,7 @@ router.delete('/enhancv-key', requireAuth, async (req, res) => {
 });
 
 // ── POST /api/settings/extract-linkedin ──────────────────────────────────────
-// Extract candidate profile data from a LinkedIn URL using EnhanceCV API
+// Extract candidate profile data from a LinkedIn URL using Piloterr API
 router.post('/extract-linkedin', requireAuth, async (req, res) => {
   try {
     const { linkedinUrl } = req.body;
@@ -197,7 +197,6 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
     const S = getSettings();
     let apiKey = await S.getForUser(req.user.id, 'enhancv_key').catch(() => null);
     if (!apiKey && !req.user.isAdmin) {
-      // Try to find admin users and use their key
       try {
         const User = require('../models/User');
         const users = await User.findAll();
@@ -208,33 +207,33 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
         }
       } catch (_) {}
     }
-    if (!apiKey) apiKey = process.env.ENHANCV_API_KEY || null;
-    if (!apiKey) return res.status(400).json({ error: 'EnhanceCV API key not configured. Please add your key in Settings → Account.' });
+    if (!apiKey) apiKey = process.env.PILOTERR_API_KEY || null;
+    if (!apiKey) return res.status(400).json({ error: 'Piloterr API key not configured. Please add your key in Settings → Account.' });
 
-    // Call EnhanceCV API
-    const response = await axios.post(
-      'https://api.enhancv.com/v1/linkedin-import',
-      { url: linkedinUrl },
+    // Call Piloterr LinkedIn profile API
+    const response = await axios.get(
+      'https://piloterr.com/api/v2/linkedin/profile',
       {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
+        params: { query: linkedinUrl },
+        headers: { 'x-api-key': apiKey },
         timeout: 30000,
       }
     );
 
-    const data = response.data;
-    // Map EnhanceCV response fields to our candidate fields
-    const profile = data.profile || data.data || data;
+    const profile = response.data;
+
+    // Map Piloterr response to our candidate fields
+    const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ')
+      || profile.full_name || profile.name || '';
+
     const result = {
-      fullName:     [profile.firstName, profile.lastName].filter(Boolean).join(' ') || profile.name || '',
+      fullName,
       email:        profile.email || '',
-      phone:        profile.phone || profile.phoneNumber || '',
+      phone:        profile.phone || '',
       location:     profile.location || profile.city || '',
-      currentTitle: profile.headline || profile.title || profile.currentTitle || '',
-      linkedinUrl:  linkedinUrl,
-      photoUrl:     profile.profilePicture || profile.photoUrl || profile.picture || '',
+      currentTitle: profile.headline || profile.title || '',
+      linkedinUrl,
+      photoUrl:     profile.profile_picture || profile.photo_url || '',
       resumeText:   buildResumeText(profile),
     };
 
@@ -242,32 +241,54 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
   } catch (err) {
     const status = err.response?.status;
     const msg = err.response?.data?.message || err.response?.data?.error || err.message;
-    if (status === 401 || status === 403) return res.status(400).json({ error: 'Invalid EnhanceCV API key.' });
+    if (status === 401 || status === 403) return res.status(400).json({ error: 'Invalid Piloterr API key.' });
     if (status === 404) return res.status(400).json({ error: 'LinkedIn profile not found or not accessible.' });
-    if (status === 429) return res.status(429).json({ error: 'EnhanceCV rate limit reached. Try again later.' });
+    if (status === 429) return res.status(429).json({ error: 'Piloterr rate limit reached. Try again later.' });
     res.status(500).json({ error: `LinkedIn extraction failed: ${msg}` });
   }
 });
 
 function buildResumeText(profile) {
+  // Piloterr uses snake_case; also handle camelCase for forward compat
   const lines = [];
-  if (profile.summary) lines.push(`Summary:\n${profile.summary}`);
-  if (Array.isArray(profile.experience) && profile.experience.length) {
+  const summary = profile.summary || profile.about || '';
+  if (summary) lines.push(`Summary:\n${summary}`);
+
+  const experiences = profile.experiences || profile.experience || [];
+  if (Array.isArray(experiences) && experiences.length) {
     lines.push('Experience:');
-    profile.experience.forEach(e => {
-      lines.push(`  ${e.title || ''} at ${e.company || ''} (${e.startDate || ''}–${e.endDate || 'present'})`);
+    experiences.forEach(e => {
+      const title   = e.title || '';
+      const company = e.company || e.company_name || '';
+      const start   = e.start_date || e.startDate || '';
+      const end     = e.end_date   || e.endDate   || 'present';
+      lines.push(`  ${title} at ${company} (${start}–${end})`);
       if (e.description) lines.push(`  ${e.description}`);
     });
   }
-  if (Array.isArray(profile.education) && profile.education.length) {
+
+  const educations = profile.educations || profile.education || [];
+  if (Array.isArray(educations) && educations.length) {
     lines.push('Education:');
-    profile.education.forEach(e => {
-      lines.push(`  ${e.degree || ''} at ${e.school || ''} (${e.startDate || ''}–${e.endDate || ''})`);
+    educations.forEach(e => {
+      const degree = e.degree_name || e.degree || '';
+      const school = e.school || e.school_name || '';
+      const start  = e.start_date || e.startDate || '';
+      const end    = e.end_date   || e.endDate   || '';
+      lines.push(`  ${degree} at ${school} (${start}–${end})`);
     });
   }
-  if (Array.isArray(profile.skills) && profile.skills.length) {
-    lines.push(`Skills: ${profile.skills.map(s => s.name || s).join(', ')}`);
+
+  const skills = profile.skills || [];
+  if (Array.isArray(skills) && skills.length) {
+    lines.push(`Skills: ${skills.map(s => s.name || s).join(', ')}`);
   }
+
+  const languages = profile.languages || [];
+  if (Array.isArray(languages) && languages.length) {
+    lines.push(`Languages: ${languages.map(l => l.name || l).join(', ')}`);
+  }
+
   return lines.join('\n');
 }
 
