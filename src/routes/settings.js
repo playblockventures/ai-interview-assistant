@@ -236,7 +236,9 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
       email:        '',   // LinkedIn does not expose email via scraping APIs
       phone:        '',   // LinkedIn does not expose phone via scraping APIs
       location,
-      currentTitle: profile.headline || profile.title || '',
+      currentTitle: profile.headline || profile.title
+        || (Array.isArray(profile.experiences) && profile.experiences[0]?.job_title)
+        || '',
       linkedinUrl,
       photoUrl,
       resumeText:   buildResumeText(profile),
