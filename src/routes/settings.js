@@ -33,14 +33,15 @@ const invalidateCache = (userId) => {
 // ── GET /api/settings ──────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    let hasFirebase       = !!process.env.FIREBASE_SERVICE_ACCOUNT;
-    let roles             = null;
-    let recruiters        = [];
-    let companies         = [];
-    let companyScenario   = '';
-    let companyScenarios  = {};
-    let hasOpenAI         = !!process.env.OPENAI_API_KEY;
-    let userOpenAIKey     = '';
+    let hasFirebase         = !!process.env.FIREBASE_SERVICE_ACCOUNT;
+    let roles               = null;
+    let recruiters          = [];
+    let companies           = [];
+    let companyScenario     = '';
+    let companyScenarios    = {};
+    let hasOpenAI           = !!process.env.OPENAI_API_KEY;
+    let userOpenAIKey       = '';
+    let userEnhancvKey      = '';
 
     if (isConnected()) {
       const S   = getSettings();
@@ -68,6 +69,9 @@ router.get('/', async (req, res) => {
             const ownKey = await S.getForUser(userId, 'openai_key').catch(() => null);
             userOpenAIKey   = ownKey ? '••••••••' : '';
             if (ownKey) hasOpenAI = true;
+
+            const enhancvKey = await S.getForUser(userId, 'enhancv_key').catch(() => null);
+            userEnhancvKey   = enhancvKey ? '••••••••' : '';
 
             companyScenario  = await S.getForUser(userId, 'company_scenario').catch(() => '') || '';
             const rawScenarios = await S.getForUser(userId, 'company_scenarios').catch(() => null) || {};
@@ -121,7 +125,7 @@ router.get('/', async (req, res) => {
               recruiters = all[recruiterKey(userId)] || [];
             }
 
-            const result = { hasOpenAI, hasFirebase, userOpenAIKey, dbConnected: isConnected(), roles, recruiters, companies, companyScenario, companyScenarios };
+            const result = { hasOpenAI, hasFirebase, userOpenAIKey, userEnhancvKey, dbConnected: isConnected(), roles, recruiters, companies, companyScenario, companyScenarios };
             setCached(cacheKey, result);
             return res.json(result);
           }
@@ -135,9 +139,9 @@ router.get('/', async (req, res) => {
       if (all.custom_roles)             roles       = all.custom_roles;
     }
 
-    res.json({ hasOpenAI, hasFirebase, userOpenAIKey, dbConnected: isConnected(), roles, recruiters, companies, companyScenario, companyScenarios });
+    res.json({ hasOpenAI, hasFirebase, userOpenAIKey, userEnhancvKey, dbConnected: isConnected(), roles, recruiters, companies, companyScenario, companyScenarios });
   } catch (err) {
-    res.json({ hasOpenAI: !!process.env.OPENAI_API_KEY, hasFirebase: !!process.env.FIREBASE_SERVICE_ACCOUNT, dbConnected: false, roles: null, recruiters: [], companies: [], companyScenario: '', companyScenarios: {}, userOpenAIKey: '' });
+    res.json({ hasOpenAI: !!process.env.OPENAI_API_KEY, hasFirebase: !!process.env.FIREBASE_SERVICE_ACCOUNT, dbConnected: false, roles: null, recruiters: [], companies: [], companyScenario: '', companyScenarios: {}, userOpenAIKey: '', userEnhancvKey: '' });
   }
 });
 
@@ -157,9 +161,115 @@ router.put('/openai-key', requireAuth, async (req, res) => {
 router.delete('/openai-key', requireAuth, async (req, res) => {
   try {
     await getSettings().setForUser(req.user.id, 'openai_key', null);
+    invalidateCache(req.user.id);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+// ── PUT /api/settings/enhancv-key ─────────────────────────────────────────────
+router.put('/enhancv-key', requireAuth, async (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    if (!apiKey || !apiKey.trim()) return res.status(400).json({ error: 'API key is required' });
+    await getSettings().setForUser(req.user.id, 'enhancv_key', apiKey.trim());
+    invalidateCache(req.user.id);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── DELETE /api/settings/enhancv-key ─────────────────────────────────────────
+router.delete('/enhancv-key', requireAuth, async (req, res) => {
+  try {
+    await getSettings().setForUser(req.user.id, 'enhancv_key', null);
+    invalidateCache(req.user.id);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── POST /api/settings/extract-linkedin ──────────────────────────────────────
+// Extract candidate profile data from a LinkedIn URL using EnhanceCV API
+router.post('/extract-linkedin', requireAuth, async (req, res) => {
+  try {
+    const { linkedinUrl } = req.body;
+    if (!linkedinUrl) return res.status(400).json({ error: 'LinkedIn URL is required' });
+
+    // Resolve API key: user key → admin key → env
+    const S = getSettings();
+    let apiKey = await S.getForUser(req.user.id, 'enhancv_key').catch(() => null);
+    if (!apiKey && !req.user.isAdmin) {
+      // Try to find admin users and use their key
+      try {
+        const User = require('../models/User');
+        const users = await User.findAll();
+        const admins = users.filter(u => u.isAdmin);
+        for (const admin of admins) {
+          apiKey = await S.getForUser(admin.id, 'enhancv_key').catch(() => null);
+          if (apiKey) break;
+        }
+      } catch (_) {}
+    }
+    if (!apiKey) apiKey = process.env.ENHANCV_API_KEY || null;
+    if (!apiKey) return res.status(400).json({ error: 'EnhanceCV API key not configured. Please add your key in Settings → Account.' });
+
+    // Call EnhanceCV API
+    const response = await axios.post(
+      'https://api.enhancv.com/v1/linkedin-import',
+      { url: linkedinUrl },
+      {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 30000,
+      }
+    );
+
+    const data = response.data;
+    // Map EnhanceCV response fields to our candidate fields
+    const profile = data.profile || data.data || data;
+    const result = {
+      fullName:     [profile.firstName, profile.lastName].filter(Boolean).join(' ') || profile.name || '',
+      email:        profile.email || '',
+      phone:        profile.phone || profile.phoneNumber || '',
+      location:     profile.location || profile.city || '',
+      currentTitle: profile.headline || profile.title || profile.currentTitle || '',
+      linkedinUrl:  linkedinUrl,
+      photoUrl:     profile.profilePicture || profile.photoUrl || profile.picture || '',
+      resumeText:   buildResumeText(profile),
+    };
+
+    res.json(result);
+  } catch (err) {
+    const status = err.response?.status;
+    const msg = err.response?.data?.message || err.response?.data?.error || err.message;
+    if (status === 401 || status === 403) return res.status(400).json({ error: 'Invalid EnhanceCV API key.' });
+    if (status === 404) return res.status(400).json({ error: 'LinkedIn profile not found or not accessible.' });
+    if (status === 429) return res.status(429).json({ error: 'EnhanceCV rate limit reached. Try again later.' });
+    res.status(500).json({ error: `LinkedIn extraction failed: ${msg}` });
+  }
+});
+
+function buildResumeText(profile) {
+  const lines = [];
+  if (profile.summary) lines.push(`Summary:\n${profile.summary}`);
+  if (Array.isArray(profile.experience) && profile.experience.length) {
+    lines.push('Experience:');
+    profile.experience.forEach(e => {
+      lines.push(`  ${e.title || ''} at ${e.company || ''} (${e.startDate || ''}–${e.endDate || 'present'})`);
+      if (e.description) lines.push(`  ${e.description}`);
+    });
+  }
+  if (Array.isArray(profile.education) && profile.education.length) {
+    lines.push('Education:');
+    profile.education.forEach(e => {
+      lines.push(`  ${e.degree || ''} at ${e.school || ''} (${e.startDate || ''}–${e.endDate || ''})`);
+    });
+  }
+  if (Array.isArray(profile.skills) && profile.skills.length) {
+    lines.push(`Skills: ${profile.skills.map(s => s.name || s).join(', ')}`);
+  }
+  return lines.join('\n');
+}
 
 // ── PUT /api/settings/company-scenario ───────────────────────────────────────
 // Legacy single-scenario endpoint (kept for backward compat)

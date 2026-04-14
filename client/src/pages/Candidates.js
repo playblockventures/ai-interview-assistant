@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import toast from 'react-hot-toast';
-import { candidateApi, generateApi, authApi } from '../utils/api';
+import { candidateApi, generateApi, authApi, settingsApi } from '../utils/api';
 import { AppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -30,12 +30,14 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
   });
   const [photoPreview, setPhotoPreview] = useState(initial?.photoUrl || '');
   const [photoData, setPhotoData]       = useState('');
-  const [resumeFile, setResumeFile]     = useState(null);
-  const [resumeText, setResumeText]     = useState('');
-  const [extracting, setExtracting]     = useState(false);
-  const [recommending, setRecommending] = useState(false);
-  const [roleHint, setRoleHint]         = useState('');
-  const [saving, setSaving]             = useState(false);
+  const [resumeFile, setResumeFile]         = useState(null);
+  const [resumeText, setResumeText]         = useState('');
+  const [extracting, setExtracting]         = useState(false);
+  const [recommending, setRecommending]     = useState(false);
+  const [roleHint, setRoleHint]             = useState('');
+  const [saving, setSaving]                 = useState(false);
+  const [linkedinInput, setLinkedinInput]   = useState('');
+  const [extractingLi, setExtractingLi]     = useState(false);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -94,6 +96,28 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
     finally { setRecommending(false); }
   };
 
+  const extractFromLinkedIn = async () => {
+    const url = linkedinInput.trim();
+    if (!url) return;
+    setExtractingLi(true);
+    try {
+      const data = await settingsApi.extractLinkedIn(url);
+      setForm(p => ({
+        ...p,
+        fullName:     p.fullName     || data.fullName     || '',
+        email:        p.email        || data.email        || '',
+        phone:        p.phone        || data.phone        || '',
+        linkedinUrl:  url,
+        location:     p.location     || data.location     || '',
+        currentTitle: p.currentTitle || data.currentTitle || '',
+      }));
+      if (data.photoUrl && !photoPreview) { setPhotoPreview(data.photoUrl); setPhotoData(data.photoUrl); }
+      if (data.resumeText) setResumeText(data.resumeText);
+      toast.success('LinkedIn profile extracted — fields auto-filled');
+    } catch (e) { toast.error(e.message); }
+    finally { setExtractingLi(false); }
+  };
+
   const getRecruiterName = (id) => recruiters.find(r => r.id === id)?.name || '';
   const getCompanyName   = (id) => companies.find(c => c.id === id)?.name  || '';
 
@@ -127,16 +151,39 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
           <div style={{ width: 72, height: 72, borderRadius: '50%', flexShrink: 0, background: 'var(--bg-elevated)', border: '2px solid var(--border)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>
             {photoPreview ? <img src={photoPreview} alt="Photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
           </div>
-          <div style={{ flex: 1 }}>
-            <div className="form-label" style={{ marginBottom: 6 }}>
-              Resume {extracting && <span style={{ color: 'var(--accent)', marginLeft: 6 }}>⟳ Extracting...</span>}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="form-label" style={{ marginBottom: 2 }}>
+              Import from Resume or LinkedIn
             </div>
-            <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`} style={{ padding: '14px 16px', marginBottom: 0 }}>
+            {/* Resume drop zone */}
+            <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`} style={{ padding: '10px 14px', marginBottom: 0 }}>
               <input {...getInputProps()} />
-              <div className="dropzone-icon" style={{ fontSize: 18, marginBottom: 2 }}>📄</div>
-              <div className="dropzone-text" style={{ fontSize: 12 }}>
-                {resumeFile ? resumeFile.name : isDragActive ? 'Drop here' : extracting ? 'Extracting...' : 'Drop PDF/DOC/TXT to auto-fill fields'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                <span style={{ fontSize: 16 }}>📄</span>
+                <span style={{ color: 'var(--text-muted)' }}>
+                  {resumeFile ? resumeFile.name : extracting ? '⟳ Extracting...' : isDragActive ? 'Drop here' : 'Drop or click to upload resume (PDF/DOC/TXT)'}
+                </span>
               </div>
+            </div>
+            {/* LinkedIn extraction */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                className="form-input"
+                style={{ flex: 1, fontSize: 12 }}
+                placeholder="Or paste LinkedIn URL to auto-fill..."
+                value={linkedinInput}
+                onChange={e => setLinkedinInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && extractFromLinkedIn()}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={extractFromLinkedIn}
+                disabled={extractingLi || !linkedinInput.trim()}
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                {extractingLi ? <><span className="spinner" style={{ width: 10, height: 10 }} /> Extracting...</> : '🔗 Extract'}
+              </button>
             </div>
           </div>
         </div>

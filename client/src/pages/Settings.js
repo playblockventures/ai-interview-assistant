@@ -709,14 +709,20 @@ function KnowledgeSection({ dbConnected, targetUserId = null }) {
 // ── Change Password (for self) ────────────────────────────────────────────────
 function AccountSection() {
   const { user } = useAuth();
-  const [form, setForm]         = useState({ currentPassword: '', newPassword: '', confirm: '' });
-  const [saving, setSaving]     = useState(false);
-  const [apiKey, setApiKey]     = useState('');
-  const [hasKey, setHasKey]     = useState(false);
-  const [savingKey, setSavingKey] = useState(false);
+  const [form, setForm]               = useState({ currentPassword: '', newPassword: '', confirm: '' });
+  const [saving, setSaving]           = useState(false);
+  const [apiKey, setApiKey]           = useState('');
+  const [hasKey, setHasKey]           = useState(false);
+  const [savingKey, setSavingKey]     = useState(false);
+  const [enhancvKey, setEnhancvKey]   = useState('');
+  const [hasEnhancv, setHasEnhancv]   = useState(false);
+  const [savingEnhancv, setSavingEnhancv] = useState(false);
 
   useEffect(() => {
-    settingsApi.getAll().then(d => setHasKey(!!d.userOpenAIKey)).catch(() => {});
+    settingsApi.getAll().then(d => {
+      setHasKey(!!d.userOpenAIKey);
+      setHasEnhancv(!!d.userEnhancvKey);
+    }).catch(() => {});
   }, []);
 
   const submitPassword = async () => {
@@ -749,6 +755,27 @@ function AccountSection() {
       await settingsApi.deleteOpenAIKey();
       setHasKey(false);
       toast.success('API key removed');
+    } catch (e) { toast.error(e.message); }
+  };
+
+  const saveEnhancvApiKey = async () => {
+    if (!enhancvKey.trim()) return;
+    setSavingEnhancv(true);
+    try {
+      await settingsApi.saveEnhancvKey(enhancvKey.trim());
+      setHasEnhancv(true);
+      setEnhancvKey('');
+      toast.success('EnhanceCV API key saved');
+    } catch (e) { toast.error(e.message); }
+    finally { setSavingEnhancv(false); }
+  };
+
+  const removeEnhancvKey = async () => {
+    if (!window.confirm('Remove your EnhanceCV API key?')) return;
+    try {
+      await settingsApi.deleteEnhancvKey();
+      setHasEnhancv(false);
+      toast.success('EnhanceCV key removed');
     } catch (e) { toast.error(e.message); }
   };
 
@@ -806,6 +833,39 @@ function AccountSection() {
         </div>
         <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
           Get your key at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>platform.openai.com/api-keys</a>
+        </div>
+      </div>
+
+      {/* EnhanceCV API Key — per user */}
+      <div className="card mt-16">
+        <div className="card-title">EnhanceCV API Key</div>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+          Add your EnhanceCV API key to extract candidate profiles from LinkedIn URLs.
+          If you don&apos;t set a key, the admin&apos;s key will be used as a fallback.
+        </p>
+        {hasEnhancv && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(0,212,170,0.06)', border: '1px solid rgba(0,212,170,0.2)', borderRadius: 'var(--radius-sm)', marginBottom: 14 }}>
+            <span style={{ color: 'var(--success)', fontSize: 16 }}>✓</span>
+            <span style={{ fontSize: 13, color: 'var(--success)', flex: 1 }}>Your EnhanceCV API key is configured</span>
+            <button className="btn btn-danger btn-sm" onClick={removeEnhancvKey}>Remove</button>
+          </div>
+        )}
+        <div className="flex gap-8">
+          <input
+            className="form-input"
+            type="password"
+            placeholder={hasEnhancv ? 'Enter new key to replace current one' : 'Your EnhanceCV API key...'}
+            value={enhancvKey}
+            onChange={e => setEnhancvKey(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && saveEnhancvApiKey()}
+            style={{ flex: 1 }}
+          />
+          <button className="btn btn-primary" onClick={saveEnhancvApiKey} disabled={savingEnhancv || !enhancvKey.trim()}>
+            {savingEnhancv ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Save Key'}
+          </button>
+        </div>
+        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+          Get your key at <a href="https://app.enhancv.com" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>app.enhancv.com</a>
         </div>
       </div>
     </>
