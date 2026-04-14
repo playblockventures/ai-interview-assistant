@@ -210,6 +210,8 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
     if (!apiKey) apiKey = process.env.PILOTERR_API_KEY || null;
     if (!apiKey) return res.status(400).json({ error: 'Piloterr API key not configured. Please add your key in Settings → Account.' });
 
+    console.log('[extract-linkedin] using key prefix:', apiKey.slice(0, 6), '...', 'url:', linkedinUrl);
+
     // Call Piloterr LinkedIn profile API
     const response = await axios.get(
       'https://piloterr.com/api/v2/linkedin/profile',
@@ -240,8 +242,10 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
     res.json(result);
   } catch (err) {
     const status = err.response?.status;
-    const msg = err.response?.data?.message || err.response?.data?.error || err.message;
-    if (status === 401 || status === 403) return res.status(400).json({ error: 'Invalid Piloterr API key.' });
+    const piloterrBody = err.response?.data;
+    const msg = (typeof piloterrBody === 'string' ? piloterrBody : piloterrBody?.message || piloterrBody?.error || piloterrBody?.detail) || err.message;
+    console.error('[extract-linkedin] Piloterr error', status, JSON.stringify(piloterrBody));
+    if (status === 401 || status === 403) return res.status(400).json({ error: `Piloterr auth failed (${status}): ${msg || 'Invalid API key'}` });
     if (status === 404) return res.status(400).json({ error: 'LinkedIn profile not found or not accessible.' });
     if (status === 429) return res.status(429).json({ error: 'Piloterr rate limit reached. Try again later.' });
     res.status(500).json({ error: `LinkedIn extraction failed: ${msg}` });
