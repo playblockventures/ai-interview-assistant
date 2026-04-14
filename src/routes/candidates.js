@@ -75,7 +75,8 @@ router.get('/:id', async (req, res) => {
 router.post('/', upload.single('resume'), async (req, res) => {
   try {
     const { fullName, email, linkedinUrl, phone, location, currentTitle, photoUrl,
-            role, resumeUrl, recruiterId, recruiterName, resumeText: bodyText } = req.body;
+            role, resumeUrl, recruiterId, recruiterName, companyId, companyName,
+            resumeText: bodyText } = req.body;
 
     let resumeText = bodyText || '', resumeFileName = '';
     if (req.file) {
@@ -90,6 +91,8 @@ router.post('/', upload.single('resume'), async (req, res) => {
       resumeUrl:     resumeUrl     || '',
       recruiterId:   recruiterId   || '',
       recruiterName: recruiterName || '',
+      companyId:     companyId     || '',
+      companyName:   companyName   || '',
       ownerId:       req.user.id,
       ownerName:     req.user.displayName || req.user.username,
     });
