@@ -494,7 +494,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
   });
   const [history, setHistory] = useState(
     (candidate.conversationHistory || []).map((m, originalIdx) => ({
-      role:              m.role === 'assistant' ? 'assistant' : 'user',
+      role:              m.role === 'assistant' ? 'assistant' : m.role === 'call_script' ? 'call_script' : 'user',
       content:           m.content,
       timestamp:         m.timestamp,
       imageBase64:       m.imageBase64       || null,
