@@ -223,19 +223,48 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
     );
 
     const profile = response.data;
+    console.log('[extract-linkedin] raw profile keys:', Object.keys(profile));
+    console.log('[extract-linkedin] raw profile:', JSON.stringify(profile).slice(0, 2000));
 
     // Map Piloterr response to our candidate fields
     const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ')
       || profile.full_name || profile.name || '';
 
+    // Email: Piloterr may nest it under contact_info or return directly
+    const email = profile.email
+      || profile.contact_info?.email
+      || profile.personal_email
+      || profile.work_email
+      || '';
+
+    // Phone: may be nested
+    const phone = profile.phone
+      || profile.phone_number
+      || profile.contact_info?.phone
+      || '';
+
+    // Location: various possible fields
+    const location = profile.location
+      || profile.city
+      || [profile.city_name, profile.country_name].filter(Boolean).join(', ')
+      || profile.geo_location
+      || '';
+
+    // Photo
+    const photoUrl = profile.profile_picture
+      || profile.photo_url
+      || profile.picture
+      || profile.avatar
+      || '';
+
     const result = {
       fullName,
-      email:        profile.email || '',
-      phone:        profile.phone || '',
-      location:     profile.location || profile.city || '',
-      currentTitle: profile.headline || profile.title || '',
+      email,
+      phone,
+      location,
+      currentTitle: profile.headline || profile.title || profile.current_title || '',
       linkedinUrl,
-      photoUrl:     profile.profile_picture || profile.photo_url || '',
+      photoUrl,
       resumeText:   buildResumeText(profile),
     };
 
@@ -254,44 +283,81 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
 });
 
 function buildResumeText(profile) {
-  // Piloterr uses snake_case; also handle camelCase for forward compat
   const lines = [];
-  const summary = profile.summary || profile.about || '';
+
+  // Bio / summary / about
+  const summary = profile.summary || profile.about || profile.description || profile.bio || '';
   if (summary) lines.push(`Summary:\n${summary}`);
 
-  const experiences = profile.experiences || profile.experience || [];
+  // Headline / current title
+  const headline = profile.headline || profile.title || '';
+  if (headline && !summary) lines.push(`Title: ${headline}`);
+
+  // Experience
+  const experiences = profile.experiences || profile.experience || profile.positions || profile.work_experience || [];
   if (Array.isArray(experiences) && experiences.length) {
-    lines.push('Experience:');
+    lines.push('\nExperience:');
     experiences.forEach(e => {
-      const title   = e.title || '';
-      const company = e.company || e.company_name || '';
-      const start   = e.start_date || e.startDate || '';
-      const end     = e.end_date   || e.endDate   || 'present';
-      lines.push(`  ${title} at ${company} (${start}–${end})`);
-      if (e.description) lines.push(`  ${e.description}`);
+      const title   = e.title || e.role || '';
+      const company = e.company || e.company_name || e.organization || '';
+      const start   = e.start_date || e.startDate || e.start || '';
+      const end     = e.end_date   || e.endDate   || e.end   || 'present';
+      const dateStr = (start || end !== 'present') ? ` (${start}–${end})` : '';
+      lines.push(`  ${[title, company].filter(Boolean).join(' at ')}${dateStr}`);
+      const desc = e.description || e.summary || '';
+      if (desc) lines.push(`    ${desc}`);
     });
   }
 
+  // Education
   const educations = profile.educations || profile.education || [];
   if (Array.isArray(educations) && educations.length) {
-    lines.push('Education:');
+    lines.push('\nEducation:');
     educations.forEach(e => {
-      const degree = e.degree_name || e.degree || '';
-      const school = e.school || e.school_name || '';
-      const start  = e.start_date || e.startDate || '';
-      const end    = e.end_date   || e.endDate   || '';
-      lines.push(`  ${degree} at ${school} (${start}–${end})`);
+      const degree = e.degree_name || e.degree || e.field_of_study || '';
+      const school = e.school || e.school_name || e.institution || '';
+      const start  = e.start_date || e.startDate || e.start || '';
+      const end    = e.end_date   || e.endDate   || e.end   || '';
+      const dateStr = (start || end) ? ` (${[start, end].filter(Boolean).join('–')})` : '';
+      lines.push(`  ${[degree, school].filter(Boolean).join(' at ')}${dateStr}`);
+      if (e.description) lines.push(`    ${e.description}`);
     });
   }
 
-  const skills = profile.skills || [];
-  if (Array.isArray(skills) && skills.length) {
-    lines.push(`Skills: ${skills.map(s => s.name || s).join(', ')}`);
+  // Certifications
+  const certs = profile.certifications || profile.certificates || [];
+  if (Array.isArray(certs) && certs.length) {
+    lines.push('\nCertifications:');
+    certs.forEach(c => {
+      const name = c.name || c.title || (typeof c === 'string' ? c : '');
+      const org  = c.authority || c.organization || c.issuer || '';
+      if (name) lines.push(`  ${name}${org ? ' — ' + org : ''}`);
+    });
   }
 
+  // Skills
+  const skills = profile.skills || [];
+  if (Array.isArray(skills) && skills.length) {
+    const skillNames = skills.map(s => s.name || s.skill || (typeof s === 'string' ? s : '')).filter(Boolean);
+    if (skillNames.length) lines.push(`\nSkills: ${skillNames.join(', ')}`);
+  }
+
+  // Languages
   const languages = profile.languages || [];
   if (Array.isArray(languages) && languages.length) {
-    lines.push(`Languages: ${languages.map(l => l.name || l).join(', ')}`);
+    const langNames = languages.map(l => l.name || l.language || (typeof l === 'string' ? l : '')).filter(Boolean);
+    if (langNames.length) lines.push(`Languages: ${langNames.join(', ')}`);
+  }
+
+  // Volunteer / activities
+  const volunteer = profile.volunteer_work || profile.volunteering || profile.activities || [];
+  if (Array.isArray(volunteer) && volunteer.length) {
+    lines.push('\nVolunteer / Activities:');
+    volunteer.forEach(v => {
+      const role = v.role || v.title || v.name || (typeof v === 'string' ? v : '');
+      const org  = v.company || v.organization || '';
+      if (role) lines.push(`  ${role}${org ? ' at ' + org : ''}`);
+    });
   }
 
   return lines.join('\n');
