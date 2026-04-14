@@ -226,7 +226,9 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
 
     // Map Piloterr response to our candidate fields
     const fullName = profile.full_name || [profile.first_name, profile.last_name].filter(Boolean).join(' ') || '';
-    const location = profile.address || profile.location || profile.city || '';
+    const addr = profile.address || {};
+    const location = (typeof addr === 'string' ? addr : [addr.city, addr.country].filter(Boolean).join(', '))
+      || profile.location || profile.city || '';
     const photoUrl = profile.photo_url || profile.profile_picture || profile.picture || '';
 
     const result = {
