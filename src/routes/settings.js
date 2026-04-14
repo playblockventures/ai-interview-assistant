@@ -57,6 +57,20 @@ router.get('/', async (req, res) => {
             companies        = all[companiesKey(userId)] || [];
 
             if (payload.isAdmin) {
+              // Admin sees ALL users' companies merged (deduplicated by id)
+              const allCompanyKeys = Object.keys(all).filter(k => k.startsWith('companies_'));
+              const mergedCompanies = [];
+              const seenCompanies = new Set();
+              allCompanyKeys.forEach(k => {
+                (all[k] || []).forEach(c => {
+                  if (!seenCompanies.has(c.id)) {
+                    seenCompanies.add(c.id);
+                    mergedCompanies.push(c);
+                  }
+                });
+              });
+              if (mergedCompanies.length > 0) companies = mergedCompanies;
+
               // Admin sees ALL users' recruiters merged, with owner info attached
               const User = require('../models/User');
               const users = await User.findAll().catch(() => []);

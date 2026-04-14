@@ -1272,7 +1272,7 @@ function StatusTab({ candidate, onUpdated }) {
 
 // ── Edit Profile Modal ───────────────────────────────────────────────────────
 function EditProfileModal({ candidate, onClose, onSaved }) {
-  const { roles, recruiters } = useContext(AppContext);
+  const { roles, recruiters, companies } = useContext(AppContext);
   const fileInputRef = useRef(null);
   const [form, setForm] = useState({
     fullName:     candidate.fullName     || '',
@@ -1285,6 +1285,8 @@ function EditProfileModal({ candidate, onClose, onSaved }) {
     resumeUrl:    candidate.resumeUrl    || '',
     recruiterId:  candidate.recruiterId  || '',
     photoUrl:     candidate.photoUrl     || '',
+    companyId:    candidate.companyId    || '',
+    companyName:  candidate.companyName  || '',
   });
   const [saving,      setSaving]      = useState(false);
   const [extracting,  setExtracting]  = useState(false);
@@ -1322,6 +1324,8 @@ function EditProfileModal({ candidate, onClose, onSaved }) {
       Object.entries(form).forEach(([k, v]) => fd.append(k, v || ''));
       const recruiterName = recruiters.find(r => r.id === form.recruiterId)?.name || '';
       fd.set('recruiterName', recruiterName);
+      const companyName = companies.find(c => c.id === form.companyId)?.name || '';
+      fd.set('companyName', companyName);
       if (resumeFile) fd.append('resume', resumeFile);
       await candidateApi.update(candidate.id, fd);
       toast.success('Profile updated!');
@@ -1376,6 +1380,16 @@ function EditProfileModal({ candidate, onClose, onSaved }) {
             {recruiters.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
         </div>
+
+        {companies.length > 0 && (
+          <div className="form-group">
+            <label className="form-label">Company</label>
+            <select className="form-select" value={form.companyId} onChange={e => set('companyId', e.target.value)}>
+              <option value="">No company assigned</option>
+              {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        )}
 
         <div className="flex gap-8" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
           <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
