@@ -492,18 +492,29 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
     customInstructions: '',
     companyId: candidate.companyId || '',
   });
-  const [history, setHistory] = useState(
-    (candidate.conversationHistory || []).map((m, originalIdx) => ({
-      role:              m.role === 'assistant' ? 'assistant' : m.role === 'call_script' ? 'call_script' : 'user',
-      content:           m.content,
-      timestamp:         m.timestamp,
-      imageBase64:       m.imageBase64       || null,
-      imageMimeType:     m.imageMimeType     || null,
-      attachedFileName:  m.attachedFileName  || null,
-      attachedFileText:  m.attachedFileText  || null,
-      _origIdx:          originalIdx,
-    }))
-  );
+  const mapHistory = (arr) => (arr || []).map((m, originalIdx) => ({
+    role:             m.role === 'assistant' ? 'assistant' : m.role === 'call_script' ? 'call_script' : 'user',
+    content:          m.content,
+    timestamp:        m.timestamp,
+    imageBase64:      m.imageBase64      || null,
+    imageMimeType:    m.imageMimeType    || null,
+    attachedFileName: m.attachedFileName || null,
+    attachedFileText: m.attachedFileText || null,
+    _origIdx:         originalIdx,
+  }));
+
+  const [history, setHistory] = useState(() => mapHistory(candidate.conversationHistory));
+
+  // Refresh history from server on mount and after external changes
+  const refreshHistory = useCallback(async () => {
+    try {
+      const data = await interviewApi.getHistory(candidate.id);
+      setHistory(mapHistory(data.conversationHistory));
+    } catch (_) {}
+  }, [candidate.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { refreshHistory(); }, [refreshHistory]);
+
   const [input, setInput] = useState('');
   const [pendingImage, setPendingImage] = useState(null);
   const [pendingFile, setPendingFile] = useState(null);   // { name, text, size }
@@ -767,15 +778,10 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
         recruiterId:        config.recruiterId || undefined,
         customInstructions: callScriptInstr.trim() || undefined,
       });
-      // Push into local history as call_script entry
-      setHistory(h => [...h, {
-        role: 'call_script',
-        content: data.script,
-        timestamp: new Date().toISOString(),
-        _origIdx: h.length,
-      }]);
       setShowCallScriptModal(false);
       setCallScriptInstr('');
+      // Refresh history from server so _origIdx values are accurate and data is confirmed persisted
+      await refreshHistory();
       toast.success('Call script generated!');
     } catch (e) { toast.error(e.message); }
     finally { setGeneratingScript(false); }
