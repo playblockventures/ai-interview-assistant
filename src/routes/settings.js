@@ -245,7 +245,8 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
     const piloterrBody = err.response?.data;
     const msg = (typeof piloterrBody === 'string' ? piloterrBody : piloterrBody?.message || piloterrBody?.error || piloterrBody?.detail) || err.message;
     console.error('[extract-linkedin] Piloterr error', status, JSON.stringify(piloterrBody));
-    if (status === 401 || status === 403) return res.status(400).json({ error: `Piloterr auth failed (${status}): ${msg || 'Invalid API key'}` });
+    if (status === 401) return res.status(400).json({ error: 'Invalid Piloterr API key. Check your key in Settings → Account.' });
+    if (status === 403) return res.status(400).json({ error: 'Piloterr plan does not include LinkedIn profile access. Please upgrade your Piloterr plan or use a key with LinkedIn API access.' });
     if (status === 404) return res.status(400).json({ error: 'LinkedIn profile not found or not accessible.' });
     if (status === 429) return res.status(429).json({ error: 'Piloterr rate limit reached. Try again later.' });
     res.status(500).json({ error: `LinkedIn extraction failed: ${msg}` });
