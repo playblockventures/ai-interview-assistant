@@ -20,21 +20,13 @@ const Candidate = {
     // Use .select() so Firestore only returns the fields we need for the list view
     let query = db.collection(COL).select(...LIST_FIELDS);
 
-    // Push ownership filter to Firestore when possible (avoids full scan for non-admin)
-    if (!isAdmin && ownerId) {
-      query = query.where('ownerId', '==', ownerId);
-    } else if (isAdmin && ownerId) {
-      query = query.where('ownerId', '==', ownerId);
-    }
-    if (status) {
-      query = query.where('status', '==', status);
-    }
+    // Push ownership and status filters to Firestore
+    if (ownerId) query = query.where('ownerId', '==', ownerId);
+    if (status)  query = query.where('status',  '==', status);
 
     const snapshot = await query.get();
     let docs = snapshot.docs.map(docToObj);
 
-    // lastMessageAt is stored directly on the doc (updated on every push), so no need to compute
-    // Fall back to updatedAt/createdAt for docs that don't have it yet
     docs.sort((a, b) => {
       const aTime = a.lastMessageAt || a.updatedAt || a.createdAt || '';
       const bTime = b.lastMessageAt || b.updatedAt || b.createdAt || '';
@@ -58,6 +50,33 @@ const Candidate = {
     const start = (parseInt(page) - 1) * parseInt(limit);
     const paginated = docs.slice(start, start + parseInt(limit));
     return { candidates: paginated, total, page: parseInt(page), totalPages: Math.ceil(total / parseInt(limit)) };
+  },
+
+  // Lightweight stats for the dashboard — only reads small projection fields
+  async getStats({ ownerId, isAdmin } = {}) {
+    const db = getDB();
+    const STAT_FIELDS = ['status', 'role', 'location', 'recruiterId', 'recruiterName',
+                         'ownerId', 'ownerName', 'companyId', 'companyName',
+                         'createdAt', 'updatedAt', 'lastMessageAt'];
+    let query = db.collection(COL).select(...STAT_FIELDS);
+    if (ownerId) query = query.where('ownerId', '==', ownerId);
+    const snapshot = await query.get();
+    return snapshot.docs.map(docToObj);
+  },
+
+  // Fetch just the N most recently active candidates (for dashboard recent list)
+  async findRecent({ ownerId, isAdmin, limit = 8 } = {}) {
+    const db = getDB();
+    let query = db.collection(COL).select(...LIST_FIELDS);
+    if (ownerId) query = query.where('ownerId', '==', ownerId);
+    const snapshot = await query.get();
+    let docs = snapshot.docs.map(docToObj);
+    docs.sort((a, b) => {
+      const aTime = a.lastMessageAt || a.updatedAt || a.createdAt || '';
+      const bTime = b.lastMessageAt || b.updatedAt || b.createdAt || '';
+      return bTime.localeCompare(aTime);
+    });
+    return docs.slice(0, parseInt(limit));
   },
 
   async findById(id) {

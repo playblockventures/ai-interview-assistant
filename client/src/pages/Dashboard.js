@@ -203,12 +203,12 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const [recentData, allData] = await Promise.all([
-          candidateApi.getAll({ limit: 8 }),
-          candidateApi.getAll({ limit: 1000 }),
+        const [recentData, statsData] = await Promise.all([
+          candidateApi.getRecent(8),
+          candidateApi.getStats(),
         ]);
         setRecent(recentData.candidates || []);
-        setAllCandidates(allData.candidates || []);
+        setAllCandidates(statsData.candidates || []);
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     })();

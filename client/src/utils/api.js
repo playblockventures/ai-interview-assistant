@@ -39,6 +39,8 @@ export const authApi = {
 
 export const candidateApi = {
   getAll:       (params)   => api.get('/candidates', { params }),
+  getStats:     ()         => api.get('/candidates/stats'),
+  getRecent:    (limit)    => api.get('/candidates/recent', { params: { limit } }),
   getById:      (id)       => api.get(`/candidates/${id}`),
   create:       (formData) => api.post('/candidates', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   update:       (id, formData) => api.put(`/candidates/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),

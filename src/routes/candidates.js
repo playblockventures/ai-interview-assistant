@@ -24,6 +24,30 @@ const attachmentUpload = multer({
 
 router.use(requireAuth);
 
+// GET stats — lightweight aggregate for dashboard (no large fields)
+router.get('/stats', async (req, res) => {
+  try {
+    const docs = await Candidate.getStats({
+      ownerId: req.user.isAdmin ? null : req.user.id,
+      isAdmin: req.user.isAdmin,
+    });
+    res.json({ candidates: docs, total: docs.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET recent — small list for dashboard recent activity
+router.get('/recent', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 8;
+    const docs = await Candidate.findRecent({
+      ownerId: req.user.isAdmin ? null : req.user.id,
+      isAdmin: req.user.isAdmin,
+      limit,
+    });
+    res.json({ candidates: docs });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET all — scoped by user unless admin
 router.get('/', async (req, res) => {
   try {
