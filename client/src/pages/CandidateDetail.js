@@ -1431,7 +1431,10 @@ function ProfileCard({ candidate }) {
                   ? <img src={recruiter.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   : recruiter.name.charAt(0)}
               </div>
-              <span>Recruiter: {recruiter.name}</span>
+              <span>Recruiter: {recruiter.linkedinUrl
+                ? <a href={recruiter.linkedinUrl.startsWith('http') ? recruiter.linkedinUrl : `https://${recruiter.linkedinUrl}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>{recruiter.name} ↗</a>
+                : recruiter.name}
+              </span>
             </div>
           )}
           {candidate.ownerName && (
