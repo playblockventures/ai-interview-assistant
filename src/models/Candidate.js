@@ -4,38 +4,43 @@ const COL = 'candidates';
 const now = () => new Date().toISOString();
 const docToObj = (doc) => ({ id: doc.id, ...doc.data() });
 
+// Fields fetched for the list view — excludes large payload fields
+const LIST_FIELDS = [
+  'fullName', 'email', 'phone', 'location', 'currentTitle', 'linkedinUrl',
+  'photoUrl', 'role', 'recruiterId', 'recruiterName', 'companyId', 'companyName',
+  'ownerId', 'ownerName', 'status', 'notes', 'resumeUrl', 'resumeFileName',
+  'appliedScenario', 'createdAt', 'updatedAt', 'lastMessageAt',
+];
+
 const Candidate = {
-  // Fetch all, filter client-side (avoids Firestore composite index requirement)
+  // Fetch list using field projection — avoids downloading huge resumeText/conversationHistory
   async findAll({ status, search, page = 1, limit = 20, recruiterId, ownerId, isAdmin } = {}) {
     const db = getDB();
-    const snapshot = await db.collection(COL).get();
-    let docs = snapshot.docs.map(docToObj);
 
-    if (isAdmin) {
-      // Admin can optionally filter by a specific owner; null/undefined = see all
-      if (ownerId) docs = docs.filter(d => d.ownerId === ownerId);
-    } else {
-      // Non-admin: always scoped to their own candidates
-      if (ownerId) docs = docs.filter(d => d.ownerId === ownerId);
+    // Use .select() so Firestore only returns the fields we need for the list view
+    let query = db.collection(COL).select(...LIST_FIELDS);
+
+    // Push ownership filter to Firestore when possible (avoids full scan for non-admin)
+    if (!isAdmin && ownerId) {
+      query = query.where('ownerId', '==', ownerId);
+    } else if (isAdmin && ownerId) {
+      query = query.where('ownerId', '==', ownerId);
+    }
+    if (status) {
+      query = query.where('status', '==', status);
     }
 
-    // Compute lastMessageAt = latest timestamp across conversation + outreach messages
-    docs = docs.map(d => {
-      const times = [
-        ...(d.conversationHistory || []).map(m => m.timestamp || m.editedAt || ''),
-        ...(d.outreachMessages    || []).map(m => m.createdAt  || m.editedAt || ''),
-      ].filter(Boolean);
-      const lastMessageAt = times.length ? times.reduce((a, b) => a > b ? a : b) : '';
-      return { ...d, lastMessageAt };
-    });
+    const snapshot = await query.get();
+    let docs = snapshot.docs.map(docToObj);
 
+    // lastMessageAt is stored directly on the doc (updated on every push), so no need to compute
+    // Fall back to updatedAt/createdAt for docs that don't have it yet
     docs.sort((a, b) => {
       const aTime = a.lastMessageAt || a.updatedAt || a.createdAt || '';
       const bTime = b.lastMessageAt || b.updatedAt || b.createdAt || '';
       return bTime.localeCompare(aTime);
     });
 
-    if (status)      docs = docs.filter(d => d.status === status);
     if (recruiterId) docs = docs.filter(d => d.recruiterId === recruiterId);
     if (search) {
       const s = search.toLowerCase();
@@ -52,8 +57,7 @@ const Candidate = {
     const total = docs.length;
     const start = (parseInt(page) - 1) * parseInt(limit);
     const paginated = docs.slice(start, start + parseInt(limit));
-    const light = paginated.map(({ resumeText, conversationHistory, outreachMessages, interviewScenarios, ...rest }) => rest);
-    return { candidates: light, total, page: parseInt(page), totalPages: Math.ceil(total / parseInt(limit)) };
+    return { candidates: paginated, total, page: parseInt(page), totalPages: Math.ceil(total / parseInt(limit)) };
   },
 
   async findById(id) {
@@ -124,22 +128,26 @@ const Candidate = {
   async pushOutreachMessage(id, msg) {
     const db = getDB();
     const admin = require('firebase-admin');
+    const ts = now();
     await db.collection(COL).doc(id).update({
       outreachMessages: admin.firestore.FieldValue.arrayUnion({
-        content: msg.content, type: msg.type, createdAt: now(),
+        content: msg.content, type: msg.type, createdAt: ts,
       }),
-      updatedAt: now(),
+      lastMessageAt: ts,
+      updatedAt: ts,
     });
   },
 
   async pushConversation(id, entries) {
     const db = getDB();
-    const withTimestamps = entries.map(e => ({ ...e, timestamp: now() }));
+    const ts = now();
+    const withTimestamps = entries.map(e => ({ ...e, timestamp: ts }));
     const doc = await db.collection(COL).doc(id).get();
     const existing = doc.data().conversationHistory || [];
     await db.collection(COL).doc(id).update({
       conversationHistory: [...existing, ...withTimestamps],
-      updatedAt: now(),
+      lastMessageAt: ts,
+      updatedAt: ts,
     });
   },
 

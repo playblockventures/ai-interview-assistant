@@ -14,6 +14,22 @@ const { extractTextFromBuffer } = require('../utils/fileParser');
 const recruiterKey = (userId) => `recruiters_${userId}`;
 const companiesKey = (userId) => `companies_${userId}`;
 
+// In-memory settings cache — avoids hitting Firestore on every page load
+// Cache is per-user and expires after 60 seconds
+const settingsCache = new Map();
+const SETTINGS_TTL = 60_000; // ms
+const getCached = (key) => {
+  const entry = settingsCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > SETTINGS_TTL) { settingsCache.delete(key); return null; }
+  return entry.data;
+};
+const setCached = (key, data) => settingsCache.set(key, { data, ts: Date.now() });
+const invalidateCache = (userId) => {
+  settingsCache.delete(userId);
+  settingsCache.delete('admin');
+};
+
 // ── GET /api/settings ──────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
@@ -28,11 +44,6 @@ router.get('/', async (req, res) => {
 
     if (isConnected()) {
       const S   = getSettings();
-      const all = await S.getAll().catch(() => ({}));
-
-      if (all.firebase_service_account) hasFirebase = true;
-      if (all.openai_api_key)           hasOpenAI   = true;
-      if (all.custom_roles)             roles       = all.custom_roles;
 
       const authHeader = req.headers.authorization || '';
       if (authHeader.startsWith('Bearer ')) {
@@ -42,6 +53,17 @@ router.get('/', async (req, res) => {
             const userId = (payload.isAdmin && req.query.userId)
               ? req.query.userId
               : payload.id;
+
+            // Check cache first
+            const cacheKey = payload.isAdmin ? 'admin' : userId;
+            const cached = getCached(cacheKey);
+            if (cached) return res.json(cached);
+
+            const all = await S.getAll().catch(() => ({}));
+
+            if (all.firebase_service_account) hasFirebase = true;
+            if (all.openai_api_key)           hasOpenAI   = true;
+            if (all.custom_roles)             roles       = all.custom_roles;
 
             const ownKey = await S.getForUser(userId, 'openai_key').catch(() => null);
             userOpenAIKey   = ownKey ? '••••••••' : '';
@@ -54,7 +76,7 @@ router.get('/', async (req, res) => {
             for (const [k, v] of Object.entries(rawScenarios)) {
               companyScenarios[k === '_default' ? '' : k] = v;
             }
-            companies        = all[companiesKey(userId)] || [];
+            companies = all[companiesKey(userId)] || [];
 
             if (payload.isAdmin) {
               // Admin sees ALL users' companies merged (deduplicated by id)
@@ -98,9 +120,19 @@ router.get('/', async (req, res) => {
             } else {
               recruiters = all[recruiterKey(userId)] || [];
             }
+
+            const result = { hasOpenAI, hasFirebase, userOpenAIKey, dbConnected: isConnected(), roles, recruiters, companies, companyScenario, companyScenarios };
+            setCached(cacheKey, result);
+            return res.json(result);
           }
         } catch (_) {}
       }
+
+      // No auth token — still return basic env info
+      const all = await S.getAll().catch(() => ({}));
+      if (all.firebase_service_account) hasFirebase = true;
+      if (all.openai_api_key)           hasOpenAI   = true;
+      if (all.custom_roles)             roles       = all.custom_roles;
     }
 
     res.json({ hasOpenAI, hasFirebase, userOpenAIKey, dbConnected: isConnected(), roles, recruiters, companies, companyScenario, companyScenarios });
@@ -134,6 +166,7 @@ router.delete('/openai-key', requireAuth, async (req, res) => {
 router.put('/company-scenario', requireAuth, async (req, res) => {
   try {
     await getSettings().setForUser(req.user.id, 'company_scenario', req.body.scenario || '');
+    invalidateCache(req.user.id);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -149,6 +182,7 @@ router.put('/company-scenarios', requireAuth, async (req, res) => {
       safe[k === '' ? '_default' : k] = v;
     }
     await getSettings().setForUser(req.user.id, 'company_scenarios', safe);
+    invalidateCache(req.user.id);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -158,6 +192,7 @@ router.put('/recruiters', requireAuth, async (req, res) => {
   try {
     const targetUserId = (req.user.isAdmin && req.query.userId) ? req.query.userId : req.user.id;
     await getSettings().set(recruiterKey(targetUserId), req.body.recruiters || []);
+    invalidateCache(targetUserId);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -166,6 +201,7 @@ router.put('/recruiters', requireAuth, async (req, res) => {
 router.put('/companies', requireAuth, async (req, res) => {
   try {
     await getSettings().setForUser(req.user.id, 'companies', req.body.companies || []);
+    invalidateCache(req.user.id);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
