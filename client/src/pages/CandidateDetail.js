@@ -3,6 +3,17 @@ import { useParams, Link, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import toast from 'react-hot-toast';
 import { candidateApi, generateApi, interviewApi, notificationApi } from '../utils/api';
+
+// Helper — download a blob response as a file
+function downloadBlob(res, fallbackName) {
+  const cd = res.headers?.['content-disposition'] || '';
+  const match = cd.match(/filename="?([^";\n]+)"?/);
+  const filename = match ? match[1] : fallbackName;
+  const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  window.URL.revokeObjectURL(url);
+}
 import { useDropzone } from 'react-dropzone';
 import { AppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -740,6 +751,31 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
 
   const hasLastAssistant = history.some(m => m.role === 'assistant');
 
+  // Call script modal state
+  const [callScriptTarget, setCallScriptTarget] = useState(null); // { content, index }
+  const [callScriptInstr,  setCallScriptInstr]  = useState('');
+  const [generatingScript, setGeneratingScript] = useState(false);
+
+  const generateCallScript = async () => {
+    if (!callScriptTarget) return;
+    setGeneratingScript(true);
+    try {
+      const res = await generateApi.callScript({
+        candidateId:        candidate.id,
+        messageContent:     callScriptTarget.content,
+        messageIndex:       callScriptTarget.index,
+        role:               config.role,
+        companyId:          config.companyId || undefined,
+        customInstructions: callScriptInstr.trim() || undefined,
+      });
+      downloadBlob(res, `call_script_step_${(callScriptTarget.index || 0) + 1}.pdf`);
+      setCallScriptTarget(null);
+      setCallScriptInstr('');
+      toast.success('Call script downloaded!');
+    } catch (e) { toast.error(e.message); }
+    finally { setGeneratingScript(false); }
+  };
+
   // Admin: send tip state
   const [showTipModal, setShowTipModal] = useState(false);
   const [tipMsg, setTipMsg]             = useState('');
@@ -833,6 +869,50 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
             )}
           </div>
         </div>
+
+        {/* Call Script modal */}
+        {callScriptTarget && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+            onClick={() => !generatingScript && setCallScriptTarget(null)}>
+            <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 24, width: 480, maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>📞 Generate Call Script</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+                AI will generate a structured call script based on this conversation step and export it as a PDF.
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Based on message</label>
+                <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontSize: 12, color: 'var(--text-secondary)', maxHeight: 120, overflowY: 'auto', lineHeight: 1.6, border: '1px solid var(--border)' }}>
+                  {callScriptTarget.content?.substring(0, 400)}{callScriptTarget.content?.length > 400 ? '…' : ''}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">
+                  Custom Instructions <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span>
+                </label>
+                <textarea
+                  className="form-textarea"
+                  style={{ minHeight: 90 }}
+                  placeholder={`e.g. Focus on salary negotiation talking points. Include objection handling for "I'm happy at my current company". Keep the tone warm and consultative.`}
+                  value={callScriptInstr}
+                  onChange={e => setCallScriptInstr(e.target.value)}
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-8">
+                <button className="btn btn-primary" onClick={generateCallScript} disabled={generatingScript}>
+                  {generatingScript
+                    ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Generating PDF...</>
+                    : '↓ Generate & Download PDF'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => { setCallScriptTarget(null); setCallScriptInstr(''); }} disabled={generatingScript}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Admin: Send Tip modal */}
         {showTipModal && (
@@ -973,6 +1053,11 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
                     ) : (
                       <>
                         <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(msg.content); toast.success('Copied!'); }}>Copy</button>
+                        {msg.role === 'assistant' && msg.content && (
+                          <button className="btn btn-secondary btn-sm" onClick={() => setCallScriptTarget({ content: msg.content, index: i })} title="Generate call script PDF for this message">
+                            📞 Call Script
+                          </button>
+                        )}
                         <button className="btn btn-secondary btn-sm" onClick={() => startEdit(i)}>✎ Edit</button>
                         <button onClick={() => deleteMsg(i)} className="btn btn-danger btn-sm">✕</button>
                       </>

@@ -445,6 +445,117 @@ router.post('/recommend-role', async (req, res) => {
   }
 });
 
+// ── POST /generate/call-script ───────────────────────────────────────────────
+router.post('/call-script', async (req, res) => {
+  try {
+    const {
+      candidateId, messageContent, messageIndex,
+      role, customInstructions = '', companyId: companyIdOverride,
+    } = req.body;
+
+    let candidate = null;
+    if (candidateId) {
+      candidate = await Candidate.findById(candidateId);
+      if (!Candidate.canAccess(candidate, req.user)) candidate = null;
+    }
+
+    const effectiveUserId  = await getEffectiveUserId(req, candidateId);
+    const companyId        = companyIdOverride ?? candidate?.companyId ?? null;
+    const openai           = await getOpenAIClient(effectiveUserId);
+    const knowledgeContext = await getKnowledgeContext(req.user.id, companyId);
+    const companyScenario  = await getCompanyScenario(req.user.id, companyId);
+    const roleLabel        = await resolveRoleLabel(role || candidate?.role);
+    const candidateContext = buildCandidateContext(candidate, 1000);
+
+    const systemPrompt = [
+      `You are an expert recruiter writing a structured call script for a ${roleLabel || 'professional'} interview or follow-up call.`,
+      knowledgeContext,
+      companyScenario,
+      candidateContext ? `\n\n--- CANDIDATE ---\n${candidateContext}` : '',
+    ].filter(Boolean).join('');
+
+    const userPrompt = [
+      `Generate a detailed, structured call script based on the following recruiter message or conversation step:`,
+      `\n\n"${messageContent}"`,
+      customInstructions ? `\n\nCustom Instructions:\n${customInstructions}` : '',
+      `\n\nThe call script should include:
+1. **Opening** — How to introduce yourself and set the tone
+2. **Purpose of the call** — What you'll cover in this call
+3. **Key talking points** — Bullet points directly based on the message above
+4. **Questions to ask** — 3-5 targeted questions for this step
+5. **Handling common responses** — How to address hesitation, questions, or pushback
+6. **Closing** — Next steps and how to wrap up the call
+
+Make it conversational, specific to the candidate and role, and easy to follow during a live call.`,
+    ].filter(Boolean).join('');
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userPrompt },
+      ],
+      max_tokens: 2000,
+      temperature: 0.7,
+    });
+
+    const script = completion.choices[0].message.content;
+
+    // Stream as PDF
+    const candidateName = candidate?.fullName || '';
+    const stepLabel     = messageIndex !== undefined ? ` — Step ${messageIndex + 1}` : '';
+    const pdfTitle      = `Call Script${stepLabel}`;
+
+    const doc = new PDFDocument({ margin: 50 });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="call_script${stepLabel.replace(/\s/g, '_')}.pdf"`);
+    doc.pipe(res);
+
+    // Header
+    doc.fontSize(20).font('Helvetica-Bold').text(pdfTitle, { align: 'center' });
+    if (candidateName) {
+      doc.fontSize(12).font('Helvetica').moveDown(0.3).text(`Candidate: ${candidateName}`, { align: 'center' });
+    }
+    if (roleLabel) {
+      doc.fontSize(11).font('Helvetica').text(`Role: ${roleLabel}`, { align: 'center' });
+    }
+    doc.moveDown().moveTo(50, doc.y).lineTo(550, doc.y).stroke().moveDown();
+
+    // Body — parse markdown-style headers and render them as bold
+    const lines = script.split('\n');
+    lines.forEach(line => {
+      if (/^#{1,3}\s/.test(line)) {
+        // Heading
+        const text = line.replace(/^#{1,3}\s/, '');
+        doc.fontSize(13).font('Helvetica-Bold').text(text, { lineGap: 2 });
+        doc.moveDown(0.3);
+      } else if (/^\*\*(.+)\*\*/.test(line)) {
+        // Bold line
+        const text = line.replace(/\*\*/g, '');
+        doc.fontSize(11).font('Helvetica-Bold').text(text, { lineGap: 3 });
+      } else if (/^[-*•]\s/.test(line)) {
+        // Bullet
+        const text = line.replace(/^[-*•]\s/, '');
+        doc.fontSize(11).font('Helvetica').text(`  • ${text}`, { lineGap: 3 });
+      } else if (line.trim() === '') {
+        doc.moveDown(0.5);
+      } else {
+        doc.fontSize(11).font('Helvetica').text(line, { lineGap: 3 });
+      }
+    });
+
+    if (customInstructions) {
+      doc.moveDown().moveTo(50, doc.y).lineTo(550, doc.y).stroke().moveDown();
+      doc.fontSize(9).font('Helvetica').fillColor('#888888').text(`Custom instructions: ${customInstructions}`);
+    }
+
+    doc.end();
+  } catch (err) {
+    console.error('[Call script]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /generate/export-pdf ─────────────────────────────────────────────────
 router.post('/export-pdf', async (req, res) => {
   try {
