@@ -511,7 +511,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
       const data = await interviewApi.getHistory(candidate.id);
       setHistory(mapHistory(data.conversationHistory));
     } catch (_) {}
-  }, [candidate.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [candidate.id]); // eslint-disable-line
 
   useEffect(() => { refreshHistory(); }, [refreshHistory]);
 
