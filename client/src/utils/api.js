@@ -94,6 +94,7 @@ export const notificationApi = {
   getAll:      (params)     => api.get('/notifications', { params }),
   getCount:    ()           => api.get('/notifications/count'),
   getUsers:    ()           => api.get('/notifications/users'),
+  getSent:     ()           => api.get('/notifications/sent'),
   send:        (data)       => api.post('/notifications', data),
   markRead:    (id)         => api.patch(`/notifications/${id}/read`),
   markAllRead: ()           => api.patch('/notifications/read-all'),

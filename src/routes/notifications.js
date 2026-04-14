@@ -57,6 +57,29 @@ router.post('/', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── GET /notifications/sent ──────────────────────────────────────────────────
+// Admin: returns all notifications sent by this admin, with per-recipient read status
+router.get('/sent', async (req, res) => {
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  try {
+    const all = await Notification.findAll();
+    // Only notifications created by this admin
+    const sent = all.filter(n => n.createdBy === req.user.id);
+
+    // Group by a "send batch" key: same title+message+createdAt prefix (within 5s)
+    // Simpler: just return flat list with userId + read, let frontend group by content
+    const User = require('../models/User');
+    const users = await User.findAll().catch(() => []);
+    const userMap = {};
+    users.forEach(u => { userMap[u.id] = u.displayName || u.username; });
+
+    res.json(sent.map(n => ({
+      ...n,
+      recipientName: userMap[n.userId] || n.userId,
+    })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── PATCH /notifications/:id/read ─────────────────────────────────────────────
 router.patch('/:id/read', async (req, res) => {
   try {

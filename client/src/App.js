@@ -37,21 +37,27 @@ function NotificationBell() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen]           = useState(false);
+  const [tab, setTab]             = useState('inbox'); // 'inbox' | 'sent'
   const [items, setItems]         = useState([]);
+  const [sent, setSent]           = useState([]);
   const [unread, setUnread]       = useState(0);
   const [loading, setLoading]     = useState(false);
+  const [loadingSent, setLoadingSent] = useState(false);
+
+  // Tip detail modal (for users viewing a tip)
+  const [activeTip, setActiveTip] = useState(null);
+
+  // Send tip modal (admin)
   const [showTip, setShowTip]     = useState(false);
   const [users, setUsers]         = useState([]);
   const [tip, setTip]             = useState({ userIds: [], title: '', message: '', candidateId: '', candidateName: '' });
   const [sending, setSending]     = useState(false);
+
   const dropRef = useRef(null);
   const pollRef = useRef(null);
 
   const fetchCount = useCallback(async () => {
-    try {
-      const data = await notificationApi.getCount();
-      setUnread(data.count || 0);
-    } catch (_) {}
+    try { const d = await notificationApi.getCount(); setUnread(d.count || 0); } catch (_) {}
   }, []);
 
   const fetchAll = useCallback(async () => {
@@ -64,7 +70,12 @@ function NotificationBell() {
     finally { setLoading(false); }
   }, []);
 
-  // Poll unread count every 30 s
+  const fetchSent = useCallback(async () => {
+    setLoadingSent(true);
+    try { setSent(await notificationApi.getSent()); } catch (_) {}
+    finally { setLoadingSent(false); }
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     fetchCount();
@@ -72,7 +83,6 @@ function NotificationBell() {
     return () => clearInterval(pollRef.current);
   }, [user, fetchCount]);
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e) => { if (dropRef.current && !dropRef.current.contains(e.target)) setOpen(false); };
     document.addEventListener('mousedown', handler);
@@ -81,7 +91,7 @@ function NotificationBell() {
 
   const openPanel = () => {
     setOpen(v => {
-      if (!v) fetchAll();
+      if (!v) { fetchAll(); if (user?.isAdmin) fetchSent(); }
       return !v;
     });
   };
@@ -90,6 +100,8 @@ function NotificationBell() {
     try {
       await notificationApi.markRead(id);
       setItems(p => p.map(n => n.id === id ? { ...n, read: true } : n));
+      // Also update read status in sent list so admin sees it immediately
+      setSent(p => p.map(n => n.id === id ? { ...n, read: true } : n));
       setUnread(p => Math.max(0, p - 1));
     } catch (_) {}
   };
@@ -111,13 +123,16 @@ function NotificationBell() {
 
   const clickNotification = (n) => {
     if (!n.read) markRead(n.id);
-    if (n.candidateId) {
+    if (n.type === 'tip') {
+      // Show full tip content in a modal
+      setActiveTip(n);
+      setOpen(false);
+    } else if (n.candidateId) {
       navigate(`/candidates/${n.candidateId}`);
       setOpen(false);
     }
   };
 
-  // Admin: send tip
   const openTip = async () => {
     if (!users.length) {
       try { setUsers(await notificationApi.getUsers()); } catch (_) {}
@@ -133,6 +148,7 @@ function NotificationBell() {
       toast.success('Tip sent');
       setShowTip(false);
       setTip({ userIds: [], title: '', message: '', candidateId: '', candidateName: '' });
+      fetchSent();
     } catch (e) { toast.error(e.message); }
     finally { setSending(false); }
   };
@@ -152,6 +168,17 @@ function NotificationBell() {
     return `${Math.floor(h / 24)}d ago`;
   };
 
+  // Group sent notifications by message+title (same send batch)
+  const sentGroups = (() => {
+    const map = new Map();
+    sent.forEach(n => {
+      const key = `${n.title}||${n.message}||${n.createdAt?.slice(0, 16)}`;
+      if (!map.has(key)) map.set(key, { ...n, recipients: [] });
+      map.get(key).recipients.push({ userId: n.userId, name: n.recipientName, read: n.read, id: n.id });
+    });
+    return [...map.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  })();
+
   return (
     <div ref={dropRef} style={{ position: 'relative', marginBottom: 8 }}>
       {/* Bell button */}
@@ -168,11 +195,9 @@ function NotificationBell() {
           <span style={{ fontSize: 16 }}>🔔</span>
           {unread > 0 && (
             <span style={{
-              position: 'absolute', top: -2, right: -2,
-              background: 'var(--error)', color: '#fff',
-              borderRadius: '50%', fontSize: 9, fontWeight: 700,
-              minWidth: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: '0 3px', lineHeight: 1,
+              position: 'absolute', top: -2, right: -2, background: 'var(--error)', color: '#fff',
+              borderRadius: '50%', fontSize: 9, fontWeight: 700, minWidth: 16, height: 16,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', lineHeight: 1,
             }}>{unread > 99 ? '99+' : unread}</span>
           )}
         </div>
@@ -186,149 +211,202 @@ function NotificationBell() {
           position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 4,
           background: 'var(--bg-surface)', border: '1px solid var(--border)',
           borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', zIndex: 200,
-          maxHeight: 420, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          width: 320, maxHeight: 480, display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}>
           {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-            <span style={{ fontWeight: 600, fontSize: 13 }}>Notifications</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {user?.isAdmin && (
-                <button
-                  onClick={openTip}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--accent)', padding: '2px 6px', borderRadius: 4 }}
-                >
-                  💡 Send Tip
-                </button>
-              )}
-              {unread > 0 && (
-                <button
-                  onClick={markAllRead}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--text-muted)', padding: '2px 6px', borderRadius: 4 }}
-                >
-                  Mark all read
-                </button>
-              )}
+          <div style={{ padding: '10px 14px 0', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>Notifications</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {user?.isAdmin && (
+                  <button onClick={openTip}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--accent)', padding: '2px 6px', borderRadius: 4 }}>
+                    💡 Send Tip
+                  </button>
+                )}
+                {tab === 'inbox' && unread > 0 && (
+                  <button onClick={markAllRead}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--text-muted)', padding: '2px 6px', borderRadius: 4 }}>
+                    Mark all read
+                  </button>
+                )}
+              </div>
             </div>
+            {/* Tabs — admin only */}
+            {user?.isAdmin && (
+              <div style={{ display: 'flex', gap: 0 }}>
+                {[['inbox', 'Inbox'], ['sent', 'Sent']].map(([t, label]) => (
+                  <button key={t} onClick={() => setTab(t)} style={{
+                    background: 'none', border: 'none', cursor: 'pointer', fontSize: 12,
+                    padding: '4px 12px', color: tab === t ? 'var(--accent)' : 'var(--text-muted)',
+                    borderBottom: `2px solid ${tab === t ? 'var(--accent)' : 'transparent'}`,
+                    fontWeight: tab === t ? 600 : 400, marginBottom: -1,
+                  }}>{label}{t === 'inbox' && unread > 0 ? ` (${unread})` : ''}</button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* List */}
-          <div style={{ overflowY: 'auto', flex: 1 }}>
-            {loading && (
-              <div style={{ padding: '20px', textAlign: 'center' }}>
-                <span className="spinner" style={{ width: 20, height: 20 }} />
-              </div>
-            )}
-            {!loading && items.length === 0 && (
-              <div style={{ padding: '24px 14px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
-                No notifications yet
-              </div>
-            )}
-            {!loading && items.map(n => (
-              <div
-                key={n.id}
-                style={{
-                  padding: '10px 14px', borderBottom: '1px solid var(--border)',
-                  background: n.read ? 'transparent' : 'rgba(108,99,255,0.06)',
-                  display: 'flex', gap: 10, alignItems: 'flex-start',
-                  cursor: n.candidateId ? 'pointer' : 'default',
-                  transition: 'background 0.1s',
-                }}
-                onClick={() => clickNotification(n)}
-              >
-                <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>
-                  {n.type === 'tip' ? '💡' : '💬'}
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: n.read ? 400 : 600, color: 'var(--text-primary)', lineHeight: 1.4 }}>
-                    {n.title}
+          {/* Inbox */}
+          {tab === 'inbox' && (
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {loading && <div style={{ padding: 20, textAlign: 'center' }}><span className="spinner" style={{ width: 20, height: 20 }} /></div>}
+              {!loading && items.length === 0 && (
+                <div style={{ padding: '24px 14px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No notifications yet</div>
+              )}
+              {!loading && items.map(n => (
+                <div key={n.id}
+                  onClick={() => clickNotification(n)}
+                  style={{
+                    padding: '10px 14px', borderBottom: '1px solid var(--border)',
+                    background: n.read ? 'transparent' : 'rgba(108,99,255,0.06)',
+                    display: 'flex', gap: 10, alignItems: 'flex-start',
+                    cursor: 'pointer', transition: 'background 0.1s',
+                  }}>
+                  <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>{n.type === 'tip' ? '💡' : '💬'}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: n.read ? 400 : 600, color: 'var(--text-primary)', lineHeight: 1.4 }}>
+                      {n.title}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.4,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {n.message}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <span>{timeAgo(n.createdAt)}</span>
+                      {n.candidateName && <span>· {n.candidateName}</span>}
+                      {n.type === 'tip' && <span style={{ color: 'var(--accent)', fontSize: 9 }}>tap to view</span>}
+                      {!n.read && <span style={{ color: 'var(--accent)', fontWeight: 600 }}>● New</span>}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.4, wordBreak: 'break-word' }}>
-                    {n.message}
-                  </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span>{timeAgo(n.createdAt)}</span>
-                    {n.candidateName && <span>· {n.candidateName}</span>}
-                    {!n.read && <span style={{ color: 'var(--accent)', fontWeight: 600 }}>● New</span>}
-                  </div>
+                  <button onClick={e => { e.stopPropagation(); remove(n.id); }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, padding: '0 2px', flexShrink: 0 }}
+                    title="Dismiss">✕</button>
                 </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); remove(n.id); }}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, padding: '0 2px', flexShrink: 0 }}
-                  title="Dismiss"
-                >✕</button>
+              ))}
+            </div>
+          )}
+
+          {/* Sent — admin only */}
+          {tab === 'sent' && (
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {loadingSent && <div style={{ padding: 20, textAlign: 'center' }}><span className="spinner" style={{ width: 20, height: 20 }} /></div>}
+              {!loadingSent && sentGroups.length === 0 && (
+                <div style={{ padding: '24px 14px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No tips sent yet</div>
+              )}
+              {!loadingSent && sentGroups.map((g, i) => {
+                const readCount = g.recipients.filter(r => r.read).length;
+                const total = g.recipients.length;
+                return (
+                  <div key={i} style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', flex: 1, marginRight: 8 }}>{g.title}</div>
+                      <span style={{
+                        fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 8,
+                        background: readCount === total ? 'rgba(0,212,170,0.12)' : 'rgba(255,214,102,0.1)',
+                        color: readCount === total ? 'var(--success)' : 'var(--warning)',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {readCount}/{total} seen
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6, lineHeight: 1.4 }}>{g.message}</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+                      {g.recipients.map(r => (
+                        <span key={r.id} style={{
+                          fontSize: 10, padding: '1px 7px', borderRadius: 8,
+                          background: r.read ? 'rgba(0,212,170,0.1)' : 'rgba(255,107,107,0.1)',
+                          color: r.read ? 'var(--success)' : 'var(--error)',
+                          border: `1px solid ${r.read ? 'rgba(0,212,170,0.2)' : 'rgba(255,107,107,0.2)'}`,
+                        }}>
+                          {r.read ? '✓' : '○'} {r.name}
+                        </span>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{timeAgo(g.createdAt)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tip detail modal — shown when user clicks a tip notification */}
+      {activeTip && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+          onClick={() => setActiveTip(null)}>
+          <div style={{ background: 'var(--bg-surface)', border: '1px solid rgba(108,99,255,0.3)', borderRadius: 'var(--radius)', padding: 28, width: 460, maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <span style={{ fontSize: 22 }}>💡</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>{activeTip.title}</div>
+                {activeTip.createdByName && (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                    From {activeTip.createdByName} · {timeAgo(activeTip.createdAt)}
+                  </div>
+                )}
               </div>
-            ))}
+            </div>
+            <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: '14px 16px', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap', marginBottom: 16 }}>
+              {activeTip.message}
+            </div>
+            {activeTip.candidateName && (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+                Related candidate: <strong style={{ color: 'var(--text-primary)' }}>{activeTip.candidateName}</strong>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              {activeTip.candidateId && (
+                <button className="btn btn-primary btn-sm" onClick={() => { navigate(`/candidates/${activeTip.candidateId}`); setActiveTip(null); }}>
+                  Go to Candidate ↗
+                </button>
+              )}
+              <button className="btn btn-secondary btn-sm" onClick={() => setActiveTip(null)}>Close</button>
+            </div>
           </div>
         </div>
       )}
 
       {/* Admin: Send Tip modal */}
       {showTip && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-        }} onClick={() => setShowTip(false)}>
-          <div style={{
-            background: 'var(--bg-surface)', border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)', padding: 24, width: 440, maxWidth: '90vw',
-            maxHeight: '80vh', overflowY: 'auto',
-          }} onClick={e => e.stopPropagation()}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+          onClick={() => setShowTip(false)}>
+          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 24, width: 440, maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }}
+            onClick={e => e.stopPropagation()}>
             <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>💡 Send Guide Tip</div>
-
             <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Recipients
-              </label>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Recipients</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 <button
-                  onClick={() => setTip(p => ({ ...p, userIds: p.userIds.length === users.length ? [] : users.map(u => u.id) }))}
-                  style={{
-                    fontSize: 11, padding: '3px 10px', borderRadius: 20, cursor: 'pointer',
-                    border: '1px solid var(--border)',
-                    background: tip.userIds.length === users.length ? 'var(--accent)' : 'var(--bg-elevated)',
-                    color: tip.userIds.length === users.length ? '#fff' : 'var(--text-secondary)',
-                  }}
-                >All users</button>
+                  onClick={() => setTip(p => ({ ...p, userIds: p.userIds.length === users.filter(u => u.id !== user.id).length ? [] : users.filter(u => u.id !== user.id).map(u => u.id) }))}
+                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, cursor: 'pointer', border: '1px solid var(--border)',
+                    background: tip.userIds.length === users.filter(u => u.id !== user.id).length && tip.userIds.length > 0 ? 'var(--accent)' : 'var(--bg-elevated)',
+                    color: tip.userIds.length === users.filter(u => u.id !== user.id).length && tip.userIds.length > 0 ? '#fff' : 'var(--text-secondary)' }}>
+                  All users
+                </button>
                 {users.filter(u => u.id !== user.id).map(u => (
-                  <button
-                    key={u.id}
-                    onClick={() => toggleUser(u.id)}
-                    style={{
-                      fontSize: 11, padding: '3px 10px', borderRadius: 20, cursor: 'pointer',
-                      border: '1px solid var(--border)',
+                  <button key={u.id} onClick={() => toggleUser(u.id)}
+                    style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, cursor: 'pointer', border: '1px solid var(--border)',
                       background: tip.userIds.includes(u.id) ? 'var(--accent)' : 'var(--bg-elevated)',
-                      color: tip.userIds.includes(u.id) ? '#fff' : 'var(--text-secondary)',
-                    }}
-                  >{u.displayName || u.username}</button>
+                      color: tip.userIds.includes(u.id) ? '#fff' : 'var(--text-secondary)' }}>
+                    {u.displayName || u.username}
+                  </button>
                 ))}
               </div>
             </div>
-
             <div style={{ marginBottom: 12 }}>
               <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Title <span style={{ fontWeight: 400 }}>(optional)</span>
               </label>
-              <input
-                className="form-input"
-                placeholder="Guide Tip from Admin"
-                value={tip.title}
-                onChange={e => setTip(p => ({ ...p, title: e.target.value }))}
-              />
+              <input className="form-input" placeholder="Guide Tip from Admin" value={tip.title} onChange={e => setTip(p => ({ ...p, title: e.target.value }))} />
             </div>
-
             <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Message
-              </label>
-              <textarea
-                className="form-textarea"
-                placeholder="e.g. Remember to ask about React experience in this round..."
-                value={tip.message}
-                onChange={e => setTip(p => ({ ...p, message: e.target.value }))}
-                style={{ minHeight: 90 }}
-              />
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Message</label>
+              <textarea className="form-textarea" placeholder="e.g. Remember to ask about React experience in this round..."
+                value={tip.message} onChange={e => setTip(p => ({ ...p, message: e.target.value }))} style={{ minHeight: 90 }} />
             </div>
-
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-primary" onClick={sendTip} disabled={sending || !tip.userIds.length || !tip.message.trim()}>
                 {sending ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Sending...</> : '▶ Send to Selected Users'}
