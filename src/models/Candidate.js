@@ -55,9 +55,9 @@ const Candidate = {
   // Lightweight stats for the dashboard — only reads small projection fields
   async getStats({ ownerId, isAdmin } = {}) {
     const db = getDB();
-    const STAT_FIELDS = ['status', 'role', 'location', 'recruiterId', 'recruiterName',
-                         'ownerId', 'ownerName', 'companyId', 'companyName',
-                         'createdAt', 'updatedAt', 'lastMessageAt'];
+    const STAT_FIELDS = ['fullName', 'email', 'status', 'role', 'location',
+                         'recruiterId', 'recruiterName', 'ownerId', 'ownerName',
+                         'companyId', 'companyName', 'createdAt', 'updatedAt', 'lastMessageAt'];
     let query = db.collection(COL).select(...STAT_FIELDS);
     if (ownerId) query = query.where('ownerId', '==', ownerId);
     const snapshot = await query.get();
