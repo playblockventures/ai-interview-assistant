@@ -452,7 +452,7 @@ router.post('/call-script', async (req, res) => {
   try {
     const {
       candidateId, history = [],
-      role, customInstructions = '', companyId: companyIdOverride,
+      role, customInstructions = '', companyId: companyIdOverride, recruiterId,
     } = req.body;
 
     let candidate = null;
@@ -467,8 +467,22 @@ router.post('/call-script', async (req, res) => {
     const knowledgeContext = await getKnowledgeContext(req.user.id, companyId);
     const userInstructions = await getCustomInstructions(req.user.id);
     const companyScenario  = await getCompanyScenario(req.user.id, companyId);
+    const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
     const roleLabel        = await resolveRoleLabel(role || candidate?.role);
     const candidateContext = buildCandidateContext(candidate, 1500);
+
+    // Look up company name for the intro
+    let companyIntro = '';
+    if (companyId) {
+      try {
+        const Settings = require('../models/Settings');
+        const companies = await Settings.get('companies');
+        const company = Array.isArray(companies) ? companies.find(c => c.id === companyId) : null;
+        if (company?.name) {
+          companyIntro = `\n\n--- COMPANY ---\nCompany: ${company.name}${company.description ? `\n${company.description}` : ''}`;
+        }
+      } catch (_) {}
+    }
 
     // Summarise conversation history for context (skip call_script entries)
     const convoSummary = history
@@ -480,6 +494,8 @@ router.post('/call-script', async (req, res) => {
     const systemPrompt = [
       `You are an expert recruiter writing a structured phone/video call script for a ${roleLabel || 'professional'} position.`,
       knowledgeContext,
+      companyIntro,
+      recruiterContext,
       companyScenario,
       userInstructions,
       candidateContext ? `\n\n--- CANDIDATE ---\n${candidateContext}` : '',
@@ -543,8 +559,13 @@ router.post('/export-pdf', async (req, res) => {
   try {
     const { content, title = 'Document', candidateName } = req.body;
     const doc = new PDFDocument({ margin: 50 });
+    // Sanitize filename: strip non-ASCII and unsafe chars for Content-Disposition
+    const safeFilename = (title || 'Document')
+      .replace(/[^\x00-\x7F]/g, '')   // strip non-ASCII (em dashes etc.)
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9_.-]/g, '') || 'document';
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${title.replace(/\s+/g, '_')}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}.pdf"`);
     doc.pipe(res);
 
     doc.fontSize(18).font('Helvetica-Bold').text(title, { align: 'center' });

@@ -763,7 +763,8 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
         candidateId:        candidate.id,
         history:            history.map(m => ({ role: m.role, content: m.content })),
         role:               config.role,
-        companyId:          config.companyId || undefined,
+        companyId:          config.companyId  || undefined,
+        recruiterId:        config.recruiterId || undefined,
         customInstructions: callScriptInstr.trim() || undefined,
       });
       // Push into local history as call_script entry
