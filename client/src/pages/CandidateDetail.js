@@ -1273,7 +1273,7 @@ function ProfileCard({ candidate }) {
           {candidate.email && <span style={{ fontFamily: 'DM Mono, monospace' }}>✉ {candidate.email}</span>}
           {candidate.phone && <span>📞 {candidate.phone}</span>}
           {candidate.location && <span>📍 {candidate.location}</span>}
-          {candidate.linkedinUrl && <a href={candidate.linkedinUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>LinkedIn ↗</a>}
+          {candidate.linkedinUrl && <a href={candidate.linkedinUrl.startsWith('http') ? candidate.linkedinUrl : `https://${candidate.linkedinUrl}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>LinkedIn ↗</a>}
         </div>
         <div style={{ display: 'flex', gap: 16, marginTop: 4, flexWrap: 'wrap' }}>
           {candidate.role && <div style={{ fontSize: 12, color: 'var(--accent)' }}>🎯 {getRoleLabel(candidate.role)}</div>}
