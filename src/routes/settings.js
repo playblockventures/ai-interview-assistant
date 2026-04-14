@@ -214,7 +214,7 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
 
     // Call Piloterr LinkedIn profile API
     const response = await axios.get(
-      'https://piloterr.com/api/v2/linkedin/profile',
+      'https://api.piloterr.com/v2/linkedin/profile/info',
       {
         params: { query: linkedinUrl },
         headers: { 'x-api-key': apiKey },
