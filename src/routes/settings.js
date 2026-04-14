@@ -48,7 +48,12 @@ router.get('/', async (req, res) => {
             if (ownKey) hasOpenAI = true;
 
             companyScenario  = await S.getForUser(userId, 'company_scenario').catch(() => '') || '';
-            companyScenarios = await S.getForUser(userId, 'company_scenarios').catch(() => null) || {};
+            const rawScenarios = await S.getForUser(userId, 'company_scenarios').catch(() => null) || {};
+            // Translate '_default' back to '' for the client (Firestore rejects empty-string keys)
+            companyScenarios = {};
+            for (const [k, v] of Object.entries(rawScenarios)) {
+              companyScenarios[k === '_default' ? '' : k] = v;
+            }
             companies        = all[companiesKey(userId)] || [];
 
             if (payload.isAdmin) {
@@ -121,9 +126,15 @@ router.put('/company-scenario', requireAuth, async (req, res) => {
 
 // ── PUT /api/settings/company-scenarios ──────────────────────────────────────
 // Saves the full map: { '': 'default scenario', 'co_123': 'Acme scenario', ... }
+// Firestore rejects empty-string keys, so '' is stored as '_default'
 router.put('/company-scenarios', requireAuth, async (req, res) => {
   try {
-    await getSettings().setForUser(req.user.id, 'company_scenarios', req.body.scenarios || {});
+    const raw = req.body.scenarios || {};
+    const safe = {};
+    for (const [k, v] of Object.entries(raw)) {
+      safe[k === '' ? '_default' : k] = v;
+    }
+    await getSettings().setForUser(req.user.id, 'company_scenarios', safe);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

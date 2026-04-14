@@ -93,7 +93,8 @@ const getCompanyScenario = async (userId, companyId = null) => {
     const scenariosMap = await Settings.getForUser(userId, 'company_scenarios').catch(() => null);
     if (scenariosMap && typeof scenariosMap === 'object') {
       const specific = companyId && scenariosMap[companyId] ? scenariosMap[companyId] : '';
-      const fallback = scenariosMap[''] || '';
+      // Default stored as '_default' in Firestore (empty string keys are rejected)
+      const fallback = scenariosMap['_default'] || scenariosMap[''] || '';
       const value = specific || fallback;
       return value ? `\n\n--- COMPANY INTERVIEW SCENARIO (follow this structure) ---\n${value}` : '';
     }
