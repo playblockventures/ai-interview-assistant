@@ -867,17 +867,15 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
             <button className="btn btn-secondary btn-sm" onClick={() => setShowCallScriptModal(true)} style={{ whiteSpace: 'nowrap' }} title="Generate a call script based on the full conversation">
               📞 Call Script
             </button>
-            {hasLastAssistant && (
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={regenerateLastReply}
-                disabled={regenerating || loading}
-                title="Regenerate last reply using current instructions"
-                style={{ whiteSpace: 'nowrap' }}
-              >
-                {regenerating ? <span className="spinner" style={{ width: 12, height: 12 }} /> : '↺ Regen Reply'}
-              </button>
-            )}
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={regenerateLastReply}
+              disabled={!hasLastAssistant || regenerating || loading}
+              title={hasLastAssistant ? 'Regenerate last reply using current instructions' : 'No reply to regenerate yet'}
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              {regenerating ? <span className="spinner" style={{ width: 12, height: 12 }} /> : '↺ Regen Reply'}
+            </button>
             {user?.isAdmin && candidate.ownerId && (
               <button className="btn btn-secondary btn-sm" onClick={() => setShowTipModal(true)} title="Send a guide tip to this candidate's owner" style={{ whiteSpace: 'nowrap' }}>
                 💡 Send Tip
