@@ -223,46 +223,18 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
     );
 
     const profile = response.data;
-    console.log('[extract-linkedin] raw profile keys:', Object.keys(profile));
-    console.log('[extract-linkedin] raw profile:', JSON.stringify(profile).slice(0, 2000));
 
     // Map Piloterr response to our candidate fields
-    const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ')
-      || profile.full_name || profile.name || '';
-
-    // Email: Piloterr may nest it under contact_info or return directly
-    const email = profile.email
-      || profile.contact_info?.email
-      || profile.personal_email
-      || profile.work_email
-      || '';
-
-    // Phone: may be nested
-    const phone = profile.phone
-      || profile.phone_number
-      || profile.contact_info?.phone
-      || '';
-
-    // Location: various possible fields
-    const location = profile.location
-      || profile.city
-      || [profile.city_name, profile.country_name].filter(Boolean).join(', ')
-      || profile.geo_location
-      || '';
-
-    // Photo
-    const photoUrl = profile.profile_picture
-      || profile.photo_url
-      || profile.picture
-      || profile.avatar
-      || '';
+    const fullName = profile.full_name || [profile.first_name, profile.last_name].filter(Boolean).join(' ') || '';
+    const location = profile.address || profile.location || profile.city || '';
+    const photoUrl = profile.photo_url || profile.profile_picture || profile.picture || '';
 
     const result = {
       fullName,
-      email,
-      phone,
+      email:        '',   // LinkedIn does not expose email via scraping APIs
+      phone:        '',   // LinkedIn does not expose phone via scraping APIs
       location,
-      currentTitle: profile.headline || profile.title || profile.current_title || '',
+      currentTitle: profile.headline || profile.title || '',
       linkedinUrl,
       photoUrl,
       resumeText:   buildResumeText(profile),
@@ -285,47 +257,43 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
 function buildResumeText(profile) {
   const lines = [];
 
-  // Bio / summary / about
-  const summary = profile.summary || profile.about || profile.description || profile.bio || '';
+  // Bio / summary
+  const summary = profile.summary || profile.about || '';
   if (summary) lines.push(`Summary:\n${summary}`);
 
-  // Headline / current title
-  const headline = profile.headline || profile.title || '';
-  if (headline && !summary) lines.push(`Title: ${headline}`);
-
-  // Experience
-  const experiences = profile.experiences || profile.experience || profile.positions || profile.work_experience || [];
+  // Experience — Piloterr uses "experiences" with "job_title" field
+  const experiences = profile.experiences || profile.experience || [];
   if (Array.isArray(experiences) && experiences.length) {
     lines.push('\nExperience:');
     experiences.forEach(e => {
-      const title   = e.title || e.role || '';
-      const company = e.company || e.company_name || e.organization || '';
-      const start   = e.start_date || e.startDate || e.start || '';
-      const end     = e.end_date   || e.endDate   || e.end   || 'present';
-      const dateStr = (start || end !== 'present') ? ` (${start}–${end})` : '';
-      lines.push(`  ${[title, company].filter(Boolean).join(' at ')}${dateStr}`);
-      const desc = e.description || e.summary || '';
-      if (desc) lines.push(`    ${desc}`);
+      const title   = e.job_title || e.title || e.role || '';
+      const company = e.company || e.company_name || '';
+      const start   = e.start_date || '';
+      const end     = e.end_date || 'present';
+      const dateStr = start ? ` (${start} – ${end})` : '';
+      const header  = [title, company].filter(Boolean).join(' at ');
+      if (header) lines.push(`  ${header}${dateStr}`);
+      if (e.description) lines.push(`    ${e.description}`);
     });
   }
 
-  // Education
+  // Education — Piloterr uses "educations" with "school", "field_of_study", start/end_year
   const educations = profile.educations || profile.education || [];
   if (Array.isArray(educations) && educations.length) {
     lines.push('\nEducation:');
     educations.forEach(e => {
       const degree = e.degree_name || e.degree || e.field_of_study || '';
-      const school = e.school || e.school_name || e.institution || '';
-      const start  = e.start_date || e.startDate || e.start || '';
-      const end    = e.end_date   || e.endDate   || e.end   || '';
+      const school = e.school || e.school_name || '';
+      const start  = e.start_year || (e.start_date ? e.start_date.slice(0, 4) : '');
+      const end    = e.end_year   || (e.end_date   ? e.end_date.slice(0, 4)   : '');
       const dateStr = (start || end) ? ` (${[start, end].filter(Boolean).join('–')})` : '';
-      lines.push(`  ${[degree, school].filter(Boolean).join(' at ')}${dateStr}`);
-      if (e.description) lines.push(`    ${e.description}`);
+      const header  = [degree, school].filter(Boolean).join(' at ');
+      if (header) lines.push(`  ${header}${dateStr}`);
     });
   }
 
   // Certifications
-  const certs = profile.certifications || profile.certificates || [];
+  const certs = profile.certifications || [];
   if (Array.isArray(certs) && certs.length) {
     lines.push('\nCertifications:');
     certs.forEach(c => {
@@ -335,29 +303,18 @@ function buildResumeText(profile) {
     });
   }
 
-  // Skills
+  // Skills — Piloterr returns plain strings
   const skills = profile.skills || [];
   if (Array.isArray(skills) && skills.length) {
-    const skillNames = skills.map(s => s.name || s.skill || (typeof s === 'string' ? s : '')).filter(Boolean);
+    const skillNames = skills.map(s => (typeof s === 'string' ? s : s.name || '')).filter(Boolean);
     if (skillNames.length) lines.push(`\nSkills: ${skillNames.join(', ')}`);
   }
 
   // Languages
   const languages = profile.languages || [];
   if (Array.isArray(languages) && languages.length) {
-    const langNames = languages.map(l => l.name || l.language || (typeof l === 'string' ? l : '')).filter(Boolean);
+    const langNames = languages.map(l => (typeof l === 'string' ? l : l.name || '')).filter(Boolean);
     if (langNames.length) lines.push(`Languages: ${langNames.join(', ')}`);
-  }
-
-  // Volunteer / activities
-  const volunteer = profile.volunteer_work || profile.volunteering || profile.activities || [];
-  if (Array.isArray(volunteer) && volunteer.length) {
-    lines.push('\nVolunteer / Activities:');
-    volunteer.forEach(v => {
-      const role = v.role || v.title || v.name || (typeof v === 'string' ? v : '');
-      const org  = v.company || v.organization || '';
-      if (role) lines.push(`  ${role}${org ? ' at ' + org : ''}`);
-    });
   }
 
   return lines.join('\n');

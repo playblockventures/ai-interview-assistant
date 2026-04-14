@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:docs.piloterr.com)"
+      "WebFetch(domain:docs.piloterr.com)",
+      "WebSearch"
     ]
   }
 }
