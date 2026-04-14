@@ -229,6 +229,7 @@ function ScenarioTab({ candidate, onScenarioApplied }) {
                     </>
                   ) : (
                     <>
+                      <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(s.content); toast.success('Copied!'); }}>Copy</button>
                       <button className="btn btn-secondary btn-sm" onClick={() => applyScenario(s.content)} disabled={applying} style={{ fontSize: 10 }}>▶ Apply</button>
                       <button className="btn btn-secondary btn-sm" onClick={() => startEdit(i)}>✎ Edit</button>
                       <button onClick={() => deleteScenario(i)} className="btn btn-danger btn-sm">✕</button>
@@ -446,6 +447,7 @@ function OutreachTab({ candidate }) {
                     </>
                   ) : (
                     <>
+                      <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(m.content); toast.success('Copied!'); }}>Copy</button>
                       <button className="btn btn-secondary btn-sm" onClick={() => startEdit(i)}>✎ Edit</button>
                       <button onClick={() => deleteMsg(i)} className="btn btn-danger btn-sm">✕</button>
                     </>
@@ -970,6 +972,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
                       </>
                     ) : (
                       <>
+                        <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(msg.content); toast.success('Copied!'); }}>Copy</button>
                         <button className="btn btn-secondary btn-sm" onClick={() => startEdit(i)}>✎ Edit</button>
                         <button onClick={() => deleteMsg(i)} className="btn btn-danger btn-sm">✕</button>
                       </>
