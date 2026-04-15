@@ -14,7 +14,7 @@ const LIST_FIELDS = [
 
 const Candidate = {
   // Fetch list using field projection — avoids downloading huge resumeText/conversationHistory
-  async findAll({ status, search, page = 1, limit = 20, recruiterId, ownerId, isAdmin } = {}) {
+  async findAll({ status, search, page = 1, limit = 20, recruiterId, ownerId, isAdmin, ids } = {}) {
     const db = getDB();
 
     // Use .select() so Firestore only returns the fields we need for the list view
@@ -26,6 +26,13 @@ const Candidate = {
 
     const snapshot = await query.get();
     let docs = snapshot.docs.map(docToObj);
+
+    // If specific IDs requested (e.g. pinned candidates fetch), filter and preserve order
+    if (ids && ids.length) {
+      const idSet = new Set(ids);
+      docs = ids.map(id => docs.find(d => d.id === id)).filter(Boolean);
+      return { candidates: docs, total: docs.length, page: 1, totalPages: 1 };
+    }
 
     docs.sort((a, b) => {
       const aTime = a.lastMessageAt || a.updatedAt || a.createdAt || '';

@@ -267,29 +267,28 @@ export default function Candidates() {
   const saved = loadFilters();
 
   const [candidates,      setCandidates]      = useState([]);
+  const [pinnedCandidates, setPinnedCandidates] = useState([]);
   const [total,           setTotal]            = useState(0);
   const [loading,         setLoading]          = useState(true);
   const [showAdd,         setShowAdd]          = useState(false);
-  const [editCandidate,   setEditCandidate]    = useState(null); // candidate object to edit
+  const [editCandidate,   setEditCandidate]    = useState(null);
   const [search,          setSearch]           = useState(saved.search          || '');
   const [statusFilter,    setStatusFilter]     = useState(saved.statusFilter    || '');
   const [recruiterFilter, setRecruiterFilter]  = useState(saved.recruiterFilter || '');
-  const [ownerFilter,     setOwnerFilter]      = useState(saved.ownerFilter     || ''); // admin: filter by user
+  const [ownerFilter,     setOwnerFilter]      = useState(saved.ownerFilter     || '');
   const [page,            setPage]             = useState(saved.page            || 1);
+  const [pageSize,        setPageSize]         = useState(saved.pageSize        || 20);
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(FILTER_KEY, JSON.stringify({ search, statusFilter, recruiterFilter, ownerFilter, page }));
+      sessionStorage.setItem(FILTER_KEY, JSON.stringify({ search, statusFilter, recruiterFilter, ownerFilter, page, pageSize }));
     } catch {}
-  }, [search, statusFilter, recruiterFilter, ownerFilter, page]);
+  }, [search, statusFilter, recruiterFilter, ownerFilter, page, pageSize]);
 
   // For admin: list of all users to filter by
   const [allUsers, setAllUsers] = useState([]);
-
   useEffect(() => {
-    if (user?.isAdmin) {
-      authApi.listUsers().then(setAllUsers).catch(() => {});
-    }
+    if (user?.isAdmin) authApi.listUsers().then(setAllUsers).catch(() => {});
   }, [user]);
 
   // ── Pins ──────────────────────────────────────────────────────────────────
@@ -298,37 +297,41 @@ export default function Candidates() {
     settingsApi.getPins().then(d => setPinnedIds(new Set(d.pins || []))).catch(() => {});
   }, []);
 
+  // Fetch pinned candidates separately whenever pinnedIds changes
+  useEffect(() => {
+    if (!pinnedIds.size) { setPinnedCandidates([]); return; }
+    candidateApi.getByIds([...pinnedIds]).then(d => setPinnedCandidates(d.candidates || [])).catch(() => {});
+  }, [pinnedIds]);
+
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { search, status: statusFilter, page, limit: 20 };
+      const params = { search, status: statusFilter, page, limit: pageSize };
       if (recruiterFilter) params.recruiterId = recruiterFilter;
-      // Admin can pass ownerFilter to see a specific user's candidates
       if (user?.isAdmin && ownerFilter) params.ownerId = ownerFilter;
+      // Exclude pinned IDs so they don't appear twice
       const data = await candidateApi.getAll(params);
-      const list = data.candidates || [];
-      // Sort pinned candidates to the top
-      list.sort((a, b) => {
-        const aPinned = pinnedIds.has(a.id) ? 0 : 1;
-        const bPinned = pinnedIds.has(b.id) ? 0 : 1;
-        return aPinned - bPinned;
-      });
-      setCandidates(list);
+      const pinSet = pinnedIds;
+      setCandidates((data.candidates || []).filter(c => !pinSet.has(c.id)));
       setTotal(data.total || 0);
     } catch (e) {
       toast.error(e.message);
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, recruiterFilter, ownerFilter, page, user, pinnedIds]);
+  }, [search, statusFilter, recruiterFilter, ownerFilter, page, pageSize, user, pinnedIds]);
 
   useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
 
   const handleDelete = async (e, id) => {
     e.stopPropagation();
     if (!window.confirm('Delete this candidate?')) return;
-    try { await candidateApi.delete(id); toast.success('Candidate deleted'); fetchCandidates(); }
-    catch (e) { toast.error(e.message); }
+    try {
+      await candidateApi.delete(id);
+      toast.success('Candidate deleted');
+      setPinnedIds(s => { const n = new Set(s); n.delete(id); return n; });
+      fetchCandidates();
+    } catch (e) { toast.error(e.message); }
   };
 
   const togglePin = async (e, c) => {
@@ -405,13 +408,56 @@ export default function Candidates() {
               ))}
             </select>
           )}
+
+          {/* Page size */}
+          <select className="form-select" style={{ width: 100 }} value={pageSize}
+            onChange={e => { setPageSize(Number(e.target.value)); resetPage(); }}>
+            <option value={20}>20 / page</option>
+            <option value={50}>50 / page</option>
+            <option value={100}>100 / page</option>
+          </select>
         </div>
+
+        {/* ── Pinned candidates — always shown at top ── */}
+        {pinnedCandidates.length > 0 && (
+          <div style={{ marginBottom: 16, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#f59e0b', marginBottom: 8 }}>★ Pinned ({pinnedCandidates.length})</div>
+            <div className="table-wrap">
+              <table className="data-table">
+                <tbody>
+                  {pinnedCandidates.map(c => {
+                    const recruiter = getRecruiter(c.recruiterId);
+                    return (
+                      <tr key={c.id} onClick={() => navigate(`/candidates/${c.id}`)} style={{ cursor: 'pointer', background: 'rgba(245,158,11,0.04)' }}>
+                        <td style={{ width: 32 }}><span style={{ color: '#f59e0b' }}>★</span></td>
+                        <td style={{ width: 40 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-elevated)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
+                            {c.photoUrl ? <img src={c.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
+                          </div>
+                        </td>
+                        <td><div style={{ fontWeight: 600 }}>{c.fullName || '—'}</div>{c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.currentTitle}</div>}</td>
+                        <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.location || '—'}</td>
+                        <td style={{ fontSize: 12 }}>{recruiter?.name || c.recruiterName || '—'}</td>
+                        <td><span className={`status-badge status-${c.status}`}>{c.status?.replace('_', ' ')}</span></td>
+                        <td onClick={e => e.stopPropagation()}>
+                          <button onClick={e => togglePin(e, c)} title="Unpin"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#f59e0b', padding: '0 4px' }}>★</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60 }}>
             <span className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
           </div>
-        ) : candidates.length === 0 ? (
+        ) : candidates.length === 0 && pinnedCandidates.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">◈</div>
             <div className="empty-state-title">No candidates found</div>
@@ -507,12 +553,12 @@ export default function Candidates() {
               </table>
             </div>
 
-            {total > 20 && (
+            {total > pageSize && (
               <div className="flex items-center justify-between mt-16" style={{ paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Page {page} of {Math.ceil(total / 20)}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Page {page} of {Math.ceil(total / pageSize)}</span>
                 <div className="flex gap-8">
                   <button className="btn btn-secondary btn-sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>← Prev</button>
-                  <button className="btn btn-secondary btn-sm" disabled={page >= Math.ceil(total / 20)} onClick={() => setPage(p => p + 1)}>Next →</button>
+                  <button className="btn btn-secondary btn-sm" disabled={page >= Math.ceil(total / pageSize)} onClick={() => setPage(p => p + 1)}>Next →</button>
                 </div>
               </div>
             )}
