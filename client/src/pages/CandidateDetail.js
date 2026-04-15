@@ -119,13 +119,24 @@ function ScenarioTab({ candidate, onScenarioApplied }) {
     finally { setSavingEdit(false); }
   };
 
+  const [currentScenarioIdx, setCurrentScenarioIdx] = useState(null);
+
   const generate = async () => {
     setLoading(true);
     try {
       const data = await generateApi.scenario({ candidateId: candidate.id, ...config });
       setScenario(data.scenario);
-      setHistory(h => [{ content: data.scenario, role: config.role, createdAt: new Date().toISOString() }, ...h]);
-      toast.success('Scenario generated!');
+      if (currentScenarioIdx !== null) {
+        // Regenerate — replace existing entry in history and in Firestore
+        await interviewApi.editScenario(candidate.id, currentScenarioIdx, data.scenario);
+        setHistory(h => h.map((s, idx) => idx === currentScenarioIdx ? { ...s, content: data.scenario } : s));
+        toast.success('Scenario regenerated!');
+      } else {
+        // First generate — prepend to history
+        setHistory(h => [{ content: data.scenario, role: config.role, createdAt: new Date().toISOString() }, ...h]);
+        setCurrentScenarioIdx(0);
+        toast.success('Scenario generated!');
+      }
     } catch (e) { toast.error(e.message); }
     finally { setLoading(false); }
   };
@@ -150,6 +161,7 @@ function ScenarioTab({ candidate, onScenarioApplied }) {
     try {
       await interviewApi.deleteScenario(candidate.id, i);
       setHistory(h => h.filter((_, idx) => idx !== i));
+      if (currentScenarioIdx === i) { setScenario(''); setCurrentScenarioIdx(null); }
       toast.success('Scenario deleted');
     } catch (e) { toast.error(e.message); }
   };
@@ -290,15 +302,27 @@ function OutreachTab({ candidate }) {
 
   const set = (k, v) => setConfig(p => ({ ...p, [k]: v }));
 
+  const [currentOutreachIdx, setCurrentOutreachIdx] = useState(null);
+
   const generate = async () => {
     setLoading(true);
     try {
       const data = await generateApi.outreach({ candidateId: candidate.id, ...config });
       const newMsg = { content: data.message, type: config.messageType, createdAt: new Date().toISOString() };
       setMessage(data.message);
-      setHistory(h => [{ ...newMsg, _origIdx: 0 }, ...h.map((m, i) => ({ ...m, _origIdx: i + 1 }))]);
-      setShowHistory(true);
-      toast.success('Message generated!');
+      if (currentOutreachIdx !== null) {
+        // Regenerate — replace existing entry
+        const firestoreIdx = history[currentOutreachIdx]?._origIdx ?? currentOutreachIdx;
+        await interviewApi.editOutreachMsg(candidate.id, firestoreIdx, data.message);
+        setHistory(h => h.map((m, idx) => idx === currentOutreachIdx ? { ...m, content: data.message } : m));
+        toast.success('Message regenerated!');
+      } else {
+        // First generate — prepend to history
+        setHistory(h => [{ ...newMsg, _origIdx: 0 }, ...h.map((m, i) => ({ ...m, _origIdx: i + 1 }))]);
+        setCurrentOutreachIdx(0);
+        setShowHistory(true);
+        toast.success('Message generated!');
+      }
     } catch (e) { toast.error(e.message); }
     finally { setLoading(false); }
   };
@@ -340,6 +364,7 @@ function OutreachTab({ candidate }) {
       const firestoreIdx = history[i]._origIdx ?? i;
       await interviewApi.deleteOutreachMsg(candidate.id, firestoreIdx);
       setHistory(h => h.filter((_, idx) => idx !== i).map((m, newIdx) => ({ ...m, _origIdx: newIdx })));
+      if (currentOutreachIdx === i) { setMessage(''); setCurrentOutreachIdx(null); }
       toast.success('Message deleted');
     } catch (e) { toast.error(e.message); }
   };
