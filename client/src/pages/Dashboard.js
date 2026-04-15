@@ -329,11 +329,11 @@ export default function Dashboard() {
     window.location.href = '/candidates';
   };
 
-  // Stale candidates — pending/in_progress with no message for 3+ days
+  // Stale candidates — in_progress with no message for 3+ days
   // Use lastMessageAt (actual message time) or createdAt — NOT updatedAt (profile edits shouldn't reset the clock)
   const staleCandidates = useMemo(() => {
     return allCandidates.filter(c => {
-      if (c.status === 'success' || c.status === 'failed') return false;
+      if (c.status !== 'in_progress') return false;
       const lastActivity = c.lastMessageAt || c.createdAt;
       const days = (Date.now() - new Date(lastActivity)) / (1000 * 60 * 60 * 24);
       return days > 3;
@@ -704,30 +704,33 @@ export default function Dashboard() {
                     <span style={{ fontSize: 18 }}>⏰</span>
                     <div style={{ flex: 1 }}>
                       <div className="card-title" style={{ color: 'var(--warning)', marginBottom: 2 }}>No Reply — Needs Follow-up ({staleCandidates.length})</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Active candidates with no message activity for more than 3 days</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>In-progress candidates with no message activity for more than 3 days</div>
                     </div>
                   </div>
                   <div className="table-wrap">
                     <table className="data-table">
                       <thead><tr>
                         <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
-                        <th></th><th>Candidate</th><th>Role</th><th>Status</th><th>Last Message</th><th>Days Idle</th>
+                        <th></th><th>Candidate</th><th>Role</th><th>Last Message</th><th>Days Idle</th><th>Hiring Manager</th>
                       </tr></thead>
                       <tbody>
-                        {staleCandidates.slice(0, 10).map((c, i) => {
+                        {staleCandidates.map((c, i) => {
                           const lastActivity = c.lastMessageAt || c.createdAt;
                           const days = Math.floor((Date.now() - new Date(lastActivity)) / (1000 * 60 * 60 * 24));
+                          const recruiter = getRecruiter(c.recruiterId);
                           return (
                             <tr key={c.id} onClick={() => window.location.href = `/candidates/${c.id}`} style={{ cursor: 'pointer' }}>
                               <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                               <td><Avatar src={c.photoUrl} name={c.fullName} size={26} /></td>
                               <td style={{ fontWeight: 600 }}>{c.fullName || '—'}</td>
                               <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
-                              <td><span className={`status-badge status-${c.status}`}>{STATUS_CONFIG[c.status]?.label || c.status}</span></td>
                               <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                {c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleDateString() : 'No messages yet'}
+                                {c.lastMessageAt
+                                  ? new Date(c.lastMessageAt).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                  : 'No messages yet'}
                               </td>
                               <td><span style={{ color: days > 14 ? 'var(--error)' : 'var(--warning)', fontWeight: 700, fontSize: 13 }}>{days}d</span></td>
+                              <td style={{ fontSize: 12 }}>{recruiter?.name || c.recruiterName || '—'}</td>
                             </tr>
                           );
                         })}
@@ -847,25 +850,25 @@ export default function Dashboard() {
                 ) : <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No data yet — assign roles to candidates to see this breakdown.</div>}
               </div>
 
-              {/* Stale candidates — no reply for 7+ days */}
+              {/* Stale candidates — no reply for 3+ days */}
               {staleCandidates.length > 0 && (
                 <div className="card" style={{ marginBottom: 20, border: '1px solid rgba(245,166,35,0.3)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                     <span style={{ fontSize: 18 }}>⚠️</span>
                     <div>
                       <div className="card-title" style={{ color: 'var(--warning)', marginBottom: 2 }}>No Reply — Needs Attention ({staleCandidates.length})</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Candidates with no message activity for more than 3 days</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>In-progress candidates with no message activity for more than 3 days</div>
                     </div>
                   </div>
                   <div className="table-wrap">
                     <table className="data-table">
                       <thead><tr>
                         <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
-                        <th></th><th>Candidate</th><th>Role</th><th>Status</th><th>Last Activity</th><th>Days Idle</th><th>Recruiter</th>
+                        <th></th><th>Candidate</th><th>Role</th><th>Last Message</th><th>Days Idle</th><th>Hiring Manager</th>
                       </tr></thead>
                       <tbody>
-                        {staleCandidates.slice(0, 10).map((c, i) => {
-                          const lastActivity = c.lastMessageAt || c.updatedAt || c.createdAt;
+                        {staleCandidates.map((c, i) => {
+                          const lastActivity = c.lastMessageAt || c.createdAt;
                           const days = Math.floor((Date.now() - new Date(lastActivity)) / (1000 * 60 * 60 * 24));
                           const recruiter = getRecruiter(c.recruiterId);
                           return (
@@ -874,10 +877,13 @@ export default function Dashboard() {
                               <td><Avatar src={c.photoUrl} name={c.fullName} size={26} /></td>
                               <td style={{ fontWeight: 600 }}>{c.fullName || '—'}</td>
                               <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
-                              <td><span className={`status-badge status-${c.status}`}>{STATUS_CONFIG[c.status]?.label || c.status}</span></td>
-                              <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(lastActivity).toLocaleDateString()}</td>
+                              <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                {c.lastMessageAt
+                                  ? new Date(c.lastMessageAt).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                  : 'No messages yet'}
+                              </td>
                               <td><span style={{ color: days > 14 ? 'var(--error)' : 'var(--warning)', fontWeight: 700, fontSize: 13 }}>{days}d</span></td>
-                              <td style={{ fontSize: 12 }}>{recruiter?.name || '—'}</td>
+                              <td style={{ fontSize: 12 }}>{recruiter?.name || c.recruiterName || '—'}</td>
                             </tr>
                           );
                         })}

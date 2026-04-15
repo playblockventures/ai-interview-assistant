@@ -1049,7 +1049,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
                       <div className="flex gap-8" style={{ alignItems: 'center' }}>
                         {msg.timestamp && (
                           <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>
-                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {new Date(msg.timestamp).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </span>
                         )}
                         {editingIdx === i ? (
@@ -1098,7 +1098,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
                     <div className="flex gap-8" style={{ alignItems: 'center' }}>
                       {msg.timestamp && (
                         <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>
-                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(msg.timestamp).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </span>
                       )}
                       {editingIdx === i ? (
