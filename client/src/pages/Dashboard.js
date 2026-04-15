@@ -608,7 +608,7 @@ export default function Dashboard() {
                       <thead>
                         <tr>
                           <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
-                          <th>Hiring Manager</th>
+                          <th>Recruiter</th>
                           <th style={{ textAlign: 'center' }}>Candidates</th>
                           <th style={{ textAlign: 'center' }}>In Progress</th>
                           <th style={{ textAlign: 'center' }}>Success</th>
@@ -711,7 +711,7 @@ export default function Dashboard() {
                     <table className="data-table">
                       <thead><tr>
                         <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
-                        <th></th><th>Candidate</th><th>Role</th><th>Last Message</th><th>Days Idle</th><th>Hiring Manager</th>
+                        <th></th><th>Candidate</th><th>Role</th><th>Last Message</th><th>Days Idle</th><th>Recruiter</th><th>User</th>
                       </tr></thead>
                       <tbody>
                         {staleCandidates.map((c, i) => {
@@ -731,6 +731,7 @@ export default function Dashboard() {
                               </td>
                               <td><span style={{ color: days > 14 ? 'var(--error)' : 'var(--warning)', fontWeight: 700, fontSize: 13 }}>{days}d</span></td>
                               <td style={{ fontSize: 12 }}>{recruiter?.name || c.recruiterName || '—'}</td>
+                              <td style={{ fontSize: 12 }}>{c.ownerName || '—'}</td>
                             </tr>
                           );
                         })}
@@ -864,7 +865,7 @@ export default function Dashboard() {
                     <table className="data-table">
                       <thead><tr>
                         <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
-                        <th></th><th>Candidate</th><th>Role</th><th>Last Message</th><th>Days Idle</th><th>Hiring Manager</th>
+                        <th></th><th>Candidate</th><th>Role</th><th>Last Message</th><th>Days Idle</th><th>Recruiter</th><th>User</th>
                       </tr></thead>
                       <tbody>
                         {staleCandidates.map((c, i) => {
@@ -884,6 +885,7 @@ export default function Dashboard() {
                               </td>
                               <td><span style={{ color: days > 14 ? 'var(--error)' : 'var(--warning)', fontWeight: 700, fontSize: 13 }}>{days}d</span></td>
                               <td style={{ fontSize: 12 }}>{recruiter?.name || c.recruiterName || '—'}</td>
+                              <td style={{ fontSize: 12 }}>{c.ownerName || '—'}</td>
                             </tr>
                           );
                         })}
