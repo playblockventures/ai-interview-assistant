@@ -300,14 +300,21 @@ export default function Candidates() {
       // Admin can pass ownerFilter to see a specific user's candidates
       if (user?.isAdmin && ownerFilter) params.ownerId = ownerFilter;
       const data = await candidateApi.getAll(params);
-      setCandidates(data.candidates || []);
+      const list = data.candidates || [];
+      // Sort pinned candidates to the top
+      list.sort((a, b) => {
+        const aPinned = pinnedIds.has(a.id) ? 0 : 1;
+        const bPinned = pinnedIds.has(b.id) ? 0 : 1;
+        return aPinned - bPinned;
+      });
+      setCandidates(list);
       setTotal(data.total || 0);
     } catch (e) {
       toast.error(e.message);
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, recruiterFilter, ownerFilter, page, user]);
+  }, [search, statusFilter, recruiterFilter, ownerFilter, page, user, pinnedIds]);
 
   useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
 
@@ -444,7 +451,10 @@ export default function Candidates() {
                         </td>
                         {/* Name + title */}
                         <td>
-                          <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{c.fullName || '—'}</div>
+                          <div style={{ fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                            {pinnedIds.has(c.id) && <span style={{ color: '#f59e0b', fontSize: 13 }}>★</span>}
+                            {c.fullName || '—'}
+                          </div>
                           {c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.currentTitle}</div>}
                         </td>
                         <td style={{ fontFamily: 'DM Mono, monospace', fontSize: 12 }}>{c.email || '—'}</td>
