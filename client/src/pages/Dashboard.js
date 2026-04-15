@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useContext, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { candidateApi, authApi } from '../utils/api';
+import { candidateApi, authApi, settingsApi } from '../utils/api';
 import { AppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -195,6 +195,7 @@ export default function Dashboard() {
   const [groupMode,     setGroupMode]     = useState('none');
   const [allUsers,      setAllUsers]      = useState([]);
   const [activeView,    setActiveView]    = useState('overview'); // 'overview' | 'pipeline' | 'candidates'
+  const [pinnedCandidates, setPinnedCandidates] = useState([]);
 
   useEffect(() => {
     if (user?.isAdmin) authApi.listUsers().then(setAllUsers).catch(() => {});
@@ -203,12 +204,16 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const [recentData, statsData] = await Promise.all([
+        const [recentData, statsData, pinsData] = await Promise.all([
           candidateApi.getRecent(8),
           candidateApi.getStats(),
+          settingsApi.getPins().catch(() => ({ pins: [] })),
         ]);
         setRecent(recentData.candidates || []);
-        setAllCandidates(statsData.candidates || []);
+        const all = statsData.candidates || [];
+        setAllCandidates(all);
+        const pinIds = new Set(pinsData.pins || []);
+        setPinnedCandidates(all.filter(c => pinIds.has(c.id)));
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     })();
@@ -730,6 +735,43 @@ export default function Dashboard() {
                                   : 'No messages yet'}
                               </td>
                               <td><span style={{ color: days > 14 ? 'var(--error)' : 'var(--warning)', fontWeight: 700, fontSize: 13 }}>{days}d</span></td>
+                              <td style={{ fontSize: 12 }}>{recruiter?.name || c.recruiterName || '—'}</td>
+                              <td style={{ fontSize: 12 }}>{c.ownerName || '—'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Pinned candidates */}
+              {pinnedCandidates.length > 0 && (
+                <div className="card" style={{ marginBottom: 20, border: '1px solid rgba(245,166,35,0.3)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                    <span style={{ fontSize: 18 }}>★</span>
+                    <div>
+                      <div className="card-title" style={{ color: '#f59e0b', marginBottom: 2 }}>Pinned Candidates ({pinnedCandidates.length})</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Your personally pinned candidates</div>
+                    </div>
+                  </div>
+                  <div className="table-wrap">
+                    <table className="data-table">
+                      <thead><tr>
+                        <th style={{ width: 32 }}></th>
+                        <th></th><th>Candidate</th><th>Role</th><th>Status</th><th>Recruiter</th><th>User</th>
+                      </tr></thead>
+                      <tbody>
+                        {pinnedCandidates.map((c, i) => {
+                          const recruiter = getRecruiter(c.recruiterId);
+                          return (
+                            <tr key={c.id} onClick={() => window.location.href = `/candidates/${c.id}`} style={{ cursor: 'pointer' }}>
+                              <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
+                              <td><Avatar src={c.photoUrl} name={c.fullName} size={26} /></td>
+                              <td style={{ fontWeight: 600 }}>{c.fullName || '—'}</td>
+                              <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
+                              <td><span className={`status-badge status-${c.status}`}>{STATUS_CONFIG[c.status]?.label || c.status}</span></td>
                               <td style={{ fontSize: 12 }}>{recruiter?.name || c.recruiterName || '—'}</td>
                               <td style={{ fontSize: 12 }}>{c.ownerName || '—'}</td>
                             </tr>

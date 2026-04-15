@@ -186,6 +186,61 @@ router.delete('/enhancv-key', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── GET /api/settings/pins ───────────────────────────────────────────────────
+router.get('/pins', requireAuth, async (req, res) => {
+  try {
+    const S = getSettings();
+    const pins = await S.getForUser(req.user.id, 'pinned_candidates').catch(() => null) || [];
+    res.json({ pins });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── POST /api/settings/pins/:candidateId ─────────────────────────────────────
+router.post('/pins/:candidateId', requireAuth, async (req, res) => {
+  try {
+    const S = getSettings();
+    const pins = await S.getForUser(req.user.id, 'pinned_candidates').catch(() => null) || [];
+    if (!pins.includes(req.params.candidateId)) {
+      pins.push(req.params.candidateId);
+      await S.setForUser(req.user.id, 'pinned_candidates', pins);
+    }
+    res.json({ pins });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── DELETE /api/settings/pins/:candidateId ───────────────────────────────────
+router.delete('/pins/:candidateId', requireAuth, async (req, res) => {
+  try {
+    const S = getSettings();
+    const pins = await S.getForUser(req.user.id, 'pinned_candidates').catch(() => null) || [];
+    const updated = pins.filter(id => id !== req.params.candidateId);
+    await S.setForUser(req.user.id, 'pinned_candidates', updated);
+    res.json({ pins: updated });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── POST /api/settings/pins/:candidateId/share ───────────────────────────────
+// Share a pinned candidate with another user (or admin shares to a user)
+router.post('/pins/:candidateId/share', requireAuth, async (req, res) => {
+  try {
+    const { targetUserId, candidateName } = req.body;
+    if (!targetUserId) return res.status(400).json({ error: 'targetUserId is required' });
+    const Notification = require('../models/Notification');
+    const senderName = req.user.displayName || req.user.username;
+    await Notification.create({
+      userId: targetUserId,
+      type: 'pin_share',
+      title: `${senderName} shared a candidate with you`,
+      message: `${senderName} pinned ${candidateName || 'a candidate'} and shared it with you. Click to view.`,
+      candidateId: req.params.candidateId,
+      candidateName: candidateName || '',
+      createdBy: req.user.id,
+      createdByName: senderName,
+    });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── POST /api/settings/extract-linkedin ──────────────────────────────────────
 // Extract candidate profile data from a LinkedIn URL using Piloterr API
 router.post('/extract-linkedin', requireAuth, async (req, res) => {

@@ -318,6 +318,28 @@ export default function Candidates() {
     catch (e) { toast.error(e.message); }
   };
 
+  // ── Pins ──────────────────────────────────────────────────────────────────
+  const [pinnedIds, setPinnedIds] = useState(new Set());
+  useEffect(() => {
+    settingsApi.getPins().then(d => setPinnedIds(new Set(d.pins || []))).catch(() => {});
+  }, []);
+
+  const togglePin = async (e, c) => {
+    e.stopPropagation();
+    const isPinned = pinnedIds.has(c.id);
+    try {
+      if (isPinned) {
+        await settingsApi.removePin(c.id);
+        setPinnedIds(s => { const n = new Set(s); n.delete(c.id); return n; });
+        toast.success('Unpinned');
+      } else {
+        await settingsApi.addPin(c.id);
+        setPinnedIds(s => new Set([...s, c.id]));
+        toast.success('Pinned');
+      }
+    } catch (err) { toast.error(err.message); }
+  };
+
   const getRoleLabel  = (val) => roles.find(r => r.value === val)?.label || val || '—';
   const getRecruiter  = (id)  => recruiters.find(r => r.id === id) || null;
 
@@ -456,6 +478,12 @@ export default function Candidates() {
                         </td>
                         <td>
                           <div className="flex gap-8" onClick={e => e.stopPropagation()}>
+                            <button
+                              onClick={e => togglePin(e, c)}
+                              title={pinnedIds.has(c.id) ? 'Unpin' : 'Pin'}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: '0 4px', color: pinnedIds.has(c.id) ? '#f59e0b' : 'var(--text-muted)' }}>
+                              {pinnedIds.has(c.id) ? '★' : '☆'}
+                            </button>
                             <button className="btn btn-secondary btn-sm"
                               onClick={e => { e.stopPropagation(); setEditCandidate(c); }}>✎ Edit</button>
                             <button onClick={e => handleDelete(e, c.id)}
