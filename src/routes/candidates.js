@@ -137,6 +137,15 @@ router.delete('/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// POST backfill-last-message — admin only, one-time fix for missing lastMessageAt
+router.post('/backfill-last-message', async (req, res) => {
+  try {
+    if (!req.user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+    const count = await Candidate.backfillLastMessageAt();
+    res.json({ message: `Backfilled lastMessageAt for ${count} candidates.` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // POST parse-attachment — extract text from any file (for conversation attachments)
 router.post('/parse-attachment', attachmentUpload.single('file'), async (req, res) => {
   try {

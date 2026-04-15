@@ -55,7 +55,7 @@ const Candidate = {
   // Lightweight stats for the dashboard — only reads small projection fields
   async getStats({ ownerId, isAdmin } = {}) {
     const db = getDB();
-    const STAT_FIELDS = ['fullName', 'email', 'status', 'role', 'location',
+    const STAT_FIELDS = ['fullName', 'email', 'photoUrl', 'status', 'role', 'location',
                          'recruiterId', 'recruiterName', 'ownerId', 'ownerName',
                          'companyId', 'companyName', 'createdAt', 'updatedAt', 'lastMessageAt'];
     let query = db.collection(COL).select(...STAT_FIELDS);
@@ -224,6 +224,31 @@ const Candidate = {
     if (index < 0 || index >= arr.length) throw new Error('Message index out of range');
     arr[index] = { ...arr[index], content: newContent, editedAt: new Date().toISOString() };
     await db.collection(COL).doc(id).update({ outreachMessages: arr, updatedAt: new Date().toISOString() });
+  },
+
+  // Backfill lastMessageAt for candidates that don't have it yet
+  // Reads full docs only for candidates missing the field, then writes it back
+  async backfillLastMessageAt() {
+    const db = getDB();
+    const snapshot = await db.collection(COL).select('lastMessageAt', 'conversationHistory', 'outreachMessages', 'createdAt').get();
+    const batch = db.batch();
+    let count = 0;
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      if (data.lastMessageAt) continue; // already set
+      const msgs = [
+        ...(data.conversationHistory || []),
+        ...(data.outreachMessages || []),
+      ];
+      const timestamps = msgs.map(m => m.createdAt || m.timestamp || '').filter(Boolean).sort();
+      const lastTs = timestamps[timestamps.length - 1] || data.createdAt || null;
+      if (lastTs) {
+        batch.update(doc.ref, { lastMessageAt: lastTs });
+        count++;
+      }
+    }
+    if (count > 0) await batch.commit();
+    return count;
   },
 
   // Check ownership (non-admin users can only access their own)
