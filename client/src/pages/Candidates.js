@@ -292,6 +292,12 @@ export default function Candidates() {
     }
   }, [user]);
 
+  // ── Pins ──────────────────────────────────────────────────────────────────
+  const [pinnedIds, setPinnedIds] = useState(new Set());
+  useEffect(() => {
+    settingsApi.getPins().then(d => setPinnedIds(new Set(d.pins || []))).catch(() => {});
+  }, []);
+
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
     try {
@@ -324,12 +330,6 @@ export default function Candidates() {
     try { await candidateApi.delete(id); toast.success('Candidate deleted'); fetchCandidates(); }
     catch (e) { toast.error(e.message); }
   };
-
-  // ── Pins ──────────────────────────────────────────────────────────────────
-  const [pinnedIds, setPinnedIds] = useState(new Set());
-  useEffect(() => {
-    settingsApi.getPins().then(d => setPinnedIds(new Set(d.pins || []))).catch(() => {});
-  }, []);
 
   const togglePin = async (e, c) => {
     e.stopPropagation();
