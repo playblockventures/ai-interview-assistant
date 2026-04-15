@@ -55,6 +55,7 @@ function NotificationBell() {
 
   const dropRef = useRef(null);
   const pollRef = useRef(null);
+  const knownIdsRef = useRef(null); // null = first load, Set after first load
 
   const fetchCount = useCallback(async () => {
     try { const d = await notificationApi.getCount(); setUnread(d.count || 0); } catch (_) {}
@@ -76,12 +77,44 @@ function NotificationBell() {
     finally { setLoadingSent(false); }
   }, []);
 
+  // Poll for new notifications and pop a toast for each new unread one
+  const pollNotifications = useCallback(async () => {
+    try {
+      const data = await notificationApi.getAll();
+      const unreadItems = data.filter(n => !n.read);
+      setUnread(unreadItems.length);
+
+      if (knownIdsRef.current === null) {
+        // First load — just record existing IDs, don't toast
+        knownIdsRef.current = new Set(data.map(n => n.id));
+        setItems(data);
+        return;
+      }
+
+      const newOnes = unreadItems.filter(n => !knownIdsRef.current.has(n.id));
+      newOnes.forEach(n => {
+        toast(
+          (t) => (
+            <div onClick={() => toast.dismiss(t.id)} style={{ cursor: 'pointer' }}>
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{n.title || 'New notification'}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 260, whiteSpace: 'pre-wrap' }}>{n.message}</div>
+            </div>
+          ),
+          { duration: 6000, icon: '🔔' }
+        );
+        knownIdsRef.current.add(n.id);
+      });
+
+      if (newOnes.length > 0) setItems(data);
+    } catch (_) {}
+  }, []); // eslint-disable-line
+
   useEffect(() => {
     if (!user) return;
-    fetchCount();
-    pollRef.current = setInterval(fetchCount, 30000);
+    pollNotifications();
+    pollRef.current = setInterval(pollNotifications, 30000);
     return () => clearInterval(pollRef.current);
-  }, [user, fetchCount]);
+  }, [user, pollNotifications]);
 
   useEffect(() => {
     const handler = (e) => { if (dropRef.current && !dropRef.current.contains(e.target)) setOpen(false); };
