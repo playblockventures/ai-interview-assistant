@@ -329,14 +329,14 @@ export default function Dashboard() {
     window.location.href = '/candidates';
   };
 
-  // Stale candidates — pending/in_progress with no message for 7+ days
+  // Stale candidates — pending/in_progress with no message for 3+ days
   // Use lastMessageAt (actual message time) or createdAt — NOT updatedAt (profile edits shouldn't reset the clock)
   const staleCandidates = useMemo(() => {
     return allCandidates.filter(c => {
       if (c.status === 'success' || c.status === 'failed') return false;
       const lastActivity = c.lastMessageAt || c.createdAt;
       const days = (Date.now() - new Date(lastActivity)) / (1000 * 60 * 60 * 24);
-      return days > 7;
+      return days > 3;
     }).sort((a, b) => {
       const aDays = (Date.now() - new Date(a.lastMessageAt || a.createdAt)) / 86400000;
       const bDays = (Date.now() - new Date(b.lastMessageAt || b.createdAt)) / 86400000;
@@ -704,7 +704,7 @@ export default function Dashboard() {
                     <span style={{ fontSize: 18 }}>⏰</span>
                     <div style={{ flex: 1 }}>
                       <div className="card-title" style={{ color: 'var(--warning)', marginBottom: 2 }}>No Reply — Needs Follow-up ({staleCandidates.length})</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Active candidates with no message activity for more than 7 days</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Active candidates with no message activity for more than 3 days</div>
                     </div>
                   </div>
                   <div className="table-wrap">
@@ -854,7 +854,7 @@ export default function Dashboard() {
                     <span style={{ fontSize: 18 }}>⚠️</span>
                     <div>
                       <div className="card-title" style={{ color: 'var(--warning)', marginBottom: 2 }}>No Reply — Needs Attention ({staleCandidates.length})</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Candidates with no message activity for more than 7 days</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Candidates with no message activity for more than 3 days</div>
                     </div>
                   </div>
                   <div className="table-wrap">
