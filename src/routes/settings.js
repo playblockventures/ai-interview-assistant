@@ -279,15 +279,8 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
 
     const profile = response.data;
 
-    // Log all top-level keys to help diagnose unexpected field names
-    console.log('[extract-linkedin] profile keys:', Object.keys(profile));
-    console.log('[extract-linkedin] headline fields:', {
-      sub_title:   profile.sub_title,
-      headline:    profile.headline,
-      title:       profile.title,
-      occupation:  profile.occupation,
-      job_title:   profile.job_title,
-    });
+    // Log full raw response so we can see exactly what Piloterr returns for this plan
+    console.log('[extract-linkedin] RAW RESPONSE:', JSON.stringify(profile, null, 2));
 
     // Map Piloterr response to our candidate fields
     const fullName = profile.full_name || [profile.first_name, profile.last_name].filter(Boolean).join(' ') || '';
@@ -324,7 +317,7 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
       resumeText:   buildResumeText(profile),
     };
 
-    res.json(result);
+    res.json({ ...result, _raw: profile });
   } catch (err) {
     const status = err.response?.status;
     const piloterrBody = err.response?.data;
