@@ -282,91 +282,18 @@ function OutreachTab({ candidate }) {
     goal: '', customInstructions: '', recruiterId: candidate.recruiterId || '',
     companyId: candidate.companyId || '',
   });
-  const [message,     setMessage]     = useState('');
-  const [history,     setHistory]     = useState(
-    (candidate.outreachMessages || []).map((m, i) => ({ ...m, _origIdx: i }))
-  );
-  const [loading,     setLoading]     = useState(false);
-  const [showHistory, setShowHistory] = useState(history.length > 0);
-
-  // Manual add state
-  const [showManual,  setShowManual]  = useState(false);
-  const [manualText,  setManualText]  = useState('');
-  const [manualType,  setManualType]  = useState('manual');
-  const [addingManual, setAddingManual] = useState(false);
-
-  // Edit state
-  const [editingIdx,  setEditingIdx]  = useState(null);
-  const [editText,    setEditText]    = useState('');
-  const [saving,      setSaving]      = useState(false);
-
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
   const set = (k, v) => setConfig(p => ({ ...p, [k]: v }));
-
-  const [currentOutreachIdx, setCurrentOutreachIdx] = useState(null);
 
   const generate = async () => {
     setLoading(true);
     try {
       const data = await generateApi.outreach({ candidateId: candidate.id, ...config });
-      const newMsg = { content: data.message, type: config.messageType, createdAt: new Date().toISOString() };
       setMessage(data.message);
-      if (currentOutreachIdx !== null) {
-        // Regenerate — replace existing entry
-        const firestoreIdx = history[currentOutreachIdx]?._origIdx ?? currentOutreachIdx;
-        await interviewApi.editOutreachMsg(candidate.id, firestoreIdx, data.message);
-        setHistory(h => h.map((m, idx) => idx === currentOutreachIdx ? { ...m, content: data.message } : m));
-        toast.success('Message regenerated!');
-      } else {
-        // First generate — prepend to history
-        setHistory(h => [{ ...newMsg, _origIdx: 0 }, ...h.map((m, i) => ({ ...m, _origIdx: i + 1 }))]);
-        setCurrentOutreachIdx(0);
-        setShowHistory(true);
-        toast.success('Message generated!');
-      }
+      toast.success('Message generated!');
     } catch (e) { toast.error(e.message); }
     finally { setLoading(false); }
-  };
-
-  const addManual = async () => {
-    if (!manualText.trim()) return;
-    setAddingManual(true);
-    try {
-      await interviewApi.addOutreachMsg(candidate.id, manualText.trim(), manualType);
-      const newMsg = { content: manualText.trim(), type: manualType, createdAt: new Date().toISOString() };
-      setHistory(h => [...h, { ...newMsg, _origIdx: h.length }]);
-      setManualText('');
-      setShowManual(false);
-      setShowHistory(true);
-      toast.success('Message added');
-    } catch (e) { toast.error(e.message); }
-    finally { setAddingManual(false); }
-  };
-
-  const startEdit = (i) => { setEditingIdx(i); setEditText(history[i].content); };
-  const cancelEdit = () => { setEditingIdx(null); setEditText(''); };
-
-  const saveEdit = async (i) => {
-    if (!editText.trim()) return;
-    setSaving(true);
-    try {
-      const firestoreIdx = history[i]._origIdx ?? i;
-      await interviewApi.editOutreachMsg(candidate.id, firestoreIdx, editText.trim());
-      setHistory(h => h.map((m, idx) => idx === i ? { ...m, content: editText.trim() } : m));
-      setEditingIdx(null);
-      toast.success('Message updated');
-    } catch (e) { toast.error(e.message); }
-    finally { setSaving(false); }
-  };
-
-  const deleteMsg = async (i) => {
-    if (!window.confirm('Delete this message?')) return;
-    try {
-      const firestoreIdx = history[i]._origIdx ?? i;
-      await interviewApi.deleteOutreachMsg(candidate.id, firestoreIdx);
-      setHistory(h => h.filter((_, idx) => idx !== i).map((m, newIdx) => ({ ...m, _origIdx: newIdx })));
-      if (currentOutreachIdx === i) { setMessage(''); setCurrentOutreachIdx(null); }
-      toast.success('Message deleted');
-    } catch (e) { toast.error(e.message); }
   };
 
   return (
@@ -407,99 +334,24 @@ function OutreachTab({ candidate }) {
           <textarea className="form-textarea" placeholder="Additional context or instructions..."
             value={config.customInstructions} onChange={e => set('customInstructions', e.target.value)} style={{ minHeight: 60 }} />
         </div>
-        <div className="flex gap-8">
-          <button className="btn btn-primary" onClick={generate} disabled={loading}>
-            {loading ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Generating...</> : '✉ Generate Message'}
-          </button>
-          <button className="btn btn-secondary" onClick={() => setShowManual(v => !v)}>
-            ✎ Write Manually
-          </button>
-        </div>
+        <button className="btn btn-primary" onClick={generate} disabled={loading}>
+          {loading ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Generating...</> : '✉ Generate Message'}
+        </button>
       </div>
-
-      {/* Manual write panel */}
-      {showManual && (
-        <div className="card mb-16" style={{ border: '1px solid var(--border-light)' }}>
-          <div className="card-title" style={{ marginBottom: 12 }}>Write Message Manually</div>
-          <div className="form-group">
-            <label className="form-label">Type</label>
-            <select className="form-select" value={manualType} onChange={e => setManualType(e.target.value)}>
-              <option value="manual">Manual</option>
-              {MESSAGE_TYPES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Message</label>
-            <textarea className="form-textarea" style={{ minHeight: 140 }}
-              placeholder="Write your outreach message here..."
-              value={manualText} onChange={e => setManualText(e.target.value)} />
-          </div>
-          <div className="flex gap-8">
-            <button className="btn btn-primary" onClick={addManual} disabled={addingManual || !manualText.trim()}>
-              {addingManual ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving...</> : '+ Add Message'}
-            </button>
-            <button className="btn btn-secondary" onClick={() => { setShowManual(false); setManualText(''); }}>Cancel</button>
-          </div>
-        </div>
-      )}
 
       {/* Generated message preview */}
       {message && (
-        <div className="card mb-16">
+        <div className="card">
           <div className="flex items-center justify-between mb-16">
             <div className="card-title">Generated Message</div>
             <div className="flex gap-8">
               <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(message); toast.success('Copied!'); }}>Copy</button>
-              <button className="btn btn-secondary btn-sm" onClick={generate}>↺ Regenerate</button>
+              <button className="btn btn-secondary btn-sm" onClick={generate} disabled={loading}>↺ Regenerate</button>
             </div>
           </div>
           <div className="markdown-output" style={{ fontSize: 13.5, lineHeight: 1.7 }}>
             <ReactMarkdown>{message}</ReactMarkdown>
           </div>
-        </div>
-      )}
-
-      {/* History */}
-      {history.length > 0 && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-12" style={{ cursor: 'pointer' }} onClick={() => setShowHistory(h => !h)}>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>Message History ({history.length})</div>
-            <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{showHistory ? '▲ Hide' : '▼ Show'}</span>
-          </div>
-          {showHistory && history.map((m, i) => (
-            <div key={i} style={{ borderTop: i > 0 ? '1px solid var(--border)' : undefined, paddingTop: i > 0 ? 14 : 0, marginTop: i > 0 ? 14 : 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  {m.type} · {new Date(m.createdAt).toLocaleString()}
-                  {m.editedAt && <span style={{ marginLeft: 6, color: 'var(--text-muted)' }}>(edited)</span>}
-                </div>
-                <div className="flex gap-8">
-                  {editingIdx === i ? (
-                    <>
-                      <button className="btn btn-primary btn-sm" onClick={() => saveEdit(i)} disabled={saving}>
-                        {saving ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Save'}
-                      </button>
-                      <button className="btn btn-secondary btn-sm" onClick={cancelEdit}>Cancel</button>
-                    </>
-                  ) : (
-                    <>
-                      <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(m.content); toast.success('Copied!'); }}>Copy</button>
-                      <button className="btn btn-secondary btn-sm" onClick={() => startEdit(i)}>✎ Edit</button>
-                      <button onClick={() => deleteMsg(i)} className="btn btn-danger btn-sm">✕</button>
-                    </>
-                  )}
-                </div>
-              </div>
-              {editingIdx === i ? (
-                <textarea className="form-textarea" style={{ minHeight: 120, fontSize: 13 }}
-                  value={editText} onChange={e => setEditText(e.target.value)} autoFocus />
-              ) : (
-                <div className="markdown-output" style={{ fontSize: 13, lineHeight: 1.7 }}>
-                  <ReactMarkdown>{m.content}</ReactMarkdown>
-                </div>
-              )}
-            </div>
-          ))}
         </div>
       )}
     </div>
