@@ -285,19 +285,19 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
     // Map Piloterr response to our candidate fields
     const fullName = profile.full_name || [profile.first_name, profile.last_name].filter(Boolean).join(' ') || '';
 
-    // Location: Piloterr may return a plain string or an object
-    const addr = profile.address || profile.location_info || {};
+    // Location: Piloterr returns address as a string or null
+    const addr = profile.address || profile.location_info || profile.location || {};
     const location = (typeof addr === 'string' && addr)
       ? addr
       : [addr.city, addr.country || addr.country_code].filter(Boolean).join(', ')
-        || profile.location || profile.city || profile.country || '';
+        || profile.city || profile.country || '';
 
     const photoUrl = profile.photo_url || profile.profile_picture || profile.picture || profile.avatar || '';
 
-    // Headline: Piloterr v2 uses "sub_title" for the LinkedIn headline text
+    // Headline: Piloterr returns the LinkedIn headline in the "headline" field
     const currentTitle =
-      profile.sub_title      ||   // Piloterr primary headline field
-      profile.headline       ||   // alternative name
+      profile.headline       ||   // Piloterr primary headline field
+      profile.sub_title      ||   // legacy/alternative name
       profile.occupation     ||   // sometimes used
       profile.job_title      ||   // top-level job title (some endpoints)
       profile.title          ||   // generic fallback
@@ -335,7 +335,7 @@ function buildResumeText(profile) {
   const lines = [];
 
   // Headline (LinkedIn tagline)
-  const headline = profile.sub_title || profile.headline || profile.occupation || '';
+  const headline = profile.headline || profile.sub_title || profile.occupation || '';
   if (headline) lines.push(`Headline: ${headline}`);
 
   // Bio / summary
