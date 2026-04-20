@@ -82,27 +82,29 @@ router.get('/', async (req, res) => {
             }
             companies = all[companiesKey(userId)] || [];
 
-            if (payload.isAdmin) {
-              // Admin sees ALL users' companies merged (deduplicated by id)
+            if (payload.isAdmin && !req.query.userId) {
+              // Admin without a specific userId → merged view of ALL users' data
+              const User = require('../models/User');
+              const allUsers = await User.findAll().catch(() => []);
+              const userMap = {};
+              allUsers.forEach(u => { userMap[u.id] = u.displayName || u.username; });
+
+              // Merge companies
               const allCompanyKeys = Object.keys(all).filter(k => k.startsWith('companies_'));
               const mergedCompanies = [];
               const seenCompanies = new Set();
               allCompanyKeys.forEach(k => {
+                const ownerUserId = k.replace('companies_', '');
                 (all[k] || []).forEach(c => {
                   if (!seenCompanies.has(c.id)) {
                     seenCompanies.add(c.id);
-                    mergedCompanies.push(c);
+                    mergedCompanies.push({ ...c, _ownerUserId: ownerUserId, _ownerName: userMap[ownerUserId] || ownerUserId });
                   }
                 });
               });
               if (mergedCompanies.length > 0) companies = mergedCompanies;
 
-              // Admin sees ALL users' recruiters merged, with owner info attached
-              const User = require('../models/User');
-              const users = await User.findAll().catch(() => []);
-              const userMap = {};
-              users.forEach(u => { userMap[u.id] = u.displayName || u.username; });
-
+              // Merge recruiters
               const allRecruiterKeys = Object.keys(all).filter(k => k.startsWith('recruiters_'));
               const merged = [];
               const seen   = new Set();
@@ -111,18 +113,15 @@ router.get('/', async (req, res) => {
                 (all[k] || []).forEach(r => {
                   if (!seen.has(r.id)) {
                     seen.add(r.id);
-                    merged.push({
-                      ...r,
-                      _ownerKey:    k,
-                      _ownerUserId: ownerUserId,
-                      _ownerName:   userMap[ownerUserId] || ownerUserId,
-                    });
+                    merged.push({ ...r, _ownerKey: k, _ownerUserId: ownerUserId, _ownerName: userMap[ownerUserId] || ownerUserId });
                   }
                 });
               });
               recruiters = merged;
             } else {
+              // Specific userId requested (or non-admin) → return just that user's data
               recruiters = all[recruiterKey(userId)] || [];
+              companies  = all[companiesKey(userId)] || [];
             }
 
             const result = { hasOpenAI, hasFirebase, userOpenAIKey, userEnhancvKey, dbConnected: isConnected(), roles, recruiters, companies, companyScenario, companyScenarios };
@@ -440,8 +439,9 @@ router.put('/recruiters', requireAuth, async (req, res) => {
 // ── PUT /api/settings/companies ───────────────────────────────────────────────
 router.put('/companies', requireAuth, async (req, res) => {
   try {
-    await getSettings().setForUser(req.user.id, 'companies', req.body.companies || []);
-    invalidateCache(req.user.id);
+    const targetUserId = (req.user.isAdmin && req.query.userId) ? req.query.userId : req.user.id;
+    await getSettings().setForUser(targetUserId, 'companies', req.body.companies || []);
+    invalidateCache(targetUserId);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

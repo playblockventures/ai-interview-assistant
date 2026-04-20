@@ -331,16 +331,19 @@ function RecruitersSection({ dbConnected }) {
     if (!window.confirm(`Move "${r.name}" to ${targetUser?.displayName || targetUser?.username || moveTarget}?`)) return;
     setSaving(true);
     try {
-      // Fetch target user's current recruiters and append
-      const targetData = await settingsApi.getAll({ userId: moveTarget });
-      const targetRecruiters = Array.isArray(targetData.recruiters) ? targetData.recruiters : [];
+      const stripMeta = ({ _ownerKey, _ownerUserId, _ownerName, ...rest }) => rest;
+
+      // Use already-loaded recruiters filtered by owner — avoids merged-view API bug
+      const targetRecruiters = localRecruiters
+        .filter(x => x._ownerUserId === moveTarget)
+        .map(stripMeta);
       const { _ownerKey, _ownerUserId, _ownerName, ...clean } = r;
       await settingsApi.saveRecruiters([...targetRecruiters, clean], moveTarget);
 
       // Remove from source user
       const sourceEntries = localRecruiters
         .filter(x => (x._ownerUserId || user.id) === fromUserId && x.id !== r.id)
-        .map(({ _ownerKey, _ownerUserId, _ownerName, ...rest }) => rest);
+        .map(stripMeta);
       await settingsApi.saveRecruiters(sourceEntries, fromUserId !== user.id ? fromUserId : undefined);
 
       await refreshSettings();
@@ -477,24 +480,36 @@ function RecruitersSection({ dbConnected }) {
 // ── Companies ─────────────────────────────────────────────────────────────────
 function CompaniesSection({ dbConnected }) {
   const { companies, companyScenarios, refreshSettings } = useContext(AppContext);
+  const { user } = useAuth();
   const [local, setLocal] = useState(companies);
   const [form, setForm]   = useState({ name: '', description: '' });
   const [editId, setEditId] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [mergeTargetId, setMergeTargetId] = useState(null);   // company id we're merging INTO
-  const [mergeFromId,   setMergeFromId]   = useState(null);   // null = not selected, '' = default, 'co_x' = company
+  const [mergeTargetId, setMergeTargetId] = useState(null);
+  const [mergeFromId,   setMergeFromId]   = useState(null);
+  const [movingId,      setMovingId]      = useState(null); // company id being moved
+  const [moveTarget,    setMoveTarget]    = useState(null); // target userId
+  const [allUsers,      setAllUsers]      = useState([]);
+
+  useEffect(() => {
+    if (user?.isAdmin) authApi.listUsers().then(setAllUsers).catch(() => {});
+  }, [user]);
 
   useEffect(() => { setLocal(companies); }, [companies]);
+
+  const stripOwner = (c) => { const { _ownerUserId, _ownerName, ...rest } = c; return rest; };
 
   const save = async () => {
     if (!form.name.trim()) return toast.error('Company name is required');
     if (!dbConnected) return toast.error('Connect Firebase first');
     setSaving(true);
     try {
+      const targetUserId = editId ? (local.find(c => c.id === editId)?._ownerUserId || user?.id) : user?.id;
+      const userEntries = local.filter(c => (c._ownerUserId || user?.id) === targetUserId).map(stripOwner);
       const updated = editId
-        ? local.map(c => c.id === editId ? { ...c, ...form } : c)
-        : [...local, { id: 'co_' + Date.now(), name: form.name.trim(), description: form.description.trim() }];
-      await settingsApi.saveCompanies(updated);
+        ? userEntries.map(c => c.id === editId ? { ...c, ...form } : c)
+        : [...userEntries, { id: 'co_' + Date.now(), name: form.name.trim(), description: form.description.trim() }];
+      await settingsApi.saveCompanies(updated, user?.isAdmin && targetUserId !== user?.id ? targetUserId : undefined);
       await refreshSettings();
       setForm({ name: '', description: '' });
       setEditId(null);
@@ -503,10 +518,12 @@ function CompaniesSection({ dbConnected }) {
     finally { setSaving(false); }
   };
 
-  const remove = async (id) => {
+  const remove = async (c) => {
     if (!window.confirm('Remove this company? KB documents linked to it will remain but lose the company link.')) return;
     try {
-      await settingsApi.saveCompanies(local.filter(c => c.id !== id));
+      const ownerUserId = c._ownerUserId || user?.id;
+      const updated = local.filter(x => !(x.id === c.id)).filter(x => (x._ownerUserId || user?.id) === ownerUserId).map(stripOwner);
+      await settingsApi.saveCompanies(updated, user?.isAdmin && ownerUserId !== user?.id ? ownerUserId : undefined);
       await refreshSettings();
       toast.success('Company removed');
     } catch (e) { toast.error(e.message); }
@@ -514,6 +531,31 @@ function CompaniesSection({ dbConnected }) {
 
   const startEdit = (c) => { setEditId(c.id); setForm({ name: c.name, description: c.description || '' }); };
   const cancel    = ()  => { setEditId(null); setForm({ name: '', description: '' }); };
+
+  const moveCompany = async (c) => {
+    if (!moveTarget) return toast.error('Select a target user first');
+    const fromUserId = c._ownerUserId || user?.id;
+    if (moveTarget === fromUserId) return toast.error('Target must be a different user');
+    const targetUser = allUsers.find(u => u.id === moveTarget);
+    if (!window.confirm(`Move company "${c.name}" to ${targetUser?.displayName || targetUser?.username || moveTarget}?`)) return;
+    setSaving(true);
+    try {
+      // Use already-loaded local list filtered by owner — avoids merged-view API bug
+      const targetCompanies = local.filter(x => x._ownerUserId === moveTarget).map(stripOwner);
+      if (!targetCompanies.find(x => x.id === c.id)) {
+        await settingsApi.saveCompanies([...targetCompanies, stripOwner(c)], moveTarget);
+      }
+      // Remove from source user
+      const sourceEntries = local.filter(x => (x._ownerUserId || user?.id) === fromUserId && x.id !== c.id).map(stripOwner);
+      await settingsApi.saveCompanies(sourceEntries, fromUserId !== user?.id ? fromUserId : undefined);
+
+      await refreshSettings();
+      setMovingId(null);
+      setMoveTarget(null);
+      toast.success(`"${c.name}" moved to ${targetUser?.displayName || targetUser?.username || moveTarget}`);
+    } catch (e) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
 
   const mergeInto = async (targetCompany) => {
     if (mergeFromId === null) return;
@@ -552,17 +594,46 @@ function CompaniesSection({ dbConnected }) {
       {local.length > 0 && (
         <div style={{ marginBottom: 14 }}>
           {local.map((c, i) => (
-            <div key={c.id} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', marginBottom: 6, border: `1px solid ${mergeTargetId === c.id ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', transition: 'border-color 0.2s' }}>
+            <div key={c.id} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', marginBottom: 6, border: `1px solid ${mergeTargetId === c.id || movingId === c.id ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', transition: 'border-color 0.2s' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px' }}>
                 <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, minWidth: 20 }}>{i + 1}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{c.name}</div>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {c.name}
+                    {user?.isAdmin && c._ownerName && (
+                      <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '1px 7px' }}>
+                        👤 {c._ownerName}
+                      </span>
+                    )}
+                  </div>
                   {c.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.description}</div>}
                 </div>
-                <button className="btn btn-secondary btn-sm" onClick={() => startEdit(c)}>Edit</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => { setMergeTargetId(mergeTargetId === c.id ? null : c.id); setMergeFromId(null); }}>Merge from...</button>
-                <button className="btn btn-danger btn-sm" onClick={() => remove(c.id)}>Remove</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => { startEdit(c); setMovingId(null); setMergeTargetId(null); }}>Edit</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => { setMergeTargetId(mergeTargetId === c.id ? null : c.id); setMergeFromId(null); setMovingId(null); }}>Merge from...</button>
+                {user?.isAdmin && allUsers.length > 1 && (
+                  <button className="btn btn-secondary btn-sm" onClick={() => { setMovingId(movingId === c.id ? null : c.id); setMoveTarget(null); setMergeTargetId(null); }}>Move</button>
+                )}
+                <button className="btn btn-danger btn-sm" onClick={() => remove(c)}>Remove</button>
               </div>
+
+              {/* Inline move panel — admin only */}
+              {movingId === c.id && (
+                <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', background: 'var(--bg-card)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>Move to:</span>
+                  <select className="form-select" style={{ flex: 1, fontSize: 12 }}
+                    value={moveTarget ?? '__none__'}
+                    onChange={e => setMoveTarget(e.target.value === '__none__' ? null : e.target.value)}>
+                    <option value="__none__" disabled>— Select user —</option>
+                    {allUsers.filter(u => u.id !== (c._ownerUserId || user?.id)).map(u => (
+                      <option key={u.id} value={u.id}>{u.displayName || u.username}</option>
+                    ))}
+                  </select>
+                  <button className="btn btn-primary btn-sm" disabled={!moveTarget || saving} onClick={() => moveCompany(c)}>
+                    {saving ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Move'}
+                  </button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { setMovingId(null); setMoveTarget(null); }}>Cancel</button>
+                </div>
+              )}
 
               {/* Inline merge panel */}
               {mergeTargetId === c.id && (
