@@ -520,7 +520,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
   const mapHistory = (arr) => (arr || []).map((m, originalIdx) => ({
     role:             m.role === 'assistant' ? 'assistant' : m.role === 'call_script' ? 'call_script' : 'user',
     content:          m.content,
-    timestamp:        m.timestamp,
+    timestamp:        m.timestamp || m.createdAt || null,
     imageBase64:      m.imageBase64      || null,
     imageMimeType:    m.imageMimeType    || null,
     attachedFileName: m.attachedFileName || null,

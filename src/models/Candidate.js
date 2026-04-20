@@ -167,7 +167,7 @@ const Candidate = {
   async pushConversation(id, entries) {
     const db = getDB();
     const ts = now();
-    const withTimestamps = entries.map(e => ({ ...e, timestamp: ts }));
+    const withTimestamps = entries.map(e => ({ ...e, timestamp: ts, createdAt: ts }));
     const doc = await db.collection(COL).doc(id).get();
     const existing = doc.data().conversationHistory || [];
     await db.collection(COL).doc(id).update({
