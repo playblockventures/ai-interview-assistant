@@ -73,7 +73,7 @@ export const settingsApi = {
   extractLinkedIn:     (linkedinUrl)  => api.post('/settings/extract-linkedin', { linkedinUrl }),
   saveRecruiters:      (recruiters, userId) => api.put('/settings/recruiters', { recruiters }, userId ? { params: { userId } } : {}),
   saveCompanyScenario:  (scenario)           => api.put('/settings/company-scenario', { scenario }),
-  saveCompanyScenarios: (scenarios)          => api.put('/settings/company-scenarios', { scenarios }),
+  saveCompanyScenarios: (scenarios, userId)   => api.put('/settings/company-scenarios', { scenarios }, userId ? { params: { userId } } : {}),
   saveCompanies:       (companies, userId) => api.put('/settings/companies', { companies }, userId ? { params: { userId } } : {}),
   getPins:             ()             => api.get('/settings/pins'),
   addPin:              (candidateId)  => api.post(`/settings/pins/${candidateId}`),
@@ -85,7 +85,7 @@ export const settingsApi = {
   addInstructions:     (content, name, companyId, companyName) => api.post('/settings/knowledge/instructions', { content, name, companyId, companyName }),
   testInstructions:    (instructions, prompt) => api.post('/settings/knowledge/test-instructions', { instructions, prompt }),
   deleteKnowledge:     (id)           => api.delete(`/settings/knowledge/${id}`),
-  reassignKnowledge:   (fromCompanyId, toCompanyId, toCompanyName) => api.post('/settings/knowledge/reassign', { fromCompanyId, toCompanyId, toCompanyName }),
+  reassignKnowledge:   (fromCompanyId, toCompanyId, toCompanyName, userId) => api.post('/settings/knowledge/reassign', { fromCompanyId, toCompanyId, toCompanyName }, userId ? { params: { userId } } : {}),
 };
 
 export const exportApi = {

@@ -498,18 +498,23 @@ function CompaniesSection({ dbConnected }) {
 
   useEffect(() => { setLocal(companies); }, [companies]);
 
-  // Build unique user list from company metadata (admin only)
-  const userList = user?.isAdmin
-    ? [...new Map(
-        local
-          .filter(c => c._ownerUserId)
-          .map(c => [c._ownerUserId, { id: c._ownerUserId, name: c._ownerName || c._ownerUserId }])
-      ).values()]
+  // Use all registered users for admin filter tabs (not just those who have companies)
+  const userList = user?.isAdmin && allUsers.length > 0
+    ? allUsers.map(u => ({ id: u.id, name: u.displayName || u.username }))
     : [];
 
-  const visibleCompanies = (user?.isAdmin && filterUserId)
-    ? local.filter(c => c._ownerUserId === filterUserId)
-    : local;
+  const visibleCompanies = (() => {
+    if (user?.isAdmin && filterUserId) {
+      const userCompanies = local.filter(c => c._ownerUserId === filterUserId);
+      if (userCompanies.length === 0) {
+        // Inject a synthetic Default entry so admin can see the user always has at least the Default slot
+        const targetUser = allUsers.find(u => u.id === filterUserId);
+        return [{ id: '', name: 'Default', _ownerUserId: filterUserId, _ownerName: targetUser?.displayName || targetUser?.username || filterUserId, _synthetic: true }];
+      }
+      return userCompanies;
+    }
+    return local;
+  })();
 
   const stripOwner = (c) => { const { _ownerUserId, _ownerName, ...rest } = c; return rest; };
 
@@ -518,7 +523,9 @@ function CompaniesSection({ dbConnected }) {
     if (!dbConnected) return toast.error('Connect Firebase first');
     setSaving(true);
     try {
-      const targetUserId = editId ? (local.find(c => c.id === editId)?._ownerUserId || user?.id) : user?.id;
+      const targetUserId = editId
+        ? (local.find(c => c.id === editId)?._ownerUserId || user?.id)
+        : (user?.isAdmin && filterUserId ? filterUserId : user?.id);
       const userEntries = local.filter(c => (c._ownerUserId || user?.id) === targetUserId).map(stripOwner);
       const updated = editId
         ? userEntries.map(c => c.id === editId ? { ...c, ...form } : c)
@@ -581,16 +588,26 @@ function CompaniesSection({ dbConnected }) {
     const sourceLabel = mergeFromId === '' ? 'Default' : (local.find(c => c.id === mergeFromId)?.name || mergeFromId);
     if (!window.confirm(`Merge "${sourceLabel}" into "${targetCompany.name}"?\n\nThis will:\n• Move all KB documents from "${sourceLabel}" to "${targetCompany.name}"\n• Move the interview scenario from "${sourceLabel}" to "${targetCompany.name}" (only if the target has no scenario)\n\nThis cannot be undone.`)) return;
     setSaving(true);
+    // When admin is filtering by a specific user, operate on that user's data
+    const forUserId = (user?.isAdmin && filterUserId) ? filterUserId : null;
     try {
-      const result = await settingsApi.reassignKnowledge(mergeFromId, targetCompany.id, targetCompany.name);
+      const result = await settingsApi.reassignKnowledge(mergeFromId, targetCompany.id, targetCompany.name, forUserId || undefined);
 
-      const scenarios = { ...(companyScenarios || {}) };
+      // Load the correct user's scenarios: fetch from API if admin is acting on behalf of another user
+      let scenarios;
+      if (forUserId) {
+        const userData = await settingsApi.getAll({ userId: forUserId });
+        scenarios = { ...(userData.companyScenarios || {}) };
+      } else {
+        scenarios = { ...(companyScenarios || {}) };
+      }
+
       const sourceScenario = scenarios[mergeFromId] || '';
       const targetScenario = scenarios[targetCompany.id] || '';
       if (sourceScenario && !targetScenario) {
         scenarios[targetCompany.id] = sourceScenario;
         scenarios[mergeFromId] = '';
-        await settingsApi.saveCompanyScenarios(scenarios);
+        await settingsApi.saveCompanyScenarios(scenarios, forUserId || undefined);
       }
 
       await refreshSettings();
@@ -622,7 +639,7 @@ function CompaniesSection({ dbConnected }) {
         </div>
       )}
 
-      {local.length > 0 && (
+      {(local.length > 0 || (user?.isAdmin && filterUserId)) && (
         <div style={{ marginBottom: 14 }}>
           {visibleCompanies.map((c, i) => (
             <div key={c.id} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', marginBottom: 6, border: `1px solid ${mergeTargetId === c.id || movingId === c.id ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', transition: 'border-color 0.2s' }}>
@@ -639,12 +656,12 @@ function CompaniesSection({ dbConnected }) {
                   </div>
                   {c.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.description}</div>}
                 </div>
-                <button className="btn btn-secondary btn-sm" onClick={() => { startEdit(c); setMovingId(null); setMergeTargetId(null); }}>Edit</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => { setMergeTargetId(mergeTargetId === c.id ? null : c.id); setMergeFromId(null); setMovingId(null); }}>Merge</button>
-                {user?.isAdmin && allUsers.length > 1 && (
+                {!c._synthetic && <button className="btn btn-secondary btn-sm" onClick={() => { startEdit(c); setMovingId(null); setMergeTargetId(null); }}>Edit</button>}
+                {!c._synthetic && <button className="btn btn-secondary btn-sm" onClick={() => { setMergeTargetId(mergeTargetId === c.id ? null : c.id); setMergeFromId(null); setMovingId(null); }}>Merge</button>}
+                {!c._synthetic && user?.isAdmin && allUsers.length > 1 && (
                   <button className="btn btn-secondary btn-sm" onClick={() => { setMovingId(movingId === c.id ? null : c.id); setMoveTarget(null); setMergeTargetId(null); }}>Move</button>
                 )}
-                <button className="btn btn-danger btn-sm" onClick={() => remove(c)}>Remove</button>
+                {!c._synthetic && <button className="btn btn-danger btn-sm" onClick={() => remove(c)}>Remove</button>}
               </div>
 
               {/* Inline move panel — admin only */}
@@ -695,7 +712,14 @@ function CompaniesSection({ dbConnected }) {
       )}
 
       <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: `1px solid ${editId ? 'var(--accent)' : 'var(--border)'}`, padding: 14 }}>
-        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12 }}>{editId ? '✎ Edit Company' : '+ Add Company'}</div>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12 }}>
+          {editId ? '✎ Edit Company' : '+ Add Company'}
+          {!editId && user?.isAdmin && filterUserId && (
+            <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 8 }}>
+              for {allUsers.find(u => u.id === filterUserId)?.displayName || allUsers.find(u => u.id === filterUserId)?.username || filterUserId}
+            </span>
+          )}
+        </div>
         <div className="grid-2" style={{ gap: '0 16px' }}>
           <div className="form-group">
             <label className="form-label">Company Name</label>

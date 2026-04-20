@@ -411,13 +411,14 @@ router.put('/company-scenario', requireAuth, async (req, res) => {
 // Firestore rejects empty-string keys, so '' is stored as '_default'
 router.put('/company-scenarios', requireAuth, async (req, res) => {
   try {
+    const targetUserId = (req.user.isAdmin && req.query.userId) ? req.query.userId : req.user.id;
     const raw = req.body.scenarios || {};
     const safe = {};
     for (const [k, v] of Object.entries(raw)) {
       safe[k === '' ? '_default' : k] = v;
     }
-    await getSettings().setForUser(req.user.id, 'company_scenarios', safe);
-    invalidateCache(req.user.id);
+    await getSettings().setForUser(targetUserId, 'company_scenarios', safe);
+    invalidateCache(targetUserId);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -594,7 +595,9 @@ router.post('/knowledge/reassign', requireAuth, async (req, res) => {
   try {
     const { fromCompanyId, toCompanyId, toCompanyName } = req.body;
     if (toCompanyId === undefined) return res.status(400).json({ error: 'toCompanyId is required' });
-    const count = await getKB().reassignCompany(req.user.id, fromCompanyId ?? '', toCompanyId, toCompanyName || '');
+    const targetUserId = (req.user.isAdmin && req.query.userId) ? req.query.userId : req.user.id;
+    const count = await getKB().reassignCompany(targetUserId, fromCompanyId ?? '', toCompanyId, toCompanyName || '');
+    invalidateCache(targetUserId);
     res.json({ success: true, count });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
