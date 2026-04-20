@@ -490,12 +490,26 @@ function CompaniesSection({ dbConnected }) {
   const [movingId,      setMovingId]      = useState(null); // company id being moved
   const [moveTarget,    setMoveTarget]    = useState(null); // target userId
   const [allUsers,      setAllUsers]      = useState([]);
+  const [filterUserId,  setFilterUserId]  = useState(''); // '' = all
 
   useEffect(() => {
     if (user?.isAdmin) authApi.listUsers().then(setAllUsers).catch(() => {});
   }, [user]);
 
   useEffect(() => { setLocal(companies); }, [companies]);
+
+  // Build unique user list from company metadata (admin only)
+  const userList = user?.isAdmin
+    ? [...new Map(
+        local
+          .filter(c => c._ownerUserId)
+          .map(c => [c._ownerUserId, { id: c._ownerUserId, name: c._ownerName || c._ownerUserId }])
+      ).values()]
+    : [];
+
+  const visibleCompanies = (user?.isAdmin && filterUserId)
+    ? local.filter(c => c._ownerUserId === filterUserId)
+    : local;
 
   const stripOwner = (c) => { const { _ownerUserId, _ownerName, ...rest } = c; return rest; };
 
@@ -594,9 +608,23 @@ function CompaniesSection({ dbConnected }) {
         Define companies you recruit for. Knowledge base documents can be linked to a company so the AI uses only that company's context when generating content for a candidate.
       </p>
 
+      {/* Admin user filter tabs */}
+      {user?.isAdmin && userList.length > 0 && (
+        <div className="tabs" style={{ marginBottom: 14 }}>
+          <button className={`tab ${filterUserId === '' ? 'active' : ''}`} onClick={() => setFilterUserId('')}>
+            All ({local.length})
+          </button>
+          {userList.map(u => (
+            <button key={u.id} className={`tab ${filterUserId === u.id ? 'active' : ''}`} onClick={() => setFilterUserId(u.id)}>
+              {u.name} ({local.filter(c => c._ownerUserId === u.id).length})
+            </button>
+          ))}
+        </div>
+      )}
+
       {local.length > 0 && (
         <div style={{ marginBottom: 14 }}>
-          {local.map((c, i) => (
+          {visibleCompanies.map((c, i) => (
             <div key={c.id} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', marginBottom: 6, border: `1px solid ${mergeTargetId === c.id || movingId === c.id ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', transition: 'border-color 0.2s' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px' }}>
                 <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, minWidth: 20 }}>{i + 1}</span>
