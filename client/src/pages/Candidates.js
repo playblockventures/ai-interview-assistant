@@ -104,14 +104,14 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
       const data = await settingsApi.extractLinkedIn(url);
       setForm(p => ({
         ...p,
-        fullName:     p.fullName     || data.fullName     || '',
-        email:        p.email        || data.email        || '',
-        phone:        p.phone        || data.phone        || '',
+        fullName:     data.fullName     || p.fullName     || '',
+        email:        data.email        || p.email        || '',
+        phone:        data.phone        || p.phone        || '',
         linkedinUrl:  url,
-        location:     p.location     || data.location     || '',
-        currentTitle: p.currentTitle || data.currentTitle || '',
+        location:     data.location     || p.location     || '',
+        currentTitle: data.currentTitle || p.currentTitle || '',
       }));
-      if (data.photoUrl && !photoPreview) { setPhotoPreview(data.photoUrl); setPhotoData(data.photoUrl); }
+      if (data.photoUrl) { setPhotoPreview(data.photoUrl); setPhotoData(data.photoUrl); }
       if (data.resumeText) setResumeText(data.resumeText);
       toast.success('LinkedIn profile extracted — fields auto-filled');
     } catch (e) { toast.error(e.message); }

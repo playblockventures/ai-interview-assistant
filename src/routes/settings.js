@@ -279,21 +279,46 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
 
     const profile = response.data;
 
+    // Log all top-level keys to help diagnose unexpected field names
+    console.log('[extract-linkedin] profile keys:', Object.keys(profile));
+    console.log('[extract-linkedin] headline fields:', {
+      sub_title:   profile.sub_title,
+      headline:    profile.headline,
+      title:       profile.title,
+      occupation:  profile.occupation,
+      job_title:   profile.job_title,
+    });
+
     // Map Piloterr response to our candidate fields
     const fullName = profile.full_name || [profile.first_name, profile.last_name].filter(Boolean).join(' ') || '';
-    const addr = profile.address || {};
-    const location = (typeof addr === 'string' ? addr : [addr.city, addr.country].filter(Boolean).join(', '))
-      || profile.location || profile.city || '';
-    const photoUrl = profile.photo_url || profile.profile_picture || profile.picture || '';
+
+    // Location: Piloterr may return a plain string or an object
+    const addr = profile.address || profile.location_info || {};
+    const location = (typeof addr === 'string' && addr)
+      ? addr
+      : [addr.city, addr.country || addr.country_code].filter(Boolean).join(', ')
+        || profile.location || profile.city || profile.country || '';
+
+    const photoUrl = profile.photo_url || profile.profile_picture || profile.picture || profile.avatar || '';
+
+    // Headline: Piloterr v2 uses "sub_title" for the LinkedIn headline text
+    const currentTitle =
+      profile.sub_title      ||   // Piloterr primary headline field
+      profile.headline       ||   // alternative name
+      profile.occupation     ||   // sometimes used
+      profile.job_title      ||   // top-level job title (some endpoints)
+      profile.title          ||   // generic fallback
+      (Array.isArray(profile.experiences) && profile.experiences.length
+        ? (profile.experiences[0]?.job_title || profile.experiences[0]?.title || profile.experiences[0]?.role)
+        : '') ||
+      '';
 
     const result = {
       fullName,
-      email:        '',   // LinkedIn does not expose email via scraping APIs
-      phone:        '',   // LinkedIn does not expose phone via scraping APIs
+      email:        profile.email || '',  // usually empty; included if API returns it
+      phone:        profile.phone || profile.phone_number || '',
       location,
-      currentTitle: profile.headline || profile.title
-        || (Array.isArray(profile.experiences) && profile.experiences[0]?.job_title)
-        || '',
+      currentTitle,
       linkedinUrl,
       photoUrl,
       resumeText:   buildResumeText(profile),
@@ -316,9 +341,13 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
 function buildResumeText(profile) {
   const lines = [];
 
+  // Headline (LinkedIn tagline)
+  const headline = profile.sub_title || profile.headline || profile.occupation || '';
+  if (headline) lines.push(`Headline: ${headline}`);
+
   // Bio / summary
-  const summary = profile.summary || profile.about || '';
-  if (summary) lines.push(`Summary:\n${summary}`);
+  const summary = profile.summary || profile.about || profile.description || '';
+  if (summary) lines.push(`\nSummary:\n${summary}`);
 
   // Experience — Piloterr uses "experiences" with "job_title" field
   const experiences = profile.experiences || profile.experience || [];
