@@ -28,6 +28,7 @@ const setCached = (key, data) => settingsCache.set(key, { data, ts: Date.now() }
 const invalidateCache = (userId) => {
   settingsCache.delete(userId);
   settingsCache.delete('admin');
+  settingsCache.delete(`admin_${userId}`);
 };
 
 // ── GET /api/settings ──────────────────────────────────────────────────────────
@@ -56,7 +57,10 @@ router.get('/', async (req, res) => {
               : payload.id;
 
             // Check cache first
-            const cacheKey = payload.isAdmin ? 'admin' : userId;
+            // Admin with explicit ?userId skips the shared 'admin' cache — returns per-user data
+            const cacheKey = payload.isAdmin
+              ? (req.query.userId ? `admin_${req.query.userId}` : 'admin')
+              : userId;
             const cached = getCached(cacheKey);
             if (cached) return res.json(cached);
 
