@@ -479,7 +479,7 @@ function RecruitersSection({ dbConnected }) {
 
 // ── Companies ─────────────────────────────────────────────────────────────────
 function CompaniesSection({ dbConnected }) {
-  const { companies, companyScenarios, refreshSettings } = useContext(AppContext);
+  const { companies, companyScenarios, companyScenario, refreshSettings } = useContext(AppContext);
   const { user } = useAuth();
   const [local, setLocal] = useState(companies);
   const [form, setForm]   = useState({ name: '', description: '' });
@@ -595,14 +595,18 @@ function CompaniesSection({ dbConnected }) {
 
       // Load the correct user's scenarios: fetch from API if admin is acting on behalf of another user
       let scenarios;
+      let legacyScenario = '';
       if (forUserId) {
         const userData = await settingsApi.getAll({ userId: forUserId });
         scenarios = { ...(userData.companyScenarios || {}) };
+        legacyScenario = userData.companyScenario || '';
       } else {
         scenarios = { ...(companyScenarios || {}) };
+        legacyScenario = companyScenarios?.[''] ? '' : (companyScenario || ''); // already in map or fallback to legacy
       }
 
-      const sourceScenario = scenarios[mergeFromId] || '';
+      // When merging from Default (''), also fall back to the legacy single-scenario field
+      const sourceScenario = scenarios[mergeFromId] || (mergeFromId === '' ? legacyScenario : '') || '';
       const targetScenario = scenarios[targetCompany.id] || '';
       if (sourceScenario && !targetScenario) {
         scenarios[targetCompany.id] = sourceScenario;

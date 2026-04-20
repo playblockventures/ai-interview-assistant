@@ -60,9 +60,11 @@ const KnowledgeBase = {
     const snap = await db.collection(COL).get();
     const batch = db.batch();
     let count = 0;
+    // Treat null/undefined companyId as '' (Default) for matching purposes
+    const normalise = (v) => (v == null ? '' : v);
     snap.docs.forEach(doc => {
       const d = doc.data();
-      if (d.ownerId === ownerId && d.companyId === fromCompanyId) {
+      if (d.ownerId === ownerId && normalise(d.companyId) === normalise(fromCompanyId)) {
         batch.update(doc.ref, { companyId: toCompanyId, companyName: toCompanyName, updatedAt: now() });
         count++;
       }
