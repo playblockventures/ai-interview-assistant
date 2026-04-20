@@ -53,6 +53,23 @@ const KnowledgeBase = {
     if (ownerId && doc.data().ownerId !== ownerId) throw new Error('Access denied');
     await db.collection(COL).doc(id).delete();
   },
+
+  // Reassign all KB items from one company to another for a given user
+  async reassignCompany(ownerId, fromCompanyId, toCompanyId, toCompanyName) {
+    const db = getDB();
+    const snap = await db.collection(COL).get();
+    const batch = db.batch();
+    let count = 0;
+    snap.docs.forEach(doc => {
+      const d = doc.data();
+      if (d.ownerId === ownerId && d.companyId === fromCompanyId) {
+        batch.update(doc.ref, { companyId: toCompanyId, companyName: toCompanyName, updatedAt: now() });
+        count++;
+      }
+    });
+    if (count > 0) await batch.commit();
+    return count;
+  },
 };
 
 module.exports = KnowledgeBase;

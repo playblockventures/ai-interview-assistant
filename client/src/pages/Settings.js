@@ -420,11 +420,13 @@ function RecruitersSection({ dbConnected }) {
 
 // ── Companies ─────────────────────────────────────────────────────────────────
 function CompaniesSection({ dbConnected }) {
-  const { companies, refreshSettings } = useContext(AppContext);
+  const { companies, companyScenarios, refreshSettings } = useContext(AppContext);
   const [local, setLocal] = useState(companies);
   const [form, setForm]   = useState({ name: '', description: '' });
   const [editId, setEditId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [mergeTargetId, setMergeTargetId] = useState(null);   // company id we're merging INTO
+  const [mergeFromId,   setMergeFromId]   = useState(null);   // null = not selected, '' = default, 'co_x' = company
 
   useEffect(() => { setLocal(companies); }, [companies]);
 
@@ -457,6 +459,33 @@ function CompaniesSection({ dbConnected }) {
   const startEdit = (c) => { setEditId(c.id); setForm({ name: c.name, description: c.description || '' }); };
   const cancel    = ()  => { setEditId(null); setForm({ name: '', description: '' }); };
 
+  const mergeInto = async (targetCompany) => {
+    if (mergeFromId === null) return;
+    const sourceLabel = mergeFromId === '' ? 'Default' : (local.find(c => c.id === mergeFromId)?.name || mergeFromId);
+    if (!window.confirm(`Merge "${sourceLabel}" into "${targetCompany.name}"?\n\nThis will:\n• Move all KB documents from "${sourceLabel}" to "${targetCompany.name}"\n• Copy the interview scenario from "${sourceLabel}" to "${targetCompany.name}" (if the target has no scenario)\n\nThis cannot be undone.`)) return;
+    setSaving(true);
+    try {
+      // 1. Reassign KB items
+      const result = await settingsApi.reassignKnowledge(mergeFromId, targetCompany.id, targetCompany.name);
+
+      // 2. Move scenario: copy source scenario to target if target has none
+      const scenarios = { ...(companyScenarios || {}) };
+      const sourceScenario = scenarios[mergeFromId] || '';
+      const targetScenario = scenarios[targetCompany.id] || '';
+      if (sourceScenario && !targetScenario) {
+        scenarios[targetCompany.id] = sourceScenario;
+        scenarios[mergeFromId] = '';
+        await settingsApi.saveCompanyScenarios(scenarios);
+      }
+
+      await refreshSettings();
+      setMergeTargetId(null);
+      setMergeFromId(null);
+      toast.success(`Merged "${sourceLabel}" into "${targetCompany.name}" — ${result.count} KB item(s) moved`);
+    } catch (e) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
+
   return (
     <div className="card mt-16">
       <div className="card-title">Companies</div>
@@ -467,14 +496,41 @@ function CompaniesSection({ dbConnected }) {
       {local.length > 0 && (
         <div style={{ marginBottom: 14 }}>
           {local.map((c, i) => (
-            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', marginBottom: 6, border: '1px solid var(--border)' }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, minWidth: 20 }}>{i + 1}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{c.name}</div>
-                {c.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.description}</div>}
+            <div key={c.id} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', marginBottom: 6, border: `1px solid ${mergeTargetId === c.id ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', transition: 'border-color 0.2s' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px' }}>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, minWidth: 20 }}>{i + 1}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{c.name}</div>
+                  {c.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.description}</div>}
+                </div>
+                <button className="btn btn-secondary btn-sm" onClick={() => startEdit(c)}>Edit</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => { setMergeTargetId(mergeTargetId === c.id ? null : c.id); setMergeFromId(null); }}>Merge from...</button>
+                <button className="btn btn-danger btn-sm" onClick={() => remove(c.id)}>Remove</button>
               </div>
-              <button className="btn btn-secondary btn-sm" onClick={() => startEdit(c)}>Edit</button>
-              <button className="btn btn-danger btn-sm" onClick={() => remove(c.id)}>Remove</button>
+
+              {/* Inline merge panel */}
+              {mergeTargetId === c.id && (
+                <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', background: 'var(--bg-card)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                    Select a source to merge <strong>into "{c.name}"</strong>. Its KB documents and interview scenario will be moved here.
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <select className="form-select" style={{ flex: 1, fontSize: 12 }}
+                      value={mergeFromId ?? '__none__'}
+                      onChange={e => setMergeFromId(e.target.value === '__none__' ? null : e.target.value)}>
+                      <option value="__none__" disabled>— Select source —</option>
+                      <option value="">Default (no company)</option>
+                      {local.filter(x => x.id !== c.id).map(x => (
+                        <option key={x.id} value={x.id}>{x.name}</option>
+                      ))}
+                    </select>
+                    <button className="btn btn-primary btn-sm" disabled={saving || mergeFromId === null} onClick={() => mergeInto(c)}>
+                      {saving ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Merge'}
+                    </button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => { setMergeTargetId(null); setMergeFromId(null); }}>Cancel</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

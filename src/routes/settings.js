@@ -592,6 +592,17 @@ router.delete('/knowledge/:id', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── POST /api/settings/knowledge/reassign ────────────────────────────────────
+router.post('/knowledge/reassign', requireAuth, async (req, res) => {
+  if (!isConnected()) return res.status(503).json({ error: 'Firebase not connected.' });
+  try {
+    const { fromCompanyId, toCompanyId, toCompanyName } = req.body;
+    if (toCompanyId === undefined) return res.status(400).json({ error: 'toCompanyId is required' });
+    const count = await getKB().reassignCompany(req.user.id, fromCompanyId ?? '', toCompanyId, toCompanyName || '');
+    res.json({ success: true, count });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── PUT /api/settings/:key — global settings ──────────────────────────────────
 router.put('/:key', async (req, res) => {
   const { value } = req.body;
