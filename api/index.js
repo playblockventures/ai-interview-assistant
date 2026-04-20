@@ -24,6 +24,16 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // ── Firebase ───────────────────────────────────────────────────────────────────
 initFirebase();
 
+// One-time backfill: set lastMessageAt from outreach messages for legacy candidates
+setImmediate(async () => {
+  if (!isConnected()) return;
+  try {
+    const Candidate = require('../src/models/Candidate');
+    const count = await Candidate.backfillLastMessageAt();
+    if (count > 0) console.log(`[startup] Backfilled lastMessageAt for ${count} candidates`);
+  } catch (e) { /* non-critical — fail silently */ }
+});
+
 const requireDB = (req, res, next) => {
   if (!isConnected()) {
     return res.status(503).json({
