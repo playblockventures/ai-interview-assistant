@@ -115,19 +115,23 @@ router.post('/scenario', async (req, res) => {
     const candidateContext = buildCandidateContext(candidate);
 
     // ── System prompt: who the AI is + all context ────────────────────────────
+    // Priority order (last = highest): knowledge base → recruiter/candidate profile → company scenario → custom instructions
     const systemPrompt = [
       `You are an expert technical recruiter and interview coach specialising in ${roleLabel} roles.`,
+      // 4. Knowledge base (lowest priority)
       knowledgeContext
         ? `${knowledgeContext}\n\nIMPORTANT: You MUST base the interview scenario and questions directly on the requirements, technologies, and criteria described in the knowledge base above. Do not generate generic questions — tailor everything to the specifics found in those documents.`
         : '',
+      // 3. Recruiter & candidate profile
       recruiterContext,
-      userInstructions,
-      // Company scenario is the MASTER INSTRUCTION for structure — it must be followed exactly
+      candidateContext ? `\n\n--- CANDIDATE TO INTERVIEW ---\n${candidateContext}` : '',
+      // 2. Company interview framework/scenario
       companyScenario
-        ? `\n\n=== INTERVIEW SCENARIO (FOLLOW THIS EXACTLY) ===\n${companyScenario}\n=== END OF SCENARIO ===`
+        ? `\n\n=== COMPANY INTERVIEW FRAMEWORK ===\n${companyScenario}\n=== END ===`
         : '',
-      candidateContext
-        ? `\n\n--- CANDIDATE TO INTERVIEW ---\n${candidateContext}`
+      // 1. Custom instructions (highest priority — placed last)
+      userInstructions
+        ? `\n\n=== CUSTOM INSTRUCTIONS (HIGHEST PRIORITY — FOLLOW THESE ABOVE ALL ELSE) ===\n${userInstructions}\n=== END ===`
         : '',
     ].filter(Boolean).join('');
 
@@ -211,12 +215,18 @@ router.post('/outreach', async (req, res) => {
     const messageLabel  = MESSAGE_TYPE_LABELS[messageType] || messageType;
     const candidateContext = buildCandidateContext(candidate, 1000);
 
+    // Priority order (last = highest): knowledge base → recruiter/candidate profile → custom instructions
     const systemPrompt = [
       `You are an expert recruiter writing ${messageLabel} messages for ${roleLabel} positions.`,
+      // 4. Knowledge base (lowest priority)
       knowledgeContext,
+      // 3. Recruiter & candidate profile
       recruiterContext,
-      userInstructions,
       candidateContext ? `\n\n--- CANDIDATE ---\n${candidateContext}` : '',
+      // 1. Custom instructions (highest priority — placed last)
+      userInstructions
+        ? `\n\n=== CUSTOM INSTRUCTIONS (HIGHEST PRIORITY — FOLLOW THESE ABOVE ALL ELSE) ===\n${userInstructions}\n=== END ===`
+        : '',
     ].filter(Boolean).join('');
 
     const userPrompt = [
@@ -281,30 +291,34 @@ router.post('/conversation', async (req, res) => {
     // Applied scenario on this specific candidate (set via Apply to Conversation)
     const appliedScenario = candidate?.appliedScenario || '';
 
+    // Priority order (last = highest): knowledge base → recruiter/candidate profile → company scenario → candidate scenario → custom instructions
     const systemPrompt = [
       `You are an expert recruiter conducting a ${roleLabel} interview conversation.`,
       `Maintain a ${toneLabel} tone throughout. Generate the next ideal recruiter response.`,
       `Be natural, engaging, concise and move the conversation forward productively.`,
+      `\nIf the candidate sent an image, describe what you observe and respond appropriately.`,
+      // 4. Knowledge base (lowest priority)
       knowledgeContext
         ? `${knowledgeContext}\n\nIMPORTANT: You MUST use the knowledge base above as the foundation for your interview questions and responses. Ask the candidate specifically about the technologies, requirements, and criteria described in those documents. Do not rely on generic interview questions.`
         : '',
+      // 3. Recruiter & candidate profile
       recruiterContext,
-      // Custom instructions from KB (user's saved instructions)
-      userInstructions,
-      // Company-wide interview scenario
-      companyScenario
-        ? `\n\n=== INTERVIEW SCENARIO (FOLLOW THIS STRUCTURE) ===\n${companyScenario}\n=== END OF SCENARIO ===`
-        : '',
-      // Per-candidate applied scenario (more specific, overrides company scenario)
-      appliedScenario
-        ? `\n\n=== APPLIED INTERVIEW SCENARIO FOR THIS CANDIDATE (FOLLOW THIS) ===\n${appliedScenario}\n=== END ===`
-        : '',
-      // Per-request custom instructions from the UI (most specific)
-      customInstructions
-        ? `\n\n=== SESSION INSTRUCTIONS (HIGHEST PRIORITY) ===\n${customInstructions}\n=== END ===`
-        : '',
       candidate ? `\n\n--- CANDIDATE ---\n${buildCandidateContext(candidate, 1500)}` : '',
-      `\nIf the candidate sent an image, describe what you observe and respond appropriately.`,
+      // 2a. Company interview framework/scenario
+      companyScenario
+        ? `\n\n=== COMPANY INTERVIEW FRAMEWORK ===\n${companyScenario}\n=== END ===`
+        : '',
+      // 2b. Per-candidate applied scenario (overrides company scenario)
+      appliedScenario
+        ? `\n\n=== CANDIDATE INTERVIEW SCENARIO (FOLLOW THIS) ===\n${appliedScenario}\n=== END ===`
+        : '',
+      // 1. Custom instructions (highest priority — placed last)
+      userInstructions
+        ? `\n\n=== CUSTOM INSTRUCTIONS (HIGHEST PRIORITY — FOLLOW THESE ABOVE ALL ELSE) ===\n${userInstructions}\n=== END ===`
+        : '',
+      customInstructions
+        ? `\n\n=== SESSION INSTRUCTIONS (OVERRIDE ALL — FOLLOW EXACTLY) ===\n${customInstructions}\n=== END ===`
+        : '',
     ].filter(Boolean).join('');
 
     // Combine file text + typed content for a history entry (for AI context)
@@ -491,14 +505,23 @@ router.post('/call-script', async (req, res) => {
       .map(h => `${h.role === 'assistant' ? 'Recruiter' : 'Candidate'}: ${h.content}`)
       .join('\n');
 
+    // Priority order (last = highest): knowledge base → recruiter/candidate profile → company scenario → custom instructions
     const systemPrompt = [
       `You are an expert recruiter writing a structured phone/video call script for a ${roleLabel || 'professional'} position.`,
+      // 4. Knowledge base (lowest priority)
       knowledgeContext,
+      // 3. Recruiter & candidate profile
       companyIntro,
       recruiterContext,
-      companyScenario,
-      userInstructions,
       candidateContext ? `\n\n--- CANDIDATE ---\n${candidateContext}` : '',
+      // 2. Company interview framework/scenario
+      companyScenario
+        ? `\n\n=== COMPANY INTERVIEW FRAMEWORK ===\n${companyScenario}\n=== END ===`
+        : '',
+      // 1. Custom instructions (highest priority — placed last)
+      userInstructions
+        ? `\n\n=== CUSTOM INSTRUCTIONS (HIGHEST PRIORITY — FOLLOW THESE ABOVE ALL ELSE) ===\n${userInstructions}\n=== END ===`
+        : '',
     ].filter(Boolean).join('');
 
     const userPrompt = [
