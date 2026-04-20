@@ -219,8 +219,16 @@ function RecruitersSection({ dbConnected }) {
   const [saving, setSaving]     = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [expanded, setExpanded]     = useState(null);
+  const [movingId,    setMovingId]    = useState(null); // recruiter id being moved
+  const [moveTarget,  setMoveTarget]  = useState(null); // target userId (null = not selected)
+  const [allUsers,    setAllUsers]    = useState([]);
 
   useEffect(() => { setLocalRecruiters(recruiters); }, [recruiters]);
+
+  // Fetch registered users for admin move feature
+  useEffect(() => {
+    if (user?.isAdmin) authApi.listUsers().then(setAllUsers).catch(() => {});
+  }, [user]);
 
   // Build unique user list from recruiter metadata (admin only)
   const userList = user?.isAdmin
@@ -315,6 +323,34 @@ function RecruitersSection({ dbConnected }) {
   const cancelEdit = () => { setEditId(null); setEditOwnerUserId(null); setForm(blankForm); };
   const sf = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
+  const moveRecruiter = async (r) => {
+    if (!moveTarget) return toast.error('Select a target user first');
+    const fromUserId = r._ownerUserId || user.id;
+    if (moveTarget === fromUserId) return toast.error('Target must be a different user');
+    const targetUser = allUsers.find(u => u.id === moveTarget);
+    if (!window.confirm(`Move "${r.name}" to ${targetUser?.displayName || targetUser?.username || moveTarget}?`)) return;
+    setSaving(true);
+    try {
+      // Fetch target user's current recruiters and append
+      const targetData = await settingsApi.getAll({ userId: moveTarget });
+      const targetRecruiters = Array.isArray(targetData.recruiters) ? targetData.recruiters : [];
+      const { _ownerKey, _ownerUserId, _ownerName, ...clean } = r;
+      await settingsApi.saveRecruiters([...targetRecruiters, clean], moveTarget);
+
+      // Remove from source user
+      const sourceEntries = localRecruiters
+        .filter(x => (x._ownerUserId || user.id) === fromUserId && x.id !== r.id)
+        .map(({ _ownerKey, _ownerUserId, _ownerName, ...rest }) => rest);
+      await settingsApi.saveRecruiters(sourceEntries, fromUserId !== user.id ? fromUserId : undefined);
+
+      await refreshSettings();
+      setMovingId(null);
+      setMoveTarget(null);
+      toast.success(`"${r.name}" moved to ${targetUser?.displayName || targetUser?.username || moveTarget}`);
+    } catch (e) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
+
   return (
     <div className="card mt-16">
       <div className="card-title">Recruiter Profiles</div>
@@ -337,37 +373,57 @@ function RecruitersSection({ dbConnected }) {
         </div>
       )}
 
-      {visibleRecruiters.map(r => {
-        const isOwn = !r._ownerUserId || r._ownerUserId === user?.id;
-        return (
-          <div key={r.id} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: 8, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, background: r.photoUrl ? undefined : 'var(--accent-dim)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 14, border: '1.5px solid var(--border)' }}>
-                {r.photoUrl ? <img src={r.photoUrl} alt={r.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (r.name||'?').charAt(0).toUpperCase()}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {r.name}
-                  {r._ownerName && (
-                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '1px 7px' }}>
-                      👤 {r._ownerName}
-                    </span>
-                  )}
-                </div>
-                {(r.currentTitle || r.email) && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{[r.currentTitle, r.email].filter(Boolean).join(' · ')}</div>}
-              </div>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }} onClick={() => setExpanded(expanded === r.id ? null : r.id)}>{expanded === r.id ? '▲' : '▼'}</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => startEdit(r)}>Edit</button>
-              <button className="btn btn-danger btn-sm" onClick={() => remove(r)}>Remove</button>
+      {visibleRecruiters.map(r => (
+        <div key={r.id} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: 8, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, background: r.photoUrl ? undefined : 'var(--accent-dim)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 14, border: '1.5px solid var(--border)' }}>
+              {r.photoUrl ? <img src={r.photoUrl} alt={r.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (r.name||'?').charAt(0).toUpperCase()}
             </div>
-            {expanded === r.id && r.profile && (
-              <div style={{ padding: '0 14px 12px', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-                <pre style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{r.profile}</pre>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {r.name}
+                {r._ownerName && (
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '1px 7px' }}>
+                    👤 {r._ownerName}
+                  </span>
+                )}
               </div>
+              {(r.currentTitle || r.email) && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{[r.currentTitle, r.email].filter(Boolean).join(' · ')}</div>}
+            </div>
+            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }} onClick={() => { setExpanded(expanded === r.id ? null : r.id); setMovingId(null); }}>{expanded === r.id ? '▲' : '▼'}</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => { startEdit(r); setMovingId(null); }}>Edit</button>
+            {user?.isAdmin && allUsers.length > 1 && (
+              <button className="btn btn-secondary btn-sm" onClick={() => { setMovingId(movingId === r.id ? null : r.id); setMoveTarget(null); }}>Move</button>
             )}
+            <button className="btn btn-danger btn-sm" onClick={() => remove(r)}>Remove</button>
           </div>
-        );
-      })}
+
+          {/* Inline move panel — admin only */}
+          {movingId === r.id && (
+            <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', background: 'var(--bg-card)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>Move to:</span>
+              <select className="form-select" style={{ flex: 1, fontSize: 12 }}
+                value={moveTarget ?? '__none__'}
+                onChange={e => setMoveTarget(e.target.value === '__none__' ? null : e.target.value)}>
+                <option value="__none__" disabled>— Select user —</option>
+                {allUsers.filter(u => u.id !== (r._ownerUserId || user?.id)).map(u => (
+                  <option key={u.id} value={u.id}>{u.displayName || u.username}</option>
+                ))}
+              </select>
+              <button className="btn btn-primary btn-sm" disabled={!moveTarget || saving} onClick={() => moveRecruiter(r)}>
+                {saving ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Move'}
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setMovingId(null); setMoveTarget(null); }}>Cancel</button>
+            </div>
+          )}
+
+          {expanded === r.id && r.profile && (
+            <div style={{ padding: '0 14px 12px', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+              <pre style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{r.profile}</pre>
+            </div>
+          )}
+        </div>
+      ))}
 
       {visibleRecruiters.length === 0 && filterUserId && (
         <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '12px 0' }}>No recruiters for this user.</div>
