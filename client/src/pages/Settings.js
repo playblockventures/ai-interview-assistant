@@ -873,59 +873,169 @@ function AccountSection() {
 }
 
 // ── Admin: Browse any user's resources ───────────────────────────────────────
-// ── Admin: view a specific user's recruiters ─────────────────────────────────
-function AdminUserRecruiters({ userId, dbConnected }) {
+// ── Admin: edit a specific user's recruiters ─────────────────────────────────
+function AdminUserRecruiters({ userId, dbConnected, users = [] }) {
+  const editFormRef = useRef(null);
+  const blankForm = { name: '', email: '', phone: '', linkedinUrl: '', location: '', currentTitle: '', profile: '', photoUrl: '' };
   const [recruiters, setRecruiters] = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [expanded,   setExpanded]   = useState(null);
+  const [editId,     setEditId]     = useState(null);
+  const [form,       setForm]       = useState(blankForm);
+  const [saving,     setSaving]     = useState(false);
+  const [movingId,   setMovingId]   = useState(null); // recruiter id being moved
+  const [moveTarget, setMoveTarget] = useState('');   // target userId
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!dbConnected || !userId) { setLoading(false); return; }
-    settingsApi.getAll({ userId })
-      .then(data => setRecruiters(Array.isArray(data.recruiters) ? data.recruiters : []))
-      .catch(() => setRecruiters([]))
-      .finally(() => setLoading(false));
+    setLoading(true);
+    try {
+      const data = await settingsApi.getAll({ userId });
+      setRecruiters(Array.isArray(data.recruiters) ? data.recruiters : []);
+    } catch { setRecruiters([]); }
+    finally { setLoading(false); }
   }, [userId, dbConnected]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    if (!form.name.trim()) return toast.error('Name is required');
+    setSaving(true);
+    try {
+      const updated = editId
+        ? recruiters.map(r => r.id === editId ? { ...r, ...form } : r)
+        : [...recruiters, { id: 'r_' + Date.now(), ...form }];
+      await settingsApi.saveRecruiters(updated, userId);
+      setRecruiters(updated);
+      setForm(blankForm);
+      setEditId(null);
+      toast.success(editId ? 'Recruiter updated' : 'Recruiter added');
+    } catch (e) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const remove = async (r) => {
+    if (!window.confirm('Remove this recruiter?')) return;
+    try {
+      const updated = recruiters.filter(x => x.id !== r.id);
+      await settingsApi.saveRecruiters(updated, userId);
+      setRecruiters(updated);
+      toast.success('Recruiter removed');
+    } catch (e) { toast.error(e.message); }
+  };
+
+  const startEdit = (r) => {
+    setEditId(r.id);
+    setForm({ name: r.name||'', email: r.email||'', phone: r.phone||'', linkedinUrl: r.linkedinUrl||'', location: r.location||'', currentTitle: r.currentTitle||'', profile: r.profile||'', photoUrl: r.photoUrl||'' });
+    setTimeout(() => editFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
+  const cancelEdit = () => { setEditId(null); setForm(blankForm); };
+  const sf = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const moveRecruiter = async (r) => {
+    if (!moveTarget) return toast.error('Select a target user first');
+    if (moveTarget === userId) return toast.error('Target must be a different user');
+    if (!window.confirm(`Move "${r.name}" to ${users.find(u => u.id === moveTarget)?.displayName || users.find(u => u.id === moveTarget)?.username || moveTarget}?`)) return;
+    setSaving(true);
+    try {
+      // Fetch target user's current recruiters
+      const targetData = await settingsApi.getAll({ userId: moveTarget });
+      const targetRecruiters = Array.isArray(targetData.recruiters) ? targetData.recruiters : [];
+
+      // Add to target (preserve id)
+      await settingsApi.saveRecruiters([...targetRecruiters, { ...r }], moveTarget);
+
+      // Remove from current user
+      const updated = recruiters.filter(x => x.id !== r.id);
+      await settingsApi.saveRecruiters(updated, userId);
+
+      setRecruiters(updated);
+      setMovingId(null);
+      setMoveTarget('');
+      const targetName = users.find(u => u.id === moveTarget)?.displayName || users.find(u => u.id === moveTarget)?.username || moveTarget;
+      toast.success(`"${r.name}" moved to ${targetName}`);
+    } catch (e) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
 
   if (loading) return <div style={{ textAlign: 'center', padding: 24 }}><span className="spinner" /></div>;
 
-  if (!recruiters.length) return (
-    <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)', fontSize: 13 }}>
-      This user has no recruiters configured.
-    </div>
-  );
-
   return (
     <div>
+      {recruiters.length === 0 && !editId && (
+        <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '12px 0 16px' }}>No recruiters configured for this user yet.</div>
+      )}
+
       {recruiters.map(r => (
         <div key={r.id} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: 8, overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
-            {/* Avatar */}
             <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, background: r.photoUrl ? undefined : 'var(--accent-dim)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 14, border: '1.5px solid var(--border)' }}>
               {r.photoUrl ? <img src={r.photoUrl} alt={r.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (r.name||'?').charAt(0).toUpperCase()}
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{r.name}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
-                {[r.currentTitle, r.email, r.location].filter(Boolean).join(' · ')}
-              </div>
+              {(r.currentTitle || r.email) && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{[r.currentTitle, r.email].filter(Boolean).join(' · ')}</div>
+              )}
             </div>
             <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}
-              onClick={() => setExpanded(expanded === r.id ? null : r.id)}>
+              onClick={() => { setExpanded(expanded === r.id ? null : r.id); setMovingId(null); }}>
               {expanded === r.id ? '▲' : '▼'}
             </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => { startEdit(r); setMovingId(null); }}>Edit</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setMovingId(movingId === r.id ? null : r.id)}>Move</button>
+            <button className="btn btn-danger btn-sm" onClick={() => remove(r)}>Remove</button>
           </div>
+
+          {/* Move-to-user panel */}
+          {movingId === r.id && users.filter(u => u.id !== userId).length > 0 && (
+            <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', background: 'var(--bg-card)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>Move to:</span>
+              <select className="form-select" style={{ flex: 1, fontSize: 12 }}
+                value={moveTarget} onChange={e => setMoveTarget(e.target.value)}>
+                <option value="">— Select user —</option>
+                {users.filter(u => u.id !== userId).map(u => (
+                  <option key={u.id} value={u.id}>{u.displayName || u.username}</option>
+                ))}
+              </select>
+              <button className="btn btn-primary btn-sm" disabled={!moveTarget || saving} onClick={() => moveRecruiter(r)}>
+                {saving ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Move'}
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setMovingId(null); setMoveTarget(''); }}>Cancel</button>
+            </div>
+          )}
+
           {expanded === r.id && (
             <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', background: 'var(--bg-card)' }}>
               {r.linkedinUrl && <div style={{ fontSize: 12, marginBottom: 6 }}><a href={r.linkedinUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>LinkedIn ↗</a></div>}
+              {r.location && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{r.location}</div>}
               {r.profile && <pre style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6, margin: 0 }}>{r.profile}</pre>}
             </div>
           )}
         </div>
       ))}
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
-        {recruiters.length} recruiter{recruiters.length !== 1 ? 's' : ''} configured for this user.
-        To edit, the user must update their own recruiters in Settings → General → Recruiter Profiles.
+
+      {/* Add / Edit form */}
+      <div ref={editFormRef} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: `1px solid ${editId ? 'var(--accent)' : 'var(--border)'}`, padding: 14, marginTop: 8, transition: 'border-color 0.2s' }}>
+        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', marginBottom: 12 }}>
+          {editId ? '✎ Edit Recruiter' : '+ Add Recruiter'}
+        </div>
+        <div className="grid-2" style={{ gap: '0 16px' }}>
+          <div className="form-group"><label className="form-label">Name *</label><input className="form-input" placeholder="e.g. Sarah Chen" value={form.name} onChange={e => sf('name', e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Email</label><input className="form-input" type="email" placeholder="sarah@company.com" value={form.email} onChange={e => sf('email', e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Phone</label><input className="form-input" placeholder="+1 555 000 0000" value={form.phone} onChange={e => sf('phone', e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Location</label><input className="form-input" placeholder="New York, USA" value={form.location} onChange={e => sf('location', e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Title / Role</label><input className="form-input" placeholder="Senior Technical Recruiter" value={form.currentTitle} onChange={e => sf('currentTitle', e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">LinkedIn URL</label><input className="form-input" placeholder="https://linkedin.com/in/..." value={form.linkedinUrl} onChange={e => sf('linkedinUrl', e.target.value)} /></div>
+        </div>
+        <div className="form-group"><label className="form-label">Profile / Bio</label><textarea className="form-textarea" style={{ minHeight: 80 }} placeholder="Bio, interview style, or summary..." value={form.profile} onChange={e => sf('profile', e.target.value)} /></div>
+        <div className="form-group"><label className="form-label">Photo URL</label><input className="form-input" placeholder="https://..." value={form.photoUrl} onChange={e => sf('photoUrl', e.target.value)} /></div>
+        <div className="flex gap-8">
+          <button className="btn btn-primary" onClick={save} disabled={saving || !dbConnected}>
+            {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving...</> : editId ? 'Update' : 'Add Recruiter'}
+          </button>
+          {editId && <button className="btn btn-secondary" onClick={cancelEdit}>Cancel</button>}
+        </div>
       </div>
     </div>
   );
@@ -1003,7 +1113,7 @@ function AdminUserResources({ dbConnected }) {
 
           {/* Recruiters tab */}
           {tab === 'recruiters' && (
-            <AdminUserRecruiters userId={selectedUser.id} dbConnected={dbConnected} />
+            <AdminUserRecruiters userId={selectedUser.id} dbConnected={dbConnected} users={users} />
           )}
 
           {/* Settings tab */}
