@@ -95,9 +95,12 @@ function ScenarioTab({ candidate, onScenarioApplied }) {
     companyId: candidate.companyId || '',
   });
   // Load any previously stored scenario
-  const [scenario, setScenario] = useState(candidate.interviewScenarios?.[0]?.content || '');
-  const [loading,  setLoading]  = useState(false);
-  const [applying, setApplying] = useState(false);
+  const [scenario,  setScenario]  = useState(candidate.interviewScenarios?.[0]?.content || '');
+  const [loading,   setLoading]   = useState(false);
+  const [applying,  setApplying]  = useState(false);
+  const [editing,   setEditing]   = useState(false);
+  const [editText,  setEditText]  = useState('');
+  const [saving,    setSaving]    = useState(false);
   const set = (k, v) => setConfig(p => ({ ...p, [k]: v }));
 
   const generate = async () => {
@@ -122,6 +125,21 @@ function ScenarioTab({ candidate, onScenarioApplied }) {
       toast.success('Scenario applied to conversation!');
     } catch (e) { toast.error(e.message); }
     finally { setApplying(false); }
+  };
+
+  const startEdit = () => { setEditText(scenario); setEditing(true); };
+  const cancelEdit = () => { setEditing(false); setEditText(''); };
+
+  const saveEdit = async () => {
+    if (!editText.trim()) return;
+    setSaving(true);
+    try {
+      await interviewApi.editScenario(candidate.id, 0, editText.trim());
+      setScenario(editText.trim());
+      setEditing(false);
+      toast.success('Scenario updated');
+    } catch (e) { toast.error(e.message); }
+    finally { setSaving(false); }
   };
 
   const deleteScenario = async () => {
@@ -184,15 +202,32 @@ function ScenarioTab({ candidate, onScenarioApplied }) {
           <div className="flex items-center justify-between mb-16">
             <div className="card-title">Interview Scenario</div>
             <div className="flex gap-8">
-              <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(scenario); toast.success('Copied!'); }}>Copy</button>
-              <button className="btn btn-secondary btn-sm" onClick={exportPdf}>↓ PDF</button>
-              <button className="btn btn-primary btn-sm" onClick={applyScenario} disabled={applying}>
-                {applying ? <span className="spinner" style={{ width: 12, height: 12 }} /> : '▶ Apply to Conversation'}
-              </button>
-              <button onClick={deleteScenario} className="btn btn-danger btn-sm">✕</button>
+              {editing ? (
+                <>
+                  <button className="btn btn-primary btn-sm" onClick={saveEdit} disabled={saving}>
+                    {saving ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Save'}
+                  </button>
+                  <button className="btn btn-secondary btn-sm" onClick={cancelEdit}>Cancel</button>
+                </>
+              ) : (
+                <>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(scenario); toast.success('Copied!'); }}>Copy</button>
+                  <button className="btn btn-secondary btn-sm" onClick={exportPdf}>↓ PDF</button>
+                  <button className="btn btn-secondary btn-sm" onClick={startEdit}>✎ Edit</button>
+                  <button className="btn btn-primary btn-sm" onClick={applyScenario} disabled={applying}>
+                    {applying ? <span className="spinner" style={{ width: 12, height: 12 }} /> : '▶ Apply to Conversation'}
+                  </button>
+                  <button onClick={deleteScenario} className="btn btn-danger btn-sm">✕</button>
+                </>
+              )}
             </div>
           </div>
-          <div className="markdown-output"><ReactMarkdown>{scenario}</ReactMarkdown></div>
+          {editing ? (
+            <textarea className="form-textarea" style={{ minHeight: 300, fontSize: 13 }}
+              value={editText} onChange={e => setEditText(e.target.value)} autoFocus />
+          ) : (
+            <div className="markdown-output"><ReactMarkdown>{scenario}</ReactMarkdown></div>
+          )}
         </div>
       )}
     </div>
@@ -208,9 +243,27 @@ function OutreachTab({ candidate }) {
     companyId: candidate.companyId || '',
   });
   // Load any previously stored outreach message
-  const [message, setMessage] = useState(candidate.outreachMessages?.[0]?.content || '');
-  const [loading, setLoading] = useState(false);
+  const [message,  setMessage]  = useState(candidate.outreachMessages?.[0]?.content || '');
+  const [loading,  setLoading]  = useState(false);
+  const [editing,  setEditing]  = useState(false);
+  const [editText, setEditText] = useState('');
+  const [saving,   setSaving]   = useState(false);
   const set = (k, v) => setConfig(p => ({ ...p, [k]: v }));
+
+  const startEdit  = () => { setEditText(message); setEditing(true); };
+  const cancelEdit = () => { setEditing(false); setEditText(''); };
+
+  const saveEdit = async () => {
+    if (!editText.trim()) return;
+    setSaving(true);
+    try {
+      await interviewApi.editOutreachMsg(candidate.id, 0, editText.trim());
+      setMessage(editText.trim());
+      setEditing(false);
+      toast.success('Message updated');
+    } catch (e) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
 
   const generate = async () => {
     setLoading(true);
@@ -270,12 +323,29 @@ function OutreachTab({ candidate }) {
           <div className="flex items-center justify-between mb-16">
             <div className="card-title">Outreach Message</div>
             <div className="flex gap-8">
-              <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(message); toast.success('Copied!'); }}>Copy</button>
+              {editing ? (
+                <>
+                  <button className="btn btn-primary btn-sm" onClick={saveEdit} disabled={saving}>
+                    {saving ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Save'}
+                  </button>
+                  <button className="btn btn-secondary btn-sm" onClick={cancelEdit}>Cancel</button>
+                </>
+              ) : (
+                <>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(message); toast.success('Copied!'); }}>Copy</button>
+                  <button className="btn btn-secondary btn-sm" onClick={startEdit}>✎ Edit</button>
+                </>
+              )}
             </div>
           </div>
-          <div className="markdown-output" style={{ fontSize: 13.5, lineHeight: 1.7 }}>
-            <ReactMarkdown>{message}</ReactMarkdown>
-          </div>
+          {editing ? (
+            <textarea className="form-textarea" style={{ minHeight: 200, fontSize: 13 }}
+              value={editText} onChange={e => setEditText(e.target.value)} autoFocus />
+          ) : (
+            <div className="markdown-output" style={{ fontSize: 13.5, lineHeight: 1.7 }}>
+              <ReactMarkdown>{message}</ReactMarkdown>
+            </div>
+          )}
         </div>
       )}
     </div>
