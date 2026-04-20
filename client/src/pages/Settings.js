@@ -1320,11 +1320,26 @@ function AdminUserResources({ dbConnected }) {
                       {userSettings.userOpenAIKey ? '✓ Configured (key hidden)' : '✗ Not set — using system key'}
                     </div>
                   </div>
-                  {/* Company scenario */}
+                  {/* Companies */}
                   <div style={{ padding: '10px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: 10 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Company Scenario</div>
-                    {userSettings.companyScenario
-                      ? <pre style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6, maxHeight: 200, overflow: 'auto' }}>{userSettings.companyScenario}</pre>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Companies</div>
+                    {userSettings.companies?.length
+                      ? userSettings.companies.map(c => (
+                          <div key={c.id} style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '4px 0', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontWeight: 500 }}>{c.name}</span>
+                            {c.description && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>— {c.description}</span>}
+                            {userSettings.companyScenarios?.[c.id] && (
+                              <span style={{ fontSize: 10, color: 'var(--success)', marginLeft: 'auto' }}>● scenario</span>
+                            )}
+                          </div>
+                        ))
+                      : <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No companies</div>}
+                  </div>
+                  {/* Company scenario (Default) */}
+                  <div style={{ padding: '10px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: 10 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Default Company Scenario</div>
+                    {(userSettings.companyScenarios?.[''] || userSettings.companyScenario)
+                      ? <pre style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6, maxHeight: 200, overflow: 'auto' }}>{userSettings.companyScenarios?.[''] || userSettings.companyScenario}</pre>
                       : <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>None set</div>}
                   </div>
                   {/* Recruiters */}
