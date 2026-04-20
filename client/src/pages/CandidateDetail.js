@@ -94,74 +94,41 @@ function ScenarioTab({ candidate, onScenarioApplied }) {
     customInstructions: '', recruiterId: candidate.recruiterId || '',
     companyId: candidate.companyId || '',
   });
-  const [scenario, setScenario] = useState('');
-  const [history, setHistory] = useState(candidate.interviewScenarios || []);
-  const [loading, setLoading] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  // Load any previously stored scenario
+  const [scenario, setScenario] = useState(candidate.interviewScenarios?.[0]?.content || '');
+  const [loading,  setLoading]  = useState(false);
   const [applying, setApplying] = useState(false);
-  const [editingIdx, setEditingIdx] = useState(null);
-  const [editText,   setEditText]   = useState('');
-  const [savingEdit, setSavingEdit] = useState(false);
   const set = (k, v) => setConfig(p => ({ ...p, [k]: v }));
-
-  const startEdit  = (i) => { setEditingIdx(i); setEditText(history[i].content); };
-  const cancelEdit = ()  => { setEditingIdx(null); setEditText(''); };
-
-  const saveEdit = async (i) => {
-    if (!editText.trim()) return;
-    setSavingEdit(true);
-    try {
-      await interviewApi.editScenario(candidate.id, i, editText.trim());
-      setHistory(h => h.map((s, idx) => idx === i ? { ...s, content: editText.trim() } : s));
-      setEditingIdx(null);
-      toast.success('Scenario updated');
-    } catch (e) { toast.error(e.message); }
-    finally { setSavingEdit(false); }
-  };
-
-  const [currentScenarioIdx, setCurrentScenarioIdx] = useState(null);
 
   const generate = async () => {
     setLoading(true);
     try {
       const data = await generateApi.scenario({ candidateId: candidate.id, ...config });
       setScenario(data.scenario);
-      if (currentScenarioIdx !== null) {
-        // Regenerate — replace existing entry in history and in Firestore
-        await interviewApi.editScenario(candidate.id, currentScenarioIdx, data.scenario);
-        setHistory(h => h.map((s, idx) => idx === currentScenarioIdx ? { ...s, content: data.scenario } : s));
-        toast.success('Scenario regenerated!');
-      } else {
-        // First generate — prepend to history
-        setHistory(h => [{ content: data.scenario, role: config.role, createdAt: new Date().toISOString() }, ...h]);
-        setCurrentScenarioIdx(0);
-        toast.success('Scenario generated!');
-      }
+      toast.success(scenario ? 'Scenario regenerated!' : 'Scenario generated!');
     } catch (e) { toast.error(e.message); }
     finally { setLoading(false); }
   };
 
-  // Apply scenario — save it as the active scenario for conversation
-  const applyScenario = async (content) => {
+  const applyScenario = async () => {
     setApplying(true);
     try {
       await candidateApi.update(candidate.id, (() => {
         const fd = new FormData();
-        fd.append('appliedScenario', content);
+        fd.append('appliedScenario', scenario);
         return fd;
       })());
-      onScenarioApplied(content);
+      onScenarioApplied(scenario);
       toast.success('Scenario applied to conversation!');
     } catch (e) { toast.error(e.message); }
     finally { setApplying(false); }
   };
 
-  const deleteScenario = async (i) => {
+  const deleteScenario = async () => {
     if (!window.confirm('Delete this scenario?')) return;
     try {
-      await interviewApi.deleteScenario(candidate.id, i);
-      setHistory(h => h.filter((_, idx) => idx !== i));
-      if (currentScenarioIdx === i) { setScenario(''); setCurrentScenarioIdx(null); }
+      await interviewApi.deleteScenario(candidate.id, 0);
+      setScenario('');
       toast.success('Scenario deleted');
     } catch (e) { toast.error(e.message); }
   };
@@ -208,66 +175,24 @@ function ScenarioTab({ candidate, onScenarioApplied }) {
             value={config.customInstructions} onChange={e => set('customInstructions', e.target.value)} style={{ minHeight: 70 }} />
         </div>
         <button className="btn btn-primary" onClick={generate} disabled={loading}>
-          {loading ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Generating...</> : '◎ Generate Scenario'}
+          {loading ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Generating...</> : (scenario ? '↺ Regenerate Scenario' : '◎ Generate Scenario')}
         </button>
       </div>
 
       {scenario && (
-        <div className="card mb-16">
+        <div className="card">
           <div className="flex items-center justify-between mb-16">
-            <div className="card-title">Generated Scenario</div>
+            <div className="card-title">Interview Scenario</div>
             <div className="flex gap-8">
               <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(scenario); toast.success('Copied!'); }}>Copy</button>
               <button className="btn btn-secondary btn-sm" onClick={exportPdf}>↓ PDF</button>
-              <button className="btn btn-secondary btn-sm" onClick={generate}>↺ Regenerate</button>
-              <button className="btn btn-primary btn-sm" onClick={() => applyScenario(scenario)} disabled={applying}>
+              <button className="btn btn-primary btn-sm" onClick={applyScenario} disabled={applying}>
                 {applying ? <span className="spinner" style={{ width: 12, height: 12 }} /> : '▶ Apply to Conversation'}
               </button>
+              <button onClick={deleteScenario} className="btn btn-danger btn-sm">✕</button>
             </div>
           </div>
           <div className="markdown-output"><ReactMarkdown>{scenario}</ReactMarkdown></div>
-        </div>
-      )}
-
-      {history.length > 0 && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-12" style={{ cursor: 'pointer' }} onClick={() => setShowHistory(h => !h)}>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>Past Scenarios ({history.length})</div>
-            <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{showHistory ? '▲ Hide' : '▼ Show'}</span>
-          </div>
-          {showHistory && history.map((s, i) => (
-            <div key={i} style={{ borderTop: i > 0 ? '1px solid var(--border)' : undefined, paddingTop: i > 0 ? 12 : 0, marginTop: i > 0 ? 12 : 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  {s.role} · {new Date(s.createdAt).toLocaleString()}
-                  {s.editedAt && <span style={{ marginLeft: 6 }}>(edited)</span>}
-                </div>
-                <div className="flex gap-8">
-                  {editingIdx === i ? (
-                    <>
-                      <button className="btn btn-primary btn-sm" onClick={() => saveEdit(i)} disabled={savingEdit}>
-                        {savingEdit ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Save'}
-                      </button>
-                      <button className="btn btn-secondary btn-sm" onClick={cancelEdit}>Cancel</button>
-                    </>
-                  ) : (
-                    <>
-                      <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(s.content); toast.success('Copied!'); }}>Copy</button>
-                      <button className="btn btn-secondary btn-sm" onClick={() => applyScenario(s.content)} disabled={applying} style={{ fontSize: 10 }}>▶ Apply</button>
-                      <button className="btn btn-secondary btn-sm" onClick={() => startEdit(i)}>✎ Edit</button>
-                      <button onClick={() => deleteScenario(i)} className="btn btn-danger btn-sm">✕</button>
-                    </>
-                  )}
-                </div>
-              </div>
-              {editingIdx === i ? (
-                <textarea className="form-textarea" style={{ minHeight: 200, fontSize: 12 }}
-                  value={editText} onChange={e => setEditText(e.target.value)} autoFocus />
-              ) : (
-                <div className="markdown-output" style={{ fontSize: 12 }}><ReactMarkdown>{s.content}</ReactMarkdown></div>
-              )}
-            </div>
-          ))}
         </div>
       )}
     </div>
@@ -282,7 +207,8 @@ function OutreachTab({ candidate }) {
     goal: '', customInstructions: '', recruiterId: candidate.recruiterId || '',
     companyId: candidate.companyId || '',
   });
-  const [message, setMessage] = useState('');
+  // Load any previously stored outreach message
+  const [message, setMessage] = useState(candidate.outreachMessages?.[0]?.content || '');
   const [loading, setLoading] = useState(false);
   const set = (k, v) => setConfig(p => ({ ...p, [k]: v }));
 
@@ -291,7 +217,7 @@ function OutreachTab({ candidate }) {
     try {
       const data = await generateApi.outreach({ candidateId: candidate.id, ...config });
       setMessage(data.message);
-      toast.success('Message generated!');
+      toast.success(message ? 'Message regenerated!' : 'Message generated!');
     } catch (e) { toast.error(e.message); }
     finally { setLoading(false); }
   };
@@ -335,18 +261,16 @@ function OutreachTab({ candidate }) {
             value={config.customInstructions} onChange={e => set('customInstructions', e.target.value)} style={{ minHeight: 60 }} />
         </div>
         <button className="btn btn-primary" onClick={generate} disabled={loading}>
-          {loading ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Generating...</> : '✉ Generate Message'}
+          {loading ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Generating...</> : (message ? '↺ Regenerate Message' : '✉ Generate Message')}
         </button>
       </div>
 
-      {/* Generated message preview */}
       {message && (
         <div className="card">
           <div className="flex items-center justify-between mb-16">
-            <div className="card-title">Generated Message</div>
+            <div className="card-title">Outreach Message</div>
             <div className="flex gap-8">
               <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(message); toast.success('Copied!'); }}>Copy</button>
-              <button className="btn btn-secondary btn-sm" onClick={generate} disabled={loading}>↺ Regenerate</button>
             </div>
           </div>
           <div className="markdown-output" style={{ fontSize: 13.5, lineHeight: 1.7 }}>
@@ -598,8 +522,9 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
       const reindexed = historyWithoutLast.map((m, i) => ({ ...m, _origIdx: i }));
       setHistory(reindexed);
 
-      // Step 3: Generate new reply — server will append it to Firestore
-      const data = await generateApi.conversation(buildPayload(reindexed, lastUser.content, null, null));
+      // Step 3: Generate new reply — pass empty candidateReply so the server does NOT
+      // re-save the user message (it's already in Firestore; history array provides context)
+      const data = await generateApi.conversation(buildPayload(reindexed, '', null, null));
       setHistory(h => [...h, {
         role: 'assistant',
         content: data.response,

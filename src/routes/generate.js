@@ -177,7 +177,14 @@ Structure the scenario with:
     });
 
     const scenario = completion.choices[0].message.content;
-    if (candidate) await Candidate.pushScenario(candidateId, { content: scenario, role: roleLabel });
+    if (candidate) {
+      const existing = candidate.interviewScenarios || [];
+      if (existing.length > 0) {
+        await Candidate.updateScenario(candidateId, 0, scenario);
+      } else {
+        await Candidate.pushScenario(candidateId, { content: scenario, role: roleLabel });
+      }
+    }
     res.json({ scenario, role: roleLabel, candidateId });
   } catch (err) {
     console.error('[Generate scenario]', err.message);
@@ -254,7 +261,14 @@ Requirements:
     });
 
     const message = completion.choices[0].message.content;
-    if (candidate) await Candidate.pushOutreachMessage(candidateId, { content: message, type: messageType });
+    if (candidate) {
+      const existing = candidate.outreachMessages || [];
+      if (existing.length > 0) {
+        await Candidate.updateOutreachMessage(candidateId, 0, message);
+      } else {
+        await Candidate.pushOutreachMessage(candidateId, { content: message, type: messageType });
+      }
+    }
     res.json({ message, role: roleLabel, candidateId });
   } catch (err) {
     console.error('[Generate outreach]', err.message);
