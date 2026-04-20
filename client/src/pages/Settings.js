@@ -541,11 +541,16 @@ function CompaniesSection({ dbConnected }) {
     setSaving(true);
     try {
       // Use already-loaded local list filtered by owner — avoids merged-view API bug
-      const targetCompanies = local.filter(x => x._ownerUserId === moveTarget).map(stripOwner);
-      if (!targetCompanies.find(x => x.id === c.id)) {
-        await settingsApi.saveCompanies([...targetCompanies, stripOwner(c)], moveTarget);
-      }
-      // Remove from source user
+      const cleanC = stripOwner(c);
+      const targetCompanies = local
+        .filter(x => x._ownerUserId === moveTarget)
+        .map(stripOwner)
+        .filter(x => x.id !== cleanC.id); // deduplicate in case already present
+
+      // Add to target first — if this fails, source is untouched (no data loss)
+      await settingsApi.saveCompanies([...targetCompanies, cleanC], moveTarget);
+
+      // Remove from source only after target save succeeded
       const sourceEntries = local.filter(x => (x._ownerUserId || user?.id) === fromUserId && x.id !== c.id).map(stripOwner);
       await settingsApi.saveCompanies(sourceEntries, fromUserId !== user?.id ? fromUserId : undefined);
 
@@ -1119,14 +1124,18 @@ function AdminUserRecruiters({ userId, dbConnected, users = [] }) {
     if (!window.confirm(`Move "${r.name}" to ${users.find(u => u.id === moveTarget)?.displayName || users.find(u => u.id === moveTarget)?.username || moveTarget}?`)) return;
     setSaving(true);
     try {
-      // Fetch target user's current recruiters
+      // Strip any accidental meta fields before saving
+      const { _ownerKey, _ownerUserId, _ownerName, ...clean } = r;
+
+      // Fetch target user's current recruiters (cache-key fix ensures per-user data)
       const targetData = await settingsApi.getAll({ userId: moveTarget });
-      const targetRecruiters = Array.isArray(targetData.recruiters) ? targetData.recruiters : [];
+      const targetRecruiters = (Array.isArray(targetData.recruiters) ? targetData.recruiters : [])
+        .filter(x => x.id !== clean.id); // deduplicate in case already present
 
-      // Add to target (preserve id)
-      await settingsApi.saveRecruiters([...targetRecruiters, { ...r }], moveTarget);
+      // Add to target first — if this fails, source is untouched (no data loss)
+      await settingsApi.saveRecruiters([...targetRecruiters, clean], moveTarget);
 
-      // Remove from current user
+      // Remove from source only after target save succeeded
       const updated = recruiters.filter(x => x.id !== r.id);
       await settingsApi.saveRecruiters(updated, userId);
 
