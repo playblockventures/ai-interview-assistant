@@ -560,13 +560,11 @@ function CompaniesSection({ dbConnected }) {
   const mergeInto = async (targetCompany) => {
     if (mergeFromId === null) return;
     const sourceLabel = mergeFromId === '' ? 'Default' : (local.find(c => c.id === mergeFromId)?.name || mergeFromId);
-    if (!window.confirm(`Merge "${sourceLabel}" into "${targetCompany.name}"?\n\nThis will:\n• Move all KB documents from "${sourceLabel}" to "${targetCompany.name}"\n• Copy the interview scenario from "${sourceLabel}" to "${targetCompany.name}" (if the target has no scenario)\n\nThis cannot be undone.`)) return;
+    if (!window.confirm(`Merge "${sourceLabel}" into "${targetCompany.name}"?\n\nThis will:\n• Move all KB documents from "${sourceLabel}" to "${targetCompany.name}"\n• Move the interview scenario from "${sourceLabel}" to "${targetCompany.name}" (only if the target has no scenario)\n\nThis cannot be undone.`)) return;
     setSaving(true);
     try {
-      // 1. Reassign KB items
       const result = await settingsApi.reassignKnowledge(mergeFromId, targetCompany.id, targetCompany.name);
 
-      // 2. Move scenario: copy source scenario to target if target has none
       const scenarios = { ...(companyScenarios || {}) };
       const sourceScenario = scenarios[mergeFromId] || '';
       const targetScenario = scenarios[targetCompany.id] || '';
@@ -609,7 +607,7 @@ function CompaniesSection({ dbConnected }) {
                   {c.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.description}</div>}
                 </div>
                 <button className="btn btn-secondary btn-sm" onClick={() => { startEdit(c); setMovingId(null); setMergeTargetId(null); }}>Edit</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => { setMergeTargetId(mergeTargetId === c.id ? null : c.id); setMergeFromId(null); setMovingId(null); }}>Merge from...</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => { setMergeTargetId(mergeTargetId === c.id ? null : c.id); setMergeFromId(null); setMovingId(null); }}>Merge</button>
                 {user?.isAdmin && allUsers.length > 1 && (
                   <button className="btn btn-secondary btn-sm" onClick={() => { setMovingId(movingId === c.id ? null : c.id); setMoveTarget(null); setMergeTargetId(null); }}>Move</button>
                 )}

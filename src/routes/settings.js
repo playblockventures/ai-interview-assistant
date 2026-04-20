@@ -93,32 +93,24 @@ router.get('/', async (req, res) => {
               const userMap = {};
               allUsers.forEach(u => { userMap[u.id] = u.displayName || u.username; });
 
-              // Merge companies
+              // Merge companies — no deduplication: each key is a separate user's list
               const allCompanyKeys = Object.keys(all).filter(k => k.startsWith('companies_'));
               const mergedCompanies = [];
-              const seenCompanies = new Set();
               allCompanyKeys.forEach(k => {
                 const ownerUserId = k.replace('companies_', '');
                 (all[k] || []).forEach(c => {
-                  if (!seenCompanies.has(c.id)) {
-                    seenCompanies.add(c.id);
-                    mergedCompanies.push({ ...c, _ownerUserId: ownerUserId, _ownerName: userMap[ownerUserId] || ownerUserId });
-                  }
+                  mergedCompanies.push({ ...c, _ownerUserId: ownerUserId, _ownerName: userMap[ownerUserId] || ownerUserId });
                 });
               });
               if (mergedCompanies.length > 0) companies = mergedCompanies;
 
-              // Merge recruiters
+              // Merge recruiters — no deduplication: each key is a separate user's list
               const allRecruiterKeys = Object.keys(all).filter(k => k.startsWith('recruiters_'));
               const merged = [];
-              const seen   = new Set();
               allRecruiterKeys.forEach(k => {
                 const ownerUserId = k.replace('recruiters_', '');
                 (all[k] || []).forEach(r => {
-                  if (!seen.has(r.id)) {
-                    seen.add(r.id);
-                    merged.push({ ...r, _ownerKey: k, _ownerUserId: ownerUserId, _ownerName: userMap[ownerUserId] || ownerUserId });
-                  }
+                  merged.push({ ...r, _ownerKey: k, _ownerUserId: ownerUserId, _ownerName: userMap[ownerUserId] || ownerUserId });
                 });
               });
               recruiters = merged;
