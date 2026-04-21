@@ -340,6 +340,9 @@ function RecruitersSection({ dbConnected }) {
       const { _ownerKey, _ownerUserId, _ownerName, ...clean } = r;
       await settingsApi.saveRecruiters([...targetRecruiters, clean], moveTarget);
 
+      // Transfer candidates owned by the source user that are linked to this recruiter
+      await candidateApi.reassignCandidateOwner(fromUserId, moveTarget, clean.id);
+
       // Remove from source user
       const sourceEntries = localRecruiters
         .filter(x => (x._ownerUserId || user.id) === fromUserId && x.id !== r.id)
@@ -1204,6 +1207,9 @@ function AdminUserRecruiters({ userId, dbConnected, users = [] }) {
 
       // Add to target first — if this fails, source is untouched (no data loss)
       await settingsApi.saveRecruiters([...targetRecruiters, clean], moveTarget);
+
+      // Transfer candidates owned by the source user that are linked to this recruiter
+      await candidateApi.reassignCandidateOwner(userId, moveTarget, clean.id);
 
       // Remove from source only after target save succeeded
       const updated = recruiters.filter(x => x.id !== r.id);

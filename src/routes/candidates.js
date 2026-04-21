@@ -156,4 +156,15 @@ router.post('/parse-attachment', attachmentUpload.single('file'), async (req, re
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// POST reassign-owner — admin only, transfers candidates from one user to another for a recruiter
+router.post('/reassign-owner', async (req, res) => {
+  try {
+    if (!req.user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+    const { fromUserId, toUserId, recruiterId } = req.body;
+    if (!fromUserId || !toUserId || !recruiterId) return res.status(400).json({ error: 'fromUserId, toUserId, recruiterId required' });
+    const count = await Candidate.reassignOwner(fromUserId, toUserId, recruiterId);
+    res.json({ success: true, count });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

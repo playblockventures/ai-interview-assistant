@@ -258,6 +258,22 @@ const Candidate = {
     return count;
   },
 
+  // Transfer ownerId for all candidates belonging to a recruiter from one user to another
+  async reassignOwner(fromOwnerId, toOwnerId, recruiterId) {
+    const db = getDB();
+    const snap = await db.collection(COL).where('ownerId', '==', fromOwnerId).get();
+    const batch = db.batch();
+    let count = 0;
+    snap.docs.forEach(doc => {
+      if (doc.data().recruiterId === recruiterId) {
+        batch.update(doc.ref, { ownerId: toOwnerId, updatedAt: now() });
+        count++;
+      }
+    });
+    if (count > 0) await batch.commit();
+    return count;
+  },
+
   // Check ownership (non-admin users can only access their own)
   canAccess(candidate, user) {
     if (!user) return false;
