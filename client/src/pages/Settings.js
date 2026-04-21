@@ -94,28 +94,62 @@ function RolesSection({ dbConnected }) {
 
 // ── Company Interview Scenario ────────────────────────────────────────────────
 function CompanyScenarioSection({ dbConnected }) {
-  const { companies: allCompanies, companyScenarios, companyScenario: legacyScenario, refreshSettings } = useContext(AppContext);
+  const { companies: ctxCompanies, companyScenarios: ctxScenarios, companyScenario: ctxLegacy, refreshSettings } = useContext(AppContext);
   const { user } = useAuth();
-  // For admin, `allCompanies` is the merged list from all users. Only show the current user's own companies here.
-  const companies = allCompanies.filter(c => !c._ownerUserId || c._ownerUserId === user?.id);
 
-  // Seed helper: if the new map is empty but the legacy single-value exists,
-  // show it under the Default ('') tab so existing data is not lost.
   const seedMap = (map, legacy) => {
     const hasNew = map && Object.values(map).some(Boolean);
     if (!hasNew && legacy) return { '': legacy };
     return map || {};
   };
 
-  // local map: { '': 'default', 'co_123': '...' }
-  const [local,    setLocal]    = useState(() => seedMap(companyScenarios, legacyScenario));
-  const [selected, setSelected] = useState(''); // '' = default/no company
+  // Admin user filter — '' means own data
+  const [filterUserId, setFilterUserId] = useState('');
+  const [allUsers,     setAllUsers]     = useState([]);
+  const [loadingUser,  setLoadingUser]  = useState(false);
+
+  // companies + scenarios for the currently viewed user
+  const [companies, setCompanies] = useState(() =>
+    (ctxCompanies || []).filter(c => !c._ownerUserId || c._ownerUserId === user?.id)
+  );
+  const [local,    setLocal]    = useState(() => seedMap(ctxScenarios, ctxLegacy));
+  const [selected, setSelected] = useState('');
   const [saving,   setSaving]   = useState(false);
 
+  // Load all users list for admin filter
   useEffect(() => {
-    setLocal(seedMap(companyScenarios, legacyScenario));
-  }, [companyScenarios, legacyScenario]); // seedMap is stable (defined outside effect)
+    if (user?.isAdmin) authApi.listUsers().then(setAllUsers).catch(() => {});
+  }, [user]);
 
+  // When context updates (own user data), sync if no filter is active
+  useEffect(() => {
+    if (!filterUserId) {
+      setCompanies((ctxCompanies || []).filter(c => !c._ownerUserId || c._ownerUserId === user?.id));
+      setLocal(seedMap(ctxScenarios, ctxLegacy));
+      setSelected('');
+    }
+  }, [ctxCompanies, ctxScenarios, ctxLegacy, filterUserId, user]);
+
+  // When admin selects a different user, fetch that user's data
+  const handleFilterUser = async (uid) => {
+    setFilterUserId(uid);
+    setSelected('');
+    if (!uid) {
+      // Revert to own data
+      setCompanies((ctxCompanies || []).filter(c => !c._ownerUserId || c._ownerUserId === user?.id));
+      setLocal(seedMap(ctxScenarios, ctxLegacy));
+      return;
+    }
+    setLoadingUser(true);
+    try {
+      const data = await settingsApi.getAll({ userId: uid });
+      setCompanies(Array.isArray(data.companies) ? data.companies : []);
+      setLocal(seedMap(data.companyScenarios, data.companyScenario));
+    } catch (e) { toast.error(e.message); }
+    finally { setLoadingUser(false); }
+  };
+
+  const targetUserId = filterUserId || null;
   const currentScenario = local[selected] || '';
   const setScenario = (val) => setLocal(prev => ({ ...prev, [selected]: val }));
 
@@ -123,8 +157,8 @@ function CompanyScenarioSection({ dbConnected }) {
     if (!dbConnected) return toast.error('Connect Firebase first');
     setSaving(true);
     try {
-      await settingsApi.saveCompanyScenarios(local);
-      await refreshSettings();
+      await settingsApi.saveCompanyScenarios(local, targetUserId || undefined);
+      if (!targetUserId) await refreshSettings();
       const label = selected ? (companies.find(c => c.id === selected)?.name || selected) : 'Default';
       toast.success(`Scenario saved for "${label}"`);
     } catch (e) { toast.error(e.message); }
@@ -137,9 +171,9 @@ function CompanyScenarioSection({ dbConnected }) {
     setSaving(true);
     try {
       const updated = { ...local, [selected]: '' };
-      await settingsApi.saveCompanyScenarios(updated);
+      await settingsApi.saveCompanyScenarios(updated, targetUserId || undefined);
       setLocal(updated);
-      await refreshSettings();
+      if (!targetUserId) await refreshSettings();
       toast.success('Scenario cleared');
     } catch (e) { toast.error(e.message); }
     finally { setSaving(false); }
@@ -155,6 +189,21 @@ function CompanyScenarioSection({ dbConnected }) {
         The <strong>Default</strong> scenario applies to candidates with no company assigned.
         {activeCount > 0 && <span style={{ color: 'var(--success)', marginLeft: 8 }}>✓ {activeCount} scenario{activeCount !== 1 ? 's' : ''} active</span>}
       </p>
+
+      {/* Admin user filter */}
+      {user?.isAdmin && allUsers.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>Viewing:</span>
+          <select className="form-select" style={{ width: 200, fontSize: 12 }}
+            value={filterUserId} onChange={e => handleFilterUser(e.target.value)}>
+            <option value="">My framework</option>
+            {allUsers.filter(u => u.id !== user.id).map(u => (
+              <option key={u.id} value={u.id}>{u.displayName || u.username}</option>
+            ))}
+          </select>
+          {loadingUser && <span className="spinner" style={{ width: 14, height: 14 }} />}
+        </div>
+      )}
 
       {/* Company selector tabs */}
       <div className="tabs" style={{ marginBottom: 16 }}>
@@ -172,9 +221,7 @@ function CompanyScenarioSection({ dbConnected }) {
       {local[selected] && (
         <div style={{ background: 'rgba(0,212,170,0.06)', border: '1px solid rgba(0,212,170,0.2)', borderRadius: 'var(--radius-sm)', padding: '8px 14px', marginBottom: 14, fontSize: 12, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>✓</span>
-          <span>
-            Scenario active for <strong>{selected ? (companies.find(c => c.id === selected)?.name || selected) : 'all candidates without a company'}</strong>.
-          </span>
+          <span>Scenario active for <strong>{selected ? (companies.find(c => c.id === selected)?.name || selected) : 'all candidates without a company'}</strong>.</span>
         </div>
       )}
 
@@ -182,9 +229,7 @@ function CompanyScenarioSection({ dbConnected }) {
         <label className="form-label">
           Scenario / Interview Framework
           {selected === '' && companies.length > 0 && (
-            <span style={{ marginLeft: 8, fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}>
-              — used when no company is assigned
-            </span>
+            <span style={{ marginLeft: 8, fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}>— used when no company is assigned</span>
           )}
         </label>
         <textarea
