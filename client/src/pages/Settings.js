@@ -1181,7 +1181,7 @@ function AccountSection() {
 
 // ── Admin: Browse any user's resources ───────────────────────────────────────
 // ── Admin: edit a specific user's recruiters ─────────────────────────────────
-function AdminUserRecruiters({ userId, dbConnected, users = [] }) {
+function AdminUserRecruiters({ userId, dbConnected, users = [], onSaved }) {
   const editFormRef = useRef(null);
   const blankForm = { name: '', email: '', phone: '', linkedinUrl: '', location: '', currentTitle: '', profile: '', photoUrl: '' };
   const [recruiters, setRecruiters] = useState([]);
@@ -1217,6 +1217,7 @@ function AdminUserRecruiters({ userId, dbConnected, users = [] }) {
       setForm(blankForm);
       setEditId(null);
       toast.success(editId ? 'Recruiter updated' : 'Recruiter added');
+      onSaved?.();
     } catch (e) { toast.error(e.message); }
     finally { setSaving(false); }
   };
@@ -1228,6 +1229,7 @@ function AdminUserRecruiters({ userId, dbConnected, users = [] }) {
       await settingsApi.saveRecruiters(updated, userId);
       setRecruiters(updated);
       toast.success('Recruiter removed');
+      onSaved?.();
     } catch (e) { toast.error(e.message); }
   };
 
@@ -1268,6 +1270,7 @@ function AdminUserRecruiters({ userId, dbConnected, users = [] }) {
       setMoveTarget('');
       const targetName = users.find(u => u.id === moveTarget)?.displayName || users.find(u => u.id === moveTarget)?.username || moveTarget;
       toast.success(`"${r.name}" moved to ${targetName}`);
+      onSaved?.();
     } catch (e) { toast.error(e.message); }
     finally { setSaving(false); }
   };
@@ -1356,20 +1359,27 @@ function AdminUserRecruiters({ userId, dbConnected, users = [] }) {
 }
 
 function AdminUserResources({ dbConnected }) {
-  const [users,        setUsers]        = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [tab,          setTab]          = useState('kb'); // 'kb' | 'settings'
-  const [userSettings, setUserSettings] = useState(null);
+  const [users,           setUsers]           = useState([]);
+  const [selectedUser,    setSelectedUser]    = useState(null);
+  const [tab,             setTab]             = useState('kb'); // 'kb' | 'recruiters' | 'settings'
+  const [userSettings,    setUserSettings]    = useState(null);
   const [loadingSettings, setLoadingSettings] = useState(false);
+  // Cache settings per userId to avoid redundant fetches
+  const settingsCache = useRef({});
 
   useEffect(() => {
     authApi.listUsers().then(setUsers).catch(() => {});
   }, []);
 
-  const loadUserSettings = async (userId) => {
+  const loadUserSettings = async (userId, force = false) => {
+    if (!force && settingsCache.current[userId]) {
+      setUserSettings(settingsCache.current[userId]);
+      return;
+    }
     setLoadingSettings(true);
     try {
       const data = await settingsApi.getAll({ userId });
+      settingsCache.current[userId] = data;
       setUserSettings(data);
     } catch (_) {}
     finally { setLoadingSettings(false); }
@@ -1377,6 +1387,8 @@ function AdminUserResources({ dbConnected }) {
 
   const selectUser = (u) => {
     setSelectedUser(u);
+    // Invalidate cache for fresh load on user switch
+    delete settingsCache.current[u.id];
     setUserSettings(null);
     if (tab === 'settings') loadUserSettings(u.id);
   };
@@ -1384,6 +1396,14 @@ function AdminUserResources({ dbConnected }) {
   const handleTabChange = (t) => {
     setTab(t);
     if (t === 'settings' && selectedUser) loadUserSettings(selectedUser.id);
+  };
+
+  // Called by AdminUserRecruiters after saving — refresh settings cache
+  const handleRecruitersUpdated = () => {
+    if (selectedUser) {
+      delete settingsCache.current[selectedUser.id];
+      if (tab === 'settings') loadUserSettings(selectedUser.id, true);
+    }
   };
 
   return (
@@ -1420,15 +1440,20 @@ function AdminUserResources({ dbConnected }) {
             ))}
           </div>
 
-          {/* Knowledge base tab */}
-          {tab === 'kb' && (
+          {/* Knowledge base tab — kept mounted to avoid re-fetch on tab switch */}
+          <div style={{ display: tab === 'kb' ? '' : 'none' }}>
             <KnowledgeSection dbConnected={dbConnected} targetUserId={selectedUser.id} />
-          )}
+          </div>
 
-          {/* Recruiters tab */}
-          {tab === 'recruiters' && (
-            <AdminUserRecruiters userId={selectedUser.id} dbConnected={dbConnected} users={users} />
-          )}
+          {/* Recruiters tab — kept mounted to preserve unsaved form state */}
+          <div style={{ display: tab === 'recruiters' ? '' : 'none' }}>
+            <AdminUserRecruiters
+              userId={selectedUser.id}
+              dbConnected={dbConnected}
+              users={users}
+              onSaved={handleRecruitersUpdated}
+            />
+          </div>
 
           {/* Settings tab */}
           {tab === 'settings' && (
@@ -1446,7 +1471,7 @@ function AdminUserResources({ dbConnected }) {
                   </div>
                   {/* Companies */}
                   <div style={{ padding: '10px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: 10 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Companies</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Companies ({userSettings.companies?.length || 0})</div>
                     {userSettings.companies?.length
                       ? userSettings.companies.map(c => (
                           <div key={c.id} style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '4px 0', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1459,27 +1484,30 @@ function AdminUserResources({ dbConnected }) {
                         ))
                       : <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No companies</div>}
                   </div>
-                  {/* Company scenario (Default) */}
+                  {/* Default Company Scenario */}
                   <div style={{ padding: '10px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: 10 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Default Company Scenario</div>
                     {(userSettings.companyScenarios?.[''] || userSettings.companyScenario)
                       ? <pre style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6, maxHeight: 200, overflow: 'auto' }}>{userSettings.companyScenarios?.[''] || userSettings.companyScenario}</pre>
                       : <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>None set</div>}
                   </div>
-                  {/* Recruiters */}
+                  {/* Recruiters summary — read-only snapshot; use Recruiters tab to edit */}
                   <div style={{ padding: '10px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Recruiters</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>
+                      Recruiters ({userSettings.recruiters?.length || 0})
+                      <span style={{ fontWeight: 400, marginLeft: 8, color: 'var(--text-muted)', fontSize: 11 }}>— edit in Recruiters tab</span>
+                    </div>
                     {userSettings.recruiters?.length
                       ? userSettings.recruiters.map(r => (
                           <div key={r.id} style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
-                            {r.name} {r.email ? `— ${r.email}` : ''}
+                            {r.name}{r.email ? ` — ${r.email}` : ''}
                           </div>
                         ))
                       : <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No recruiters</div>}
                   </div>
                 </div>
               ) : (
-                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Select a user to view their settings.</div>
+                <div style={{ textAlign: 'center', padding: 24 }}><span className="spinner" /></div>
               )}
             </div>
           )}
