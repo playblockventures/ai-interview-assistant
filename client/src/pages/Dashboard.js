@@ -522,7 +522,7 @@ export default function Dashboard() {
                     <div>
                       <div className="card-title" style={{ marginBottom: 2 }}>Active Candidates — Avg. Response Time</div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        {activeCandidates.length} active · sorted by shortest avg. time between messages
+                        {activeCandidates.length} in progress · 5+ messages · shortest avg. response time first
                       </div>
                     </div>
                     <button className="btn btn-secondary btn-sm" onClick={() => navigateFiltered({ statusFilter: 'in_progress' })}>

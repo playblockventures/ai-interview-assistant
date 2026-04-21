@@ -80,8 +80,7 @@ const Candidate = {
   async findActiveWithResponseTime({ ownerId, isAdmin, limit = 20 } = {}) {
     const db = getDB();
     // Need full docs to access conversationHistory
-    let query = db.collection(COL)
-      .where('status', 'in', ['pending', 'in_progress']);
+    let query = db.collection(COL).where('status', '==', 'in_progress');
     if (ownerId) query = query.where('ownerId', '==', ownerId);
     const snapshot = await query.get();
     const docs = snapshot.docs.map(docToObj);
@@ -108,9 +107,8 @@ const Candidate = {
 
     // Candidates with measured avg response time first (shortest = most active), then unmeasured
     return withAvg
-      .filter(c => c.avgResponseMs !== null)
+      .filter(c => c.messageCount >= 5 && c.avgResponseMs !== null)
       .sort((a, b) => a.avgResponseMs - b.avgResponseMs)
-      .concat(withAvg.filter(c => c.avgResponseMs === null))
       .slice(0, parseInt(limit));
   },
 
