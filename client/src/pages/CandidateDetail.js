@@ -407,9 +407,6 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
   const [editText,   setEditText]   = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [history]);
 
   // When appliedScenario changes, show instructions panel and pre-fill
   useEffect(() => {
@@ -510,7 +507,6 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
         _origIdx: h.length,  // new message goes to the end
       }]);
       setManualText('');
-      setShowManual(false);
       toast.success('Message added');
     } catch (e) { toast.error(e.message); }
     finally { setAddingManual(false); }
