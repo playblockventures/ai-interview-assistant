@@ -526,16 +526,12 @@ function BackToTop() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const el = document.querySelector('.main-content');
-    if (!el) return;
-    const onScroll = () => setVisible(el.scrollTop > 300);
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
+    const onScroll = () => setVisible(window.scrollY > 300);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const scrollToTop = () => {
-    document.querySelector('.main-content')?.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   return ReactDOM.createPortal(
     <button
