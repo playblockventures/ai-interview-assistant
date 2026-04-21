@@ -233,7 +233,9 @@ router.post('/bulk-reassign-owner', async (req, res) => {
     const { candidateIds, toUserId } = req.body;
     if (!Array.isArray(candidateIds) || !candidateIds.length || !toUserId)
       return res.status(400).json({ error: 'candidateIds (array) and toUserId required' });
-    const count = await Candidate.reassignOwnerBulk(candidateIds, toUserId);
+    const targetUser = await User.findById(toUserId).catch(() => null);
+    const toOwnerName = targetUser?.displayName || targetUser?.username || '';
+    const count = await Candidate.reassignOwnerBulk(candidateIds, toUserId, toOwnerName);
     res.json({ success: true, count });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -244,7 +246,9 @@ router.post('/reassign-owner', async (req, res) => {
     if (!req.user.isAdmin) return res.status(403).json({ error: 'Admin only' });
     const { fromUserId, toUserId, recruiterId } = req.body;
     if (!fromUserId || !toUserId || !recruiterId) return res.status(400).json({ error: 'fromUserId, toUserId, recruiterId required' });
-    const count = await Candidate.reassignOwner(fromUserId, toUserId, recruiterId);
+    const targetUser = await User.findById(toUserId).catch(() => null);
+    const toOwnerName = targetUser?.displayName || targetUser?.username || '';
+    const count = await Candidate.reassignOwner(fromUserId, toUserId, recruiterId, toOwnerName);
     res.json({ success: true, count });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

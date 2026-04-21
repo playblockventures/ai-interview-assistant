@@ -300,25 +300,25 @@ const Candidate = {
   },
 
   // Transfer ownerId for a specific list of candidate IDs to a new owner (admin bulk move)
-  async reassignOwnerBulk(candidateIds, toOwnerId) {
+  async reassignOwnerBulk(candidateIds, toOwnerId, toOwnerName) {
     const db = getDB();
     const batch = db.batch();
     candidateIds.forEach(id => {
-      batch.update(db.collection(COL).doc(id), { ownerId: toOwnerId, updatedAt: now() });
+      batch.update(db.collection(COL).doc(id), { ownerId: toOwnerId, ownerName: toOwnerName || '', updatedAt: now() });
     });
     if (candidateIds.length > 0) await batch.commit();
     return candidateIds.length;
   },
 
   // Transfer ownerId for all candidates belonging to a recruiter from one user to another
-  async reassignOwner(fromOwnerId, toOwnerId, recruiterId) {
+  async reassignOwner(fromOwnerId, toOwnerId, recruiterId, toOwnerName) {
     const db = getDB();
     const snap = await db.collection(COL).where('ownerId', '==', fromOwnerId).get();
     const batch = db.batch();
     let count = 0;
     snap.docs.forEach(doc => {
       if (doc.data().recruiterId === recruiterId) {
-        batch.update(doc.ref, { ownerId: toOwnerId, updatedAt: now() });
+        batch.update(doc.ref, { ownerId: toOwnerId, ownerName: toOwnerName || '', updatedAt: now() });
         count++;
       }
     });

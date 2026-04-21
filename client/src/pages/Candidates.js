@@ -6,6 +6,17 @@ import { candidateApi, generateApi, authApi, settingsApi } from '../utils/api';
 import { AppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
+const formatDate = (iso) => {
+  if (!iso) return '—';
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
+};
+
 const STATUS_LABELS = {
   pending: 'Pending', in_progress: 'In Progress', success: 'Success', failed: 'Failed',
   no_response: 'No Response', not_interested: 'Not Interested',
@@ -635,7 +646,7 @@ export default function Candidates() {
                           <span className={`status-badge status-${c.status}`}>{STATUS_LABELS[c.status] || c.status?.replace(/_/g, ' ')}</span>
                         </td>
                         <td style={{ fontSize: 11, color: c.lastMessageAt ? 'var(--text-secondary)' : 'var(--text-muted)', cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
-                          {c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                          {formatDate(c.lastMessageAt)}
                         </td>
                         <td>
                           <div className="flex gap-8" onClick={e => e.stopPropagation()}>
@@ -705,7 +716,7 @@ export default function Candidates() {
                           <span className={`status-badge status-${c.status}`}>{STATUS_LABELS[c.status] || c.status?.replace(/_/g, ' ')}</span>
                         </td>
                         <td style={{ fontSize: 11, color: c.lastMessageAt ? 'var(--text-secondary)' : 'var(--text-muted)', cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
-                          {c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                          {formatDate(c.lastMessageAt)}
                         </td>
                         <td>
                           <div className="flex gap-8" onClick={e => e.stopPropagation()}>
