@@ -127,27 +127,59 @@ router.patch('/:id/status', async (req, res) => {
     const { status, notes } = req.body;
     const updated = await Candidate.update(req.params.id, { status, notes: notes ?? '' });
 
-    // Auto-notify all other users when a candidate is marked as success
-    if (status === 'success' && existing.status !== 'success') {
-      try {
-        const allUsers = await User.findAll();
-        const updaterName = req.user.displayName || req.user.username;
-        const candidateName = existing.fullName || 'A candidate';
-        await Promise.all(
+    // Fire-and-forget notifications — don't block the response
+    if (status !== existing.status) {
+      (async () => {
+        try {
+          const allUsers = await User.findAll();
+          const updaterName = req.user.displayName || req.user.username;
+          const candidateName = existing.fullName || 'A candidate';
+          const candidateId = req.params.id;
+
+          const STATUS_LABEL = {
+            pending: 'Pending', in_progress: 'In Progress', success: 'Success',
+            no_response: 'No Response', not_interested: 'Not Interested',
+            other_job: 'Already Occupied', have_a_doubt: 'Have a Doubt', failed: 'Failed',
+          };
+          const statusLabel = STATUS_LABEL[status] || status;
+
+          const notifs = [];
+
+          // Admins get notified of every status change (by anyone, except themselves)
           allUsers
-            .filter(u => u.id !== req.user.id)
-            .map(u => Notification.create({
+            .filter(u => u.isAdmin && u.id !== req.user.id)
+            .forEach(u => notifs.push(Notification.create({
               userId: u.id,
-              type: 'success',
-              title: '🎉 Interview Success!',
-              message: `${candidateName} was marked as hired by ${updaterName}`,
-              candidateId: req.params.id,
+              type: status === 'success' ? 'success' : 'status_update',
+              title: status === 'success' ? '🎉 Interview Success!' : '📋 Status Update',
+              message: status === 'success'
+                ? `${candidateName} was marked as hired by ${updaterName}`
+                : `${candidateName}'s status changed to "${statusLabel}" by ${updaterName}`,
+              candidateId,
               candidateName,
               createdBy: req.user.id,
               createdByName: updaterName,
-            }))
-        );
-      } catch (_) {}
+            })));
+
+          // On success: also notify all non-admin users (except the updater)
+          if (status === 'success') {
+            allUsers
+              .filter(u => !u.isAdmin && u.id !== req.user.id)
+              .forEach(u => notifs.push(Notification.create({
+                userId: u.id,
+                type: 'success',
+                title: '🎉 Interview Success!',
+                message: `${candidateName} was marked as hired by ${updaterName}`,
+                candidateId,
+                candidateName,
+                createdBy: req.user.id,
+                createdByName: updaterName,
+              })));
+          }
+
+          await Promise.all(notifs);
+        } catch (_) {}
+      })();
     }
 
     res.json(updated);

@@ -7,7 +7,7 @@ import { AppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
 const STATUS_LABELS = {
-  pending: 'Pending', in_progress: 'In Progress', success: 'Success',
+  pending: 'Pending', in_progress: 'In Progress', success: 'Success', failed: 'Failed',
   no_response: 'No Response', not_interested: 'Not Interested',
   other_job: 'Already Occupied', have_a_doubt: 'Have a Doubt',
 };
@@ -479,7 +479,7 @@ export default function Candidates() {
             <option value="in_progress">In Progress</option>
             <option value="success">Success</option>
             <optgroup label="Failed">
-              <option value="no_response,not_interested,other_job,have_a_doubt">Failed (any)</option>
+              <option value="failed,no_response,not_interested,other_job,have_a_doubt">Failed (any)</option>
               <option value="no_response">↳ No Response</option>
               <option value="not_interested">↳ Not Interested</option>
               <option value="other_job">↳ Already Occupied</option>
