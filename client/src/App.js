@@ -523,21 +523,28 @@ function UserMenu() {
 
 function BackToTop() {
   const [visible, setVisible] = useState(false);
-  const mainRef = useRef(null);
 
   useEffect(() => {
-    const el = document.querySelector('.main-content');
-    if (!el) return;
-    mainRef.current = el;
-    const onScroll = () => setVisible(el.scrollTop > 300);
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
+    let el = null;
+    const tryAttach = () => {
+      el = document.querySelector('.main-content');
+      if (!el) return;
+      const onScroll = () => setVisible(el.scrollTop > 300);
+      el.addEventListener('scroll', onScroll, { passive: true });
+      return () => el.removeEventListener('scroll', onScroll);
+    };
+    const cleanup = tryAttach();
+    return () => { if (cleanup) cleanup(); };
   }, []);
 
-  if (!visible) return null;
+  const scrollToTop = () => {
+    const el = document.querySelector('.main-content');
+    if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <button
-      onClick={() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+      onClick={scrollToTop}
       title="Back to top"
       style={{
         position: 'fixed', bottom: 28, right: 28, zIndex: 500,
@@ -546,6 +553,8 @@ function BackToTop() {
         cursor: 'pointer', fontSize: 18, lineHeight: 1,
         boxShadow: '0 4px 16px rgba(108,99,255,0.4)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
+        opacity: visible ? 1 : 0,
+        pointerEvents: visible ? 'auto' : 'none',
         transition: 'opacity 0.2s',
       }}
     >↑</button>
