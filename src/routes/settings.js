@@ -589,6 +589,21 @@ router.delete('/knowledge/:id', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── POST /api/settings/knowledge/reassign-owner ──────────────────────────────
+// Transfers ownerId of all KB items for a company from one user to another (admin only)
+router.post('/knowledge/reassign-owner', requireAuth, async (req, res) => {
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  if (!isConnected()) return res.status(503).json({ error: 'Firebase not connected.' });
+  try {
+    const { fromUserId, toUserId, companyId } = req.body;
+    if (!fromUserId || !toUserId) return res.status(400).json({ error: 'fromUserId and toUserId are required' });
+    const count = await getKB().reassignOwner(fromUserId, toUserId, companyId ?? '');
+    invalidateCache(fromUserId);
+    invalidateCache(toUserId);
+    res.json({ success: true, count });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── POST /api/settings/knowledge/reassign ────────────────────────────────────
 router.post('/knowledge/reassign', requireAuth, async (req, res) => {
   if (!isConnected()) return res.status(503).json({ error: 'Firebase not connected.' });

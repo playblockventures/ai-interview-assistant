@@ -571,7 +571,10 @@ function CompaniesSection({ dbConnected }) {
       // Add to target first — if this fails, source is untouched (no data loss)
       await settingsApi.saveCompanies([...targetCompanies, cleanC], moveTarget);
 
-      // Remove from source only after target save succeeded
+      // Transfer KB item ownership so target user can see them
+      await settingsApi.reassignKnowledgeOwner(fromUserId, moveTarget, cleanC.id);
+
+      // Remove from source only after target save and KB transfer succeeded
       const sourceEntries = local.filter(x => (x._ownerUserId || user?.id) === fromUserId && x.id !== c.id).map(stripOwner);
       await settingsApi.saveCompanies(sourceEntries, fromUserId !== user?.id ? fromUserId : undefined);
 

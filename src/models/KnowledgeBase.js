@@ -54,6 +54,23 @@ const KnowledgeBase = {
     await db.collection(COL).doc(id).delete();
   },
 
+  // Transfer ownership of all KB items for a specific company from one user to another
+  async reassignOwner(fromOwnerId, toOwnerId, companyId) {
+    const db = getDB();
+    const snap = await db.collection(COL).get();
+    const batch = db.batch();
+    let count = 0;
+    snap.docs.forEach(doc => {
+      const d = doc.data();
+      if (d.ownerId === fromOwnerId && d.companyId === companyId) {
+        batch.update(doc.ref, { ownerId: toOwnerId, updatedAt: now() });
+        count++;
+      }
+    });
+    if (count > 0) await batch.commit();
+    return count;
+  },
+
   // Reassign all KB items from one company to another for a given user
   async reassignCompany(ownerId, fromCompanyId, toCompanyId, toCompanyName) {
     const db = getDB();

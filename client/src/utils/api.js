@@ -86,6 +86,7 @@ export const settingsApi = {
   testInstructions:    (instructions, prompt) => api.post('/settings/knowledge/test-instructions', { instructions, prompt }),
   deleteKnowledge:     (id)           => api.delete(`/settings/knowledge/${id}`),
   reassignKnowledge:   (fromCompanyId, toCompanyId, toCompanyName, userId) => api.post('/settings/knowledge/reassign', { fromCompanyId, toCompanyId, toCompanyName }, userId ? { params: { userId } } : {}),
+  reassignKnowledgeOwner: (fromUserId, toUserId, companyId) => api.post('/settings/knowledge/reassign-owner', { fromUserId, toUserId, companyId }),
 };
 
 export const exportApi = {
