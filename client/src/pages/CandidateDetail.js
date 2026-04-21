@@ -694,7 +694,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
   return (
     <div>
       {/* Applied scenario banner */}
-      {candidate.appliedScenario && (
+      {appliedScenario && (
         <div style={{
           background: 'rgba(108,99,255,0.08)', border: '1px solid rgba(108,99,255,0.25)',
           borderRadius: 'var(--radius-sm)', padding: '10px 14px', marginBottom: 14,
@@ -830,7 +830,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
 
         {showInstructions && (
           <div style={{ marginTop: 12 }}>
-            {candidate.appliedScenario && (
+            {appliedScenario && (
               <div style={{ marginBottom: 12 }}>
                 <label className="form-label" style={{ marginBottom: 6 }}>Applied Scenario</label>
                 <div style={{
@@ -839,7 +839,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
                   maxHeight: 220, overflowY: 'auto', fontSize: 12, color: 'var(--text-secondary)',
                   lineHeight: 1.6, whiteSpace: 'pre-wrap',
                 }}>
-                  {candidate.appliedScenario}
+                  {appliedScenario}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                   This full scenario is sent to the AI on every reply. Use the field below for additional notes only.
