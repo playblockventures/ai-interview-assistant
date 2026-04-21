@@ -34,14 +34,17 @@ const MESSAGE_TYPES = [
 ];
 
 const STATUS_OPTIONS = [
-  { value: 'pending',        label: 'Pending' },
-  { value: 'in_progress',    label: 'In Progress' },
-  { value: 'success',        label: 'Success' },
+  { value: 'pending',     label: 'Pending' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'success',     label: 'Success' },
+];
+const FAILED_OPTIONS = [
   { value: 'no_response',    label: 'No Response' },
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'other_job',      label: 'Already Occupied' },
   { value: 'have_a_doubt',   label: 'Have a Doubt' },
 ];
+const ALL_FAILED_VALUES = FAILED_OPTIONS.map(o => o.value);
 
 function RecruiterSelect({ value, onChange }) {
   const { recruiters } = useContext(AppContext);
@@ -1122,7 +1125,7 @@ function StatusTab({ candidate, onUpdated }) {
       <div className="card-title">Interview Status</div>
       <div className="form-group">
         <label className="form-label">Status</label>
-        <div className="flex gap-8" style={{ flexWrap: 'wrap' }}>
+        <div className="flex gap-8" style={{ flexWrap: 'wrap', marginBottom: 8 }}>
           {STATUS_OPTIONS.map(s => (
             <button key={s.value} onClick={() => handleStatusChange(s.value)} className="btn"
               style={{
@@ -1133,6 +1136,24 @@ function StatusTab({ candidate, onUpdated }) {
               {s.label}
             </button>
           ))}
+        </div>
+        {/* Failed group */}
+        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', background: 'var(--bg-elevated)' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--error)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Failed
+          </div>
+          <div className="flex gap-8" style={{ flexWrap: 'wrap' }}>
+            {FAILED_OPTIONS.map(s => (
+              <button key={s.value} onClick={() => handleStatusChange(s.value)} className="btn"
+                style={{
+                  background: status === s.value ? 'rgba(255,107,107,0.15)' : 'var(--bg-card)',
+                  border: `1px solid ${status === s.value ? 'var(--error)' : 'var(--border)'}`,
+                  color: status === s.value ? 'var(--error)' : 'var(--text-secondary)',
+                }}>
+                {s.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       <div className="form-group">

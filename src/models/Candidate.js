@@ -22,7 +22,12 @@ const Candidate = {
 
     // Push ownership and status filters to Firestore
     if (ownerId) query = query.where('ownerId', '==', ownerId);
-    if (status)  query = query.where('status',  '==', status);
+    if (status) {
+      const statusArr = status.split(',').filter(Boolean);
+      query = statusArr.length === 1
+        ? query.where('status', '==', statusArr[0])
+        : query.where('status', 'in', statusArr);
+    }
 
     const snapshot = await query.get();
     let docs = snapshot.docs.map(docToObj);

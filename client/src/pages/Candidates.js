@@ -478,11 +478,12 @@ export default function Candidates() {
             <option value="pending">Pending</option>
             <option value="in_progress">In Progress</option>
             <option value="success">Success</option>
-            <optgroup label="── Failed ──">
-              <option value="no_response">No Response</option>
-              <option value="not_interested">Not Interested</option>
-              <option value="other_job">Already Occupied</option>
-              <option value="have_a_doubt">Have a Doubt</option>
+            <optgroup label="Failed">
+              <option value="no_response,not_interested,other_job,have_a_doubt">Failed (any)</option>
+              <option value="no_response">↳ No Response</option>
+              <option value="not_interested">↳ Not Interested</option>
+              <option value="other_job">↳ Already Occupied</option>
+              <option value="have_a_doubt">↳ Have a Doubt</option>
             </optgroup>
           </select>
 
