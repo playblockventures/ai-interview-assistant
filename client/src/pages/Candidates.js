@@ -677,15 +677,33 @@ export default function Candidates() {
               </table>
             </div>
 
-            {total > pageSize && (
-              <div className="flex items-center justify-between mt-16" style={{ paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Page {page} of {Math.ceil(total / pageSize)}</span>
-                <div className="flex gap-8">
-                  <button className="btn btn-secondary btn-sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>← Prev</button>
-                  <button className="btn btn-secondary btn-sm" disabled={page >= Math.ceil(total / pageSize)} onClick={() => setPage(p => p + 1)}>Next →</button>
+            {total > pageSize && (() => {
+              const totalPages = Math.ceil(total / pageSize);
+              const delta = 2;
+              const pages = [];
+              for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= page - delta && i <= page + delta)) {
+                  pages.push(i);
+                } else if (pages[pages.length - 1] !== '...') {
+                  pages.push('...');
+                }
+              }
+              return (
+                <div className="flex items-center gap-8 mt-16" style={{ paddingTop: 12, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                  <button className="btn btn-secondary btn-sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>←</button>
+                  {pages.map((p, i) =>
+                    p === '...'
+                      ? <span key={`ellipsis-${i}`} style={{ fontSize: 12, color: 'var(--text-muted)', padding: '0 2px' }}>…</span>
+                      : <button key={p} className="btn btn-sm" onClick={() => setPage(p)}
+                          style={{ minWidth: 32, fontWeight: page === p ? 700 : 400, background: page === p ? 'var(--accent)' : 'var(--bg-elevated)', color: page === p ? '#fff' : 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 }}>
+                          {p}
+                        </button>
+                  )}
+                  <button className="btn btn-secondary btn-sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>→</button>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 4 }}>{total} total</span>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </>
         )}
       </div>
