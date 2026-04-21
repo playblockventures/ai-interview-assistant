@@ -39,6 +39,7 @@ export const authApi = {
 
 export const candidateApi = {
   getAll:       (params)   => api.get('/candidates', { params }),
+  getActiveWithResponseTime: () => api.get('/candidates/active-response'),
   getByIds:     (ids)      => api.get('/candidates', { params: { ids: ids.join(',') } }),
   getStats:     ()         => api.get('/candidates/stats'),
   getRecent:    (limit)    => api.get('/candidates/recent', { params: { limit } }),

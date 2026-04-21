@@ -195,13 +195,14 @@ function GroupHeader({ photoUrl, initial, name, subtitle, count }) {
 export default function Dashboard() {
   const { user }                 = useAuth();
   const { recruiters, roles }    = useContext(AppContext);
-  const [allCandidates, setAllCandidates] = useState([]);
-  const [recent,        setRecent]        = useState([]);
-  const [loading,       setLoading]       = useState(true);
-  const [groupMode,     setGroupMode]     = useState('none');
-  const [allUsers,      setAllUsers]      = useState([]);
-  const [activeView,    setActiveView]    = useState('overview'); // 'overview' | 'pipeline' | 'candidates'
+  const [allCandidates,    setAllCandidates]    = useState([]);
+  const [recent,           setRecent]           = useState([]);
+  const [loading,          setLoading]          = useState(true);
+  const [groupMode,        setGroupMode]        = useState('none');
+  const [allUsers,         setAllUsers]         = useState([]);
+  const [activeView,       setActiveView]       = useState('overview');
   const [pinnedCandidates, setPinnedCandidates] = useState([]);
+  const [activeCandidates, setActiveCandidates] = useState([]);
 
   useEffect(() => {
     if (user?.isAdmin) authApi.listUsers().then(setAllUsers).catch(() => {});
@@ -210,16 +211,18 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const [recentData, statsData, pinsData] = await Promise.all([
+        const [recentData, statsData, pinsData, activeData] = await Promise.all([
           candidateApi.getRecent(8),
           candidateApi.getStats(),
           settingsApi.getPins().catch(() => ({ pins: [] })),
+          candidateApi.getActiveWithResponseTime(),
         ]);
         setRecent(recentData.candidates || []);
         const all = statsData.candidates || [];
         setAllCandidates(all);
         const pinIds = new Set(pinsData.pins || []);
         setPinnedCandidates(all.filter(c => pinIds.has(c.id)));
+        setActiveCandidates(activeData.candidates || []);
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     })();
@@ -332,6 +335,16 @@ export default function Dashboard() {
   const total = allCandidates.length;
   const getRoleLabel = (val) => roles.find(r => r.value === val)?.label || val || '—';
   const getRecruiter = (id)  => recruiters.find(r => r.id === id) || null;
+
+  const formatAvgResponse = (ms) => {
+    if (ms === null || ms === undefined) return '—';
+    const m = Math.round(ms / 60000);
+    if (m < 60) return `${m}m`;
+    const h = Math.round(ms / 3600000);
+    if (h < 24) return `${h}h`;
+    const d = (ms / 86400000).toFixed(1);
+    return `${d}d`;
+  };
 
   // Navigate to /candidates with pre-set filters via sessionStorage
   const navigateFiltered = (filters) => {
@@ -501,6 +514,86 @@ export default function Dashboard() {
                 <StatCard icon="⏱" label="Avg. Time to Decision" value={analytics?.avgDays != null ? `${analytics.avgDays}d` : '—'} color="var(--warning)"
                   sub="days from add to outcome" />
               </div>
+
+              {/* Active Candidates — sorted by avg response time */}
+              {activeCandidates.length > 0 && (
+                <div className="card" style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                    <div>
+                      <div className="card-title" style={{ marginBottom: 2 }}>Active Candidates — Avg. Response Time</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        {activeCandidates.length} active · sorted by shortest avg. time between messages
+                      </div>
+                    </div>
+                    <button className="btn btn-secondary btn-sm" onClick={() => navigateFiltered({ statusFilter: 'in_progress' })}>
+                      View all →
+                    </button>
+                  </div>
+                  <div className="table-wrap">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
+                          <th>Candidate</th>
+                          <th>Role</th>
+                          <th>Recruiter</th>
+                          {user?.isAdmin && <th>Owner</th>}
+                          <th>Status</th>
+                          <th style={{ textAlign: 'right' }}>Avg Response</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeCandidates.map((c, i) => {
+                          const recruiter = getRecruiter(c.recruiterId);
+                          return (
+                            <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => window.location.href = `/candidates/${c.id}`}>
+                              <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
+                              <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: c.photoUrl ? undefined : 'var(--accent-dim)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 11, border: '1.5px solid var(--border)' }}>
+                                    {c.photoUrl ? <img src={c.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (c.fullName || '?').charAt(0).toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <div style={{ fontWeight: 600, fontSize: 13 }}>{c.fullName || '—'}</div>
+                                    {c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.currentTitle}</div>}
+                                  </div>
+                                </div>
+                              </td>
+                              <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{getRoleLabel(c.role)}</td>
+                              <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                {recruiter ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                    <div style={{ width: 18, height: 18, borderRadius: '50%', flexShrink: 0, background: 'var(--accent-dim)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 9 }}>
+                                      {recruiter.photoUrl ? <img src={recruiter.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : recruiter.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    {recruiter.name}
+                                  </div>
+                                ) : '—'}
+                              </td>
+                              {user?.isAdmin && (
+                                <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.ownerName || '—'}</td>
+                              )}
+                              <td><span className={`status-badge status-${c.status}`}>{STATUS_CONFIG[c.status]?.label || c.status}</span></td>
+                              <td style={{ textAlign: 'right' }}>
+                                {c.avgResponseMs !== null && c.avgResponseMs !== undefined ? (
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>
+                                      {formatAvgResponse(c.avgResponseMs)}
+                                    </span>
+                                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.messageCount} msg{c.messageCount !== 1 ? 's' : ''}</span>
+                                  </div>
+                                ) : (
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>No messages</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* Row 1: Pipeline status + Activity */}
               <div className="grid-2" style={{ marginBottom: 20 }}>

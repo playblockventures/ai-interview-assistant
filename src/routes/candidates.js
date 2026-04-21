@@ -37,6 +37,17 @@ router.get('/stats', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// GET active with avg response time — for dashboard
+router.get('/active-response', async (req, res) => {
+  try {
+    const docs = await Candidate.findActiveWithResponseTime({
+      ownerId: req.user.isAdmin ? null : req.user.id,
+      isAdmin: req.user.isAdmin,
+    });
+    res.json({ candidates: docs });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET recent — small list for dashboard recent activity
 router.get('/recent', async (req, res) => {
   try {

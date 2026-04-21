@@ -76,6 +76,44 @@ const Candidate = {
     return snapshot.docs.map(docToObj);
   },
 
+  // Active candidates with avg response time computed from conversationHistory timestamps
+  async findActiveWithResponseTime({ ownerId, isAdmin, limit = 20 } = {}) {
+    const db = getDB();
+    // Need full docs to access conversationHistory
+    let query = db.collection(COL)
+      .where('status', 'in', ['pending', 'in_progress']);
+    if (ownerId) query = query.where('ownerId', '==', ownerId);
+    const snapshot = await query.get();
+    const docs = snapshot.docs.map(docToObj);
+
+    const withAvg = docs.map(c => {
+      const msgs = (c.conversationHistory || [])
+        .map(m => m.timestamp || m.createdAt)
+        .filter(Boolean)
+        .map(t => new Date(t).getTime())
+        .filter(t => !isNaN(t))
+        .sort((a, b) => a - b);
+
+      let avgMs = null;
+      if (msgs.length >= 2) {
+        let total = 0;
+        for (let i = 1; i < msgs.length; i++) total += msgs[i] - msgs[i - 1];
+        avgMs = total / (msgs.length - 1);
+      }
+
+      // Strip large fields before returning to client
+      const { conversationHistory, resumeText, interviewScenarios, ...rest } = c;
+      return { ...rest, avgResponseMs: avgMs, messageCount: msgs.length };
+    });
+
+    // Candidates with measured avg response time first (shortest = most active), then unmeasured
+    return withAvg
+      .filter(c => c.avgResponseMs !== null)
+      .sort((a, b) => a.avgResponseMs - b.avgResponseMs)
+      .concat(withAvg.filter(c => c.avgResponseMs === null))
+      .slice(0, parseInt(limit));
+  },
+
   // Fetch just the N most recently active candidates (for dashboard recent list)
   async findRecent({ ownerId, isAdmin, limit = 8 } = {}) {
     const db = getDB();
