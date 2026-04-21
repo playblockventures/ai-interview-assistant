@@ -768,10 +768,20 @@ function KnowledgeSection({ dbConnected, targetUserId = null }) {
   const fetchItems = useCallback(async () => {
     if (!dbConnected) { setItems([]); return; }
     setLoading(true);
-    try { setItems(await settingsApi.getKnowledge()); }
+    try { setItems(await settingsApi.getKnowledge(targetUserId ? { userId: targetUserId } : undefined)); }
     catch (e) { console.error(e.message); }
     finally { setLoading(false); }
   }, [dbConnected, targetUserId]);
+
+  const downloadContent = (item) => {
+    const blob = new Blob([item.content || ''], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = item.fileName || item.name || 'document.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
@@ -930,6 +940,7 @@ function KnowledgeSection({ dbConnected, targetUserId = null }) {
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <span>{CATEGORY_LABELS[item.category]} · {item.type}</span>
                     {item.url && <><span>·</span><a href={item.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>view ↗</a></>}
+                    {item.content && <><span>·</span><button onClick={() => downloadContent(item)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: 11, padding: 0 }}>download ↓</button></>}
                     <span>· {new Date(item.createdAt).toLocaleDateString()}</span>
                     {item.content && <span>· {Math.ceil(item.content.length / 4)} tokens</span>}
                     {item.companyName && (
