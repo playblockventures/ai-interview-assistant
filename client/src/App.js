@@ -521,6 +521,37 @@ function UserMenu() {
   );
 }
 
+function BackToTop() {
+  const [visible, setVisible] = useState(false);
+  const mainRef = useRef(null);
+
+  useEffect(() => {
+    const el = document.querySelector('.main-content');
+    if (!el) return;
+    mainRef.current = el;
+    const onScroll = () => setVisible(el.scrollTop > 300);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  if (!visible) return null;
+  return (
+    <button
+      onClick={() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+      title="Back to top"
+      style={{
+        position: 'fixed', bottom: 28, right: 28, zIndex: 500,
+        width: 40, height: 40, borderRadius: '50%',
+        background: 'var(--accent)', color: '#fff', border: 'none',
+        cursor: 'pointer', fontSize: 18, lineHeight: 1,
+        boxShadow: '0 4px 16px rgba(108,99,255,0.4)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'opacity 0.2s',
+      }}
+    >↑</button>
+  );
+}
+
 function AppShell() {
   return (
     <AppProvider>
@@ -561,6 +592,7 @@ function AppShell() {
             <Route path="*"             element={<Navigate to="/" replace />} />
           </Routes>
         </main>
+        <BackToTop />
       </div>
     </AppProvider>
   );
