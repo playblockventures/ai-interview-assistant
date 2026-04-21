@@ -1481,10 +1481,10 @@ export default function CandidateDetail() {
           </button>
         ))}
       </div>
-      {activeTab === 0 && <ScenarioTab candidate={candidate} onScenarioApplied={handleScenarioApplied} />}
-      {activeTab === 1 && <OutreachTab candidate={candidate} />}
-      {activeTab === 2 && <ConversationTab candidate={candidate} appliedScenario={appliedScenario} onStatusChange={(newStatus) => { setCandidate(c => ({ ...c, status: newStatus })); }} />}
-      {activeTab === 3 && <StatusTab candidate={candidate} onUpdated={fetchCandidate} />}
+      <div style={{ display: activeTab === 0 ? '' : 'none' }}><ScenarioTab candidate={candidate} onScenarioApplied={handleScenarioApplied} /></div>
+      <div style={{ display: activeTab === 1 ? '' : 'none' }}><OutreachTab candidate={candidate} /></div>
+      <div style={{ display: activeTab === 2 ? '' : 'none' }}><ConversationTab candidate={candidate} appliedScenario={appliedScenario} onStatusChange={(newStatus) => { setCandidate(c => ({ ...c, status: newStatus })); }} /></div>
+      <div style={{ display: activeTab === 3 ? '' : 'none' }}><StatusTab candidate={candidate} onUpdated={fetchCandidate} /></div>
 
       {showEditProfile && (
         <EditProfileModal
