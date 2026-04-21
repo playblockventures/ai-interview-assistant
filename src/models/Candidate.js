@@ -258,6 +258,17 @@ const Candidate = {
     return count;
   },
 
+  // Transfer ownerId for a specific list of candidate IDs to a new owner (admin bulk move)
+  async reassignOwnerBulk(candidateIds, toOwnerId) {
+    const db = getDB();
+    const batch = db.batch();
+    candidateIds.forEach(id => {
+      batch.update(db.collection(COL).doc(id), { ownerId: toOwnerId, updatedAt: now() });
+    });
+    if (candidateIds.length > 0) await batch.commit();
+    return candidateIds.length;
+  },
+
   // Transfer ownerId for all candidates belonging to a recruiter from one user to another
   async reassignOwner(fromOwnerId, toOwnerId, recruiterId) {
     const db = getDB();

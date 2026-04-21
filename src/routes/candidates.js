@@ -156,6 +156,18 @@ router.post('/parse-attachment', attachmentUpload.single('file'), async (req, re
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// POST bulk-reassign-owner — admin only, moves selected candidates to another user
+router.post('/bulk-reassign-owner', async (req, res) => {
+  try {
+    if (!req.user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+    const { candidateIds, toUserId } = req.body;
+    if (!Array.isArray(candidateIds) || !candidateIds.length || !toUserId)
+      return res.status(400).json({ error: 'candidateIds (array) and toUserId required' });
+    const count = await Candidate.reassignOwnerBulk(candidateIds, toUserId);
+    res.json({ success: true, count });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // POST reassign-owner — admin only, transfers candidates from one user to another for a recruiter
 router.post('/reassign-owner', async (req, res) => {
   try {

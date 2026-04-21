@@ -266,18 +266,23 @@ export default function Candidates() {
 
   const saved = loadFilters();
 
-  const [candidates,      setCandidates]      = useState([]);
+  const [candidates,       setCandidates]       = useState([]);
   const [pinnedCandidates, setPinnedCandidates] = useState([]);
-  const [total,           setTotal]            = useState(0);
-  const [loading,         setLoading]          = useState(true);
-  const [showAdd,         setShowAdd]          = useState(false);
-  const [editCandidate,   setEditCandidate]    = useState(null);
-  const [search,          setSearch]           = useState(saved.search          || '');
-  const [statusFilter,    setStatusFilter]     = useState(saved.statusFilter    || '');
-  const [recruiterFilter, setRecruiterFilter]  = useState(saved.recruiterFilter || '');
-  const [ownerFilter,     setOwnerFilter]      = useState(saved.ownerFilter     || '');
-  const [page,            setPage]             = useState(saved.page            || 1);
-  const [pageSize,        setPageSize]         = useState(saved.pageSize        || 20);
+  const [total,            setTotal]            = useState(0);
+  const [loading,          setLoading]          = useState(true);
+  const [showAdd,          setShowAdd]          = useState(false);
+  const [editCandidate,    setEditCandidate]    = useState(null);
+  const [search,           setSearch]           = useState(saved.search          || '');
+  const [statusFilter,     setStatusFilter]     = useState(saved.statusFilter    || '');
+  const [recruiterFilter,  setRecruiterFilter]  = useState(saved.recruiterFilter || '');
+  const [ownerFilter,      setOwnerFilter]      = useState(saved.ownerFilter     || '');
+  const [page,             setPage]             = useState(saved.page            || 1);
+  const [pageSize,         setPageSize]         = useState(saved.pageSize        || 20);
+
+  // ── Selection state ────────────────────────────────────────────────────────
+  const [selectedIds,   setSelectedIds]   = useState(new Set());
+  const [bulkMoveTo,    setBulkMoveTo]    = useState('');
+  const [bulkSaving,    setBulkSaving]    = useState(false);
 
   useEffect(() => {
     try {
@@ -285,7 +290,7 @@ export default function Candidates() {
     } catch {}
   }, [search, statusFilter, recruiterFilter, ownerFilter, page, pageSize]);
 
-  // For admin: list of all users to filter by
+  // For admin: list of all users to filter/move by
   const [allUsers, setAllUsers] = useState([]);
   useEffect(() => {
     if (user?.isAdmin) authApi.listUsers().then(setAllUsers).catch(() => {});
@@ -297,7 +302,6 @@ export default function Candidates() {
     settingsApi.getPins().then(d => setPinnedIds(new Set(d.pins || []))).catch(() => {});
   }, []);
 
-  // Fetch pinned candidates separately whenever pinnedIds changes
   useEffect(() => {
     if (!pinnedIds.size) { setPinnedCandidates([]); return; }
     candidateApi.getByIds([...pinnedIds]).then(d => setPinnedCandidates(d.candidates || [])).catch(() => {});
@@ -309,11 +313,11 @@ export default function Candidates() {
       const params = { search, status: statusFilter, page, limit: pageSize };
       if (recruiterFilter) params.recruiterId = recruiterFilter;
       if (user?.isAdmin && ownerFilter) params.ownerId = ownerFilter;
-      // Exclude pinned IDs so they don't appear twice
       const data = await candidateApi.getAll(params);
       const pinSet = pinnedIds;
       setCandidates((data.candidates || []).filter(c => !pinSet.has(c.id)));
       setTotal(data.total || 0);
+      setSelectedIds(new Set());
     } catch (e) {
       toast.error(e.message);
     } finally {
@@ -322,6 +326,54 @@ export default function Candidates() {
   }, [search, statusFilter, recruiterFilter, ownerFilter, page, pageSize, user, pinnedIds]);
 
   useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
+
+  // ── Selection helpers ──────────────────────────────────────────────────────
+  const allPageIds     = candidates.map(c => c.id);
+  const allSelected    = allPageIds.length > 0 && allPageIds.every(id => selectedIds.has(id));
+  const someSelected   = allPageIds.some(id => selectedIds.has(id));
+
+  const toggleSelect = (id) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(prev => { const next = new Set(prev); allPageIds.forEach(id => next.delete(id)); return next; });
+    } else {
+      setSelectedIds(prev => new Set([...prev, ...allPageIds]));
+    }
+  };
+
+  // ── Bulk actions ───────────────────────────────────────────────────────────
+  const handleBulkDelete = async () => {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    if (!window.confirm(`Delete ${ids.length} candidate${ids.length !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+    setBulkSaving(true);
+    try {
+      await Promise.all(ids.map(id => candidateApi.delete(id)));
+      setPinnedIds(s => { const n = new Set(s); ids.forEach(id => n.delete(id)); return n; });
+      toast.success(`${ids.length} candidate${ids.length !== 1 ? 's' : ''} deleted`);
+      fetchCandidates();
+    } catch (e) { toast.error(e.message); }
+    finally { setBulkSaving(false); }
+  };
+
+  const handleBulkMove = async () => {
+    const ids = [...selectedIds];
+    if (!ids.length || !bulkMoveTo) return;
+    const targetUser = allUsers.find(u => u.id === bulkMoveTo);
+    if (!window.confirm(`Move ${ids.length} candidate${ids.length !== 1 ? 's' : ''} to ${targetUser?.displayName || targetUser?.username || bulkMoveTo}?`)) return;
+    setBulkSaving(true);
+    try {
+      await candidateApi.bulkReassignOwner(ids, bulkMoveTo);
+      toast.success(`${ids.length} candidate${ids.length !== 1 ? 's' : ''} moved to ${targetUser?.displayName || targetUser?.username}`);
+      fetchCandidates();
+    } catch (e) { toast.error(e.message); }
+    finally { setBulkSaving(false); }
+  };
 
   const handleDelete = async (e, id) => {
     e.stopPropagation();
@@ -350,10 +402,9 @@ export default function Candidates() {
     } catch (err) { toast.error(err.message); }
   };
 
-  const getRoleLabel  = (val) => roles.find(r => r.value === val)?.label || val || '—';
-  const getRecruiter  = (id)  => recruiters.find(r => r.id === id) || null;
-
-  const resetPage = () => setPage(1);
+  const getRoleLabel = (val) => roles.find(r => r.value === val)?.label || val || '—';
+  const getRecruiter = (id)  => recruiters.find(r => r.id === id) || null;
+  const resetPage    = ()    => setPage(1);
 
   return (
     <div className="page">
@@ -368,7 +419,6 @@ export default function Candidates() {
       <div className="card">
         {/* ── Filter bar ── */}
         <div className="flex gap-12 mb-16" style={{ flexWrap: 'wrap' }}>
-          {/* Search */}
           <div className="input-wrap" style={{ flex: 1, minWidth: 200, position: 'relative' }}>
             <span className="input-icon">🔍</span>
             <input className="form-input" placeholder="Search by name, email, role, location..."
@@ -380,14 +430,12 @@ export default function Candidates() {
             )}
           </div>
 
-          {/* Status filter */}
           <select className="form-select" style={{ width: 150 }} value={statusFilter}
             onChange={e => { setStatusFilter(e.target.value); resetPage(); }}>
             <option value="">All Statuses</option>
             {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
           </select>
 
-          {/* Recruiter filter — always shown when recruiters exist */}
           {recruiters.length > 0 && (
             <select className="form-select" style={{ width: 170 }} value={recruiterFilter}
               onChange={e => { setRecruiterFilter(e.target.value); resetPage(); }}>
@@ -396,7 +444,6 @@ export default function Candidates() {
             </select>
           )}
 
-          {/* Admin: filter by hiring manager / owner */}
           {user?.isAdmin && allUsers.length > 0 && (
             <select className="form-select" style={{ width: 170 }} value={ownerFilter}
               onChange={e => { setOwnerFilter(e.target.value); resetPage(); }}>
@@ -409,7 +456,6 @@ export default function Candidates() {
             </select>
           )}
 
-          {/* Page size */}
           <select className="form-select" style={{ width: 100 }} value={pageSize}
             onChange={e => { setPageSize(Number(e.target.value)); resetPage(); }}>
             <option value={20}>20 / page</option>
@@ -418,7 +464,41 @@ export default function Candidates() {
           </select>
         </div>
 
-        {/* ── Pinned candidates — always shown at top ── */}
+        {/* ── Bulk action bar — shown when anything is selected ── */}
+        {selectedIds.size > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', marginBottom: 12, background: 'var(--accent-dim)', borderRadius: 8, border: '1px solid var(--accent)', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>
+              {selectedIds.size} selected
+            </span>
+            <button className="btn btn-secondary btn-sm" onClick={() => setSelectedIds(new Set())}>
+              Deselect all
+            </button>
+            <div style={{ flex: 1 }} />
+            {/* Admin: move to user */}
+            {user?.isAdmin && allUsers.length > 0 && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <select className="form-select" style={{ width: 170, height: 32, fontSize: 12 }}
+                  value={bulkMoveTo} onChange={e => setBulkMoveTo(e.target.value)}>
+                  <option value="">Move to user…</option>
+                  {allUsers.map(u => (
+                    <option key={u.id} value={u.id}>{u.displayName || u.username}{u.isAdmin ? ' (admin)' : ''}</option>
+                  ))}
+                </select>
+                <button className="btn btn-primary btn-sm" disabled={!bulkMoveTo || bulkSaving} onClick={handleBulkMove}>
+                  {bulkSaving ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Move'}
+                </button>
+              </div>
+            )}
+            {/* Delete selected */}
+            <button className="btn btn-sm" disabled={bulkSaving}
+              style={{ background: 'var(--error)', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+              onClick={handleBulkDelete}>
+              {bulkSaving ? <span className="spinner" style={{ width: 12, height: 12 }} /> : `Delete (${selectedIds.size})`}
+            </button>
+          </div>
+        )}
+
+        {/* ── Pinned candidates ── */}
         {pinnedCandidates.length > 0 && (
           <div style={{ marginBottom: 16, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#f59e0b', marginBottom: 8 }}>★ Pinned ({pinnedCandidates.length})</div>
@@ -428,18 +508,23 @@ export default function Candidates() {
                   {pinnedCandidates.map(c => {
                     const recruiter = getRecruiter(c.recruiterId);
                     return (
-                      <tr key={c.id} onClick={() => navigate(`/candidates/${c.id}`)} style={{ cursor: 'pointer', background: 'rgba(245,158,11,0.04)' }}>
-                        <td style={{ width: 32 }}><span style={{ color: '#f59e0b' }}>★</span></td>
-                        <td style={{ width: 40 }}>
+                      <tr key={c.id} style={{ cursor: 'pointer', background: 'rgba(245,158,11,0.04)' }}>
+                        <td style={{ width: 32 }} onClick={e => e.stopPropagation()}>
+                          <input type="checkbox" checked={selectedIds.has(c.id)}
+                            onChange={() => toggleSelect(c.id)}
+                            style={{ cursor: 'pointer', width: 15, height: 15 }} />
+                        </td>
+                        <td style={{ width: 32 }} onClick={() => navigate(`/candidates/${c.id}`)}><span style={{ color: '#f59e0b' }}>★</span></td>
+                        <td style={{ width: 40 }} onClick={() => navigate(`/candidates/${c.id}`)}>
                           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-elevated)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
                             {c.photoUrl ? <img src={c.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
                           </div>
                         </td>
-                        <td><div style={{ fontWeight: 600 }}>{c.fullName || '—'}</div>{c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.currentTitle}</div>}</td>
-                        <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
-                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.location || '—'}</td>
-                        <td style={{ fontSize: 12 }}>{recruiter?.name || c.recruiterName || '—'}</td>
-                        <td><span className={`status-badge status-${c.status}`}>{c.status?.replace('_', ' ')}</span></td>
+                        <td onClick={() => navigate(`/candidates/${c.id}`)}><div style={{ fontWeight: 600 }}>{c.fullName || '—'}</div>{c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.currentTitle}</div>}</td>
+                        <td style={{ fontSize: 12 }} onClick={() => navigate(`/candidates/${c.id}`)}>{getRoleLabel(c.role)}</td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }} onClick={() => navigate(`/candidates/${c.id}`)}>{c.location || '—'}</td>
+                        <td style={{ fontSize: 12 }} onClick={() => navigate(`/candidates/${c.id}`)}>{recruiter?.name || c.recruiterName || '—'}</td>
+                        <td onClick={() => navigate(`/candidates/${c.id}`)}><span className={`status-badge status-${c.status}`}>{c.status?.replace('_', ' ')}</span></td>
                         <td onClick={e => e.stopPropagation()}>
                           <button onClick={e => togglePin(e, c)} title="Unpin"
                             style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#f59e0b', padding: '0 4px' }}>★</button>
@@ -470,6 +555,14 @@ export default function Candidates() {
               <table className="data-table">
                 <thead>
                   <tr>
+                    <th style={{ width: 32 }} onClick={e => e.stopPropagation()}>
+                      <input type="checkbox"
+                        checked={allSelected}
+                        ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                        onChange={toggleSelectAll}
+                        style={{ cursor: 'pointer', width: 15, height: 15 }}
+                        title={allSelected ? 'Deselect all on page' : 'Select all on page'} />
+                    </th>
                     <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
                     <th style={{ width: 40 }}></th>
                     <th>Name</th>
@@ -484,30 +577,34 @@ export default function Candidates() {
                   </tr>
                 </thead>
                 <tbody>
-                  {candidates.map(c => {
+                  {candidates.map((c, idx) => {
                     const recruiter = getRecruiter(c.recruiterId);
+                    const isSelected = selectedIds.has(c.id);
                     return (
-                      <tr key={c.id} onClick={() => navigate(`/candidates/${c.id}`)}>
-                        <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{(page - 1) * 20 + candidates.indexOf(c) + 1}</td>
-                        {/* Avatar */}
-                        <td>
+                      <tr key={c.id} style={{ background: isSelected ? 'var(--accent-dim)' : undefined }}>
+                        <td onClick={e => e.stopPropagation()}>
+                          <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(c.id)}
+                            style={{ cursor: 'pointer', width: 15, height: 15 }} />
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                          {(page - 1) * pageSize + idx + 1}
+                        </td>
+                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
                           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-elevated)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
                             {c.photoUrl ? <img src={c.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
                           </div>
                         </td>
-                        {/* Name + title */}
-                        <td>
+                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
                           <div style={{ fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 5 }}>
                             {pinnedIds.has(c.id) && <span style={{ color: '#f59e0b', fontSize: 13 }}>★</span>}
                             {c.fullName || '—'}
                           </div>
                           {c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.currentTitle}</div>}
                         </td>
-                        <td style={{ fontFamily: 'DM Mono, monospace', fontSize: 12 }}>{c.email || '—'}</td>
-                        <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
-                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.location || '—'}</td>
-                        {/* Recruiter with photo */}
-                        <td>
+                        <td style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>{c.email || '—'}</td>
+                        <td style={{ fontSize: 12, cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>{getRoleLabel(c.role)}</td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>{c.location || '—'}</td>
+                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
                           {recruiter ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <div style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, background: recruiter.photoUrl ? undefined : 'var(--accent-dim)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 10 }}>
@@ -519,8 +616,7 @@ export default function Candidates() {
                             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
                           )}
                         </td>
-                        {/* User who added this candidate */}
-                        <td>
+                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                             <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, flexShrink: 0 }}>
                               {(c.ownerName || '?').charAt(0).toUpperCase()}
@@ -528,8 +624,10 @@ export default function Candidates() {
                             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.ownerName || '—'}</span>
                           </div>
                         </td>
-                        <td><span className={`status-badge status-${c.status}`}>{c.status?.replace('_', ' ')}</span></td>
-                        <td style={{ fontSize: 11, color: c.lastMessageAt ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                          <span className={`status-badge status-${c.status}`}>{c.status?.replace('_', ' ')}</span>
+                        </td>
+                        <td style={{ fontSize: 11, color: c.lastMessageAt ? 'var(--text-secondary)' : 'var(--text-muted)', cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
                           {c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
                         </td>
                         <td>

@@ -50,6 +50,7 @@ export const candidateApi = {
   extract:               (formData) => api.post('/candidates/extract', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   parseAttachment:       (formData) => api.post('/candidates/parse-attachment', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   reassignCandidateOwner: (fromUserId, toUserId, recruiterId) => api.post('/candidates/reassign-owner', { fromUserId, toUserId, recruiterId }),
+  bulkReassignOwner:      (candidateIds, toUserId) => api.post('/candidates/bulk-reassign-owner', { candidateIds, toUserId }),
 };
 
 export const generateApi = {
