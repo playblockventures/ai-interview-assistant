@@ -1,4 +1,5 @@
 import React, { useContext, useState, useEffect, useRef, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { BrowserRouter as Router, Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
@@ -525,39 +526,34 @@ function BackToTop() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    let el = null;
-    const tryAttach = () => {
-      el = document.querySelector('.main-content');
-      if (!el) return;
-      const onScroll = () => setVisible(el.scrollTop > 300);
-      el.addEventListener('scroll', onScroll, { passive: true });
-      return () => el.removeEventListener('scroll', onScroll);
-    };
-    const cleanup = tryAttach();
-    return () => { if (cleanup) cleanup(); };
+    const el = document.querySelector('.main-content');
+    if (!el) return;
+    const onScroll = () => setVisible(el.scrollTop > 300);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
   }, []);
 
   const scrollToTop = () => {
-    const el = document.querySelector('.main-content');
-    if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
+    document.querySelector('.main-content')?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  return (
+  return ReactDOM.createPortal(
     <button
       onClick={scrollToTop}
       title="Back to top"
       style={{
-        position: 'fixed', bottom: 28, right: 28, zIndex: 500,
-        width: 40, height: 40, borderRadius: '50%',
+        position: 'fixed', bottom: 28, right: 28, zIndex: 9999,
+        width: 42, height: 42, borderRadius: '50%',
         background: 'var(--accent)', color: '#fff', border: 'none',
-        cursor: 'pointer', fontSize: 18, lineHeight: 1,
-        boxShadow: '0 4px 16px rgba(108,99,255,0.4)',
+        cursor: 'pointer', fontSize: 20, lineHeight: 1,
+        boxShadow: '0 4px 20px rgba(108,99,255,0.5)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         opacity: visible ? 1 : 0,
         pointerEvents: visible ? 'auto' : 'none',
-        transition: 'opacity 0.2s',
+        transition: 'opacity 0.25s',
       }}
-    >↑</button>
+    >↑</button>,
+    document.body
   );
 }
 
