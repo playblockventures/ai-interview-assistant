@@ -1,7 +1,9 @@
-const express   = require('express');
-const router    = express.Router();
-const multer    = require('multer');
-const Candidate = require('../models/Candidate');
+const express      = require('express');
+const router       = express.Router();
+const multer       = require('multer');
+const Candidate    = require('../models/Candidate');
+const User         = require('../models/User');
+const Notification = require('../models/Notification');
 const { extractTextFromBuffer } = require('../utils/fileParser');
 const { requireAuth } = require('../utils/auth');
 
@@ -123,7 +125,32 @@ router.patch('/:id/status', async (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Candidate not found' });
     if (!Candidate.canAccess(existing, req.user)) return res.status(403).json({ error: 'Access denied' });
     const { status, notes } = req.body;
-    res.json(await Candidate.update(req.params.id, { status, notes: notes ?? '' }));
+    const updated = await Candidate.update(req.params.id, { status, notes: notes ?? '' });
+
+    // Auto-notify all other users when a candidate is marked as success
+    if (status === 'success' && existing.status !== 'success') {
+      try {
+        const allUsers = await User.findAll();
+        const updaterName = req.user.displayName || req.user.username;
+        const candidateName = existing.fullName || 'A candidate';
+        await Promise.all(
+          allUsers
+            .filter(u => u.id !== req.user.id)
+            .map(u => Notification.create({
+              userId: u.id,
+              type: 'success',
+              title: '🎉 Interview Success!',
+              message: `${candidateName} was marked as hired by ${updaterName}`,
+              candidateId: req.params.id,
+              candidateName,
+              createdBy: req.user.id,
+              createdByName: updaterName,
+            }))
+        );
+      } catch (_) {}
+    }
+
+    res.json(updated);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

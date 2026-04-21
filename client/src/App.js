@@ -54,6 +54,11 @@ function NotificationBell() {
   const [tip, setTip]             = useState({ userIds: [], title: '', message: '', candidateId: '', candidateName: '' });
   const [sending, setSending]     = useState(false);
 
+  // Slideshow state
+  const [slideItems,   setSlideItems]   = useState([]);
+  const [slideIdx,     setSlideIdx]     = useState(0);
+  const [slideVisible, setSlideVisible] = useState(false);
+
   const dropRef = useRef(null);
   const pollRef = useRef(null);
   const knownIdsRef = useRef(null); // null = first load, Set after first load
@@ -78,35 +83,34 @@ function NotificationBell() {
     finally { setLoadingSent(false); }
   }, []);
 
-  // Poll for new notifications and pop a toast for each new unread one
+  // Poll for new notifications — show slideshow for any unread
   const pollNotifications = useCallback(async () => {
     try {
       const data = await notificationApi.getAll();
       const unreadItems = data.filter(n => !n.read);
       setUnread(unreadItems.length);
+      setItems(data);
 
       if (knownIdsRef.current === null) {
-        // First load — just record existing IDs, don't toast
+        // First load — show slideshow if there are existing unread ones
         knownIdsRef.current = new Set(data.map(n => n.id));
-        setItems(data);
+        if (unreadItems.length > 0) {
+          setSlideItems(unreadItems);
+          setSlideIdx(0);
+          setSlideVisible(true);
+        }
         return;
       }
 
       const newOnes = unreadItems.filter(n => !knownIdsRef.current.has(n.id));
-      newOnes.forEach(n => {
-        toast(
-          (t) => (
-            <div onClick={() => toast.dismiss(t.id)} style={{ cursor: 'pointer' }}>
-              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{n.title || 'New notification'}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 260, whiteSpace: 'pre-wrap' }}>{n.message}</div>
-            </div>
-          ),
-          { duration: 6000, icon: '🔔' }
-        );
-        knownIdsRef.current.add(n.id);
-      });
-
-      if (newOnes.length > 0) setItems(data);
+      if (newOnes.length > 0) {
+        newOnes.forEach(n => knownIdsRef.current.add(n.id));
+        // Open slideshow with all current unread (new ones first)
+        const sorted = [...newOnes, ...unreadItems.filter(n => !newOnes.find(x => x.id === n.id))];
+        setSlideItems(sorted);
+        setSlideIdx(0);
+        setSlideVisible(true);
+      }
     } catch (_) {}
   }, []); // eslint-disable-line
 
@@ -122,6 +126,13 @@ function NotificationBell() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Auto-advance slideshow every 5s when multiple items
+  useEffect(() => {
+    if (!slideVisible || slideItems.length <= 1) return;
+    const t = setInterval(() => setSlideIdx(i => (i + 1) % slideItems.length), 5000);
+    return () => clearInterval(t);
+  }, [slideVisible, slideItems.length]);
 
   const openPanel = () => {
     setOpen(v => {
@@ -297,7 +308,7 @@ function NotificationBell() {
                     display: 'flex', gap: 10, alignItems: 'flex-start',
                     cursor: 'pointer', transition: 'background 0.1s',
                   }}>
-                  <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>{n.type === 'tip' ? '💡' : '💬'}</span>
+                  <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>{n.type === 'tip' ? '💡' : n.type === 'success' ? '🎉' : '💬'}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: n.read ? 400 : 600, color: 'var(--text-primary)', lineHeight: 1.4 }}>
                       {n.title}
@@ -449,6 +460,79 @@ function NotificationBell() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Active Notification Slideshow ── */}
+      {ReactDOM.createPortal(
+        slideVisible && slideItems.length > 0 ? (() => {
+          const n = slideItems[Math.min(slideIdx, slideItems.length - 1)];
+          const icon = n.type === 'tip' ? '💡' : n.type === 'success' ? '🎉' : '🔔';
+          const navBtn = {
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: 18, lineHeight: 1,
+            padding: '0 4px', display: 'flex', alignItems: 'center',
+          };
+          return (
+            <div style={{
+              position: 'fixed', bottom: 76, right: 24, width: 330, zIndex: 9500,
+              background: 'var(--bg-surface)', border: '1px solid var(--accent)',
+              borderRadius: 'var(--radius)', boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
+              overflow: 'hidden', animation: 'slideInRight 0.3s ease',
+            }}>
+              {/* Header bar */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '7px 10px 7px 14px',
+                background: 'var(--accent-dim)', borderBottom: '1px solid var(--border)',
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', flex: 1 }}>
+                  🔔 New Notification{slideItems.length > 1 ? ` (${slideIdx + 1} / ${slideItems.length})` : ''}
+                </span>
+                {slideItems.length > 1 && (
+                  <>
+                    <button style={navBtn} onClick={() => setSlideIdx(i => (i - 1 + slideItems.length) % slideItems.length)}>‹</button>
+                    <button style={navBtn} onClick={() => setSlideIdx(i => (i + 1) % slideItems.length)}>›</button>
+                  </>
+                )}
+                <button style={{ ...navBtn, color: 'var(--error)', fontSize: 14 }} onClick={() => setSlideVisible(false)} title="Dismiss">✕</button>
+              </div>
+
+              {/* Notification body */}
+              <div onClick={() => { clickNotification(n); setSlideVisible(false); }}
+                style={{ padding: '14px 14px 10px', cursor: 'pointer', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{icon}</span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, lineHeight: 1.4 }}>
+                    {n.title}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+                    {n.message}
+                  </div>
+                  {n.candidateName && (
+                    <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 6, fontWeight: 600 }}>
+                      → {n.candidateName}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>{timeAgo(n.createdAt)}</div>
+                </div>
+              </div>
+
+              {/* Dot indicators */}
+              {slideItems.length > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 5, padding: '4px 14px 10px' }}>
+                  {slideItems.map((_, i) => (
+                    <button key={i} onClick={() => setSlideIdx(i)} style={{
+                      width: i === slideIdx ? 18 : 6, height: 6, borderRadius: 3, border: 'none',
+                      cursor: 'pointer', padding: 0, transition: 'all 0.25s',
+                      background: i === slideIdx ? 'var(--accent)' : 'var(--border)',
+                    }} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })() : null,
+        document.body
       )}
     </div>
   );

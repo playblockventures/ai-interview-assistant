@@ -315,6 +315,7 @@ body {
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes slideInRight { from { transform: translateX(110%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
 /* Markdown output */
 .markdown-output { line-height: 1.7; }
