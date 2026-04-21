@@ -537,8 +537,8 @@ export default function Candidates() {
                   </tr>
                 </thead>
                 <tbody>
-                  {/* ── Pinned rows ── */}
-                  {pinnedCandidates.map((c, pidx) => {
+                  {/* ── Pinned rows — first page only ── */}
+                  {page === 1 && pinnedCandidates.map((c, pidx) => {
                     const recruiter  = getRecruiter(c.recruiterId);
                     const isSelected = selectedIds.has(c.id);
                     return (
@@ -601,7 +601,7 @@ export default function Candidates() {
                   })}
 
                   {/* ── Separator between pinned and regular ── */}
-                  {pinnedCandidates.length > 0 && candidates.length > 0 && (
+                  {page === 1 && pinnedCandidates.length > 0 && candidates.length > 0 && (
                     <tr>
                       <td colSpan={12} style={{ padding: '4px 0', background: 'var(--bg-page)', borderTop: '2px solid var(--border)', pointerEvents: 'none' }} />
                     </tr>
@@ -618,7 +618,7 @@ export default function Candidates() {
                             style={{ cursor: 'pointer', width: 15, height: 15 }} />
                         </td>
                         <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
-                          {pinnedCandidates.length + (page - 1) * pageSize + idx + 1}
+                          {(page === 1 ? pinnedCandidates.length : 0) + (page - 1) * pageSize + idx + 1}
                         </td>
                         <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
                           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-elevated)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
