@@ -498,46 +498,6 @@ export default function Candidates() {
           </div>
         )}
 
-        {/* ── Pinned candidates ── */}
-        {pinnedCandidates.length > 0 && (
-          <div style={{ marginBottom: 16, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#f59e0b', marginBottom: 8 }}>★ Pinned ({pinnedCandidates.length})</div>
-            <div className="table-wrap">
-              <table className="data-table">
-                <tbody>
-                  {pinnedCandidates.map(c => {
-                    const recruiter = getRecruiter(c.recruiterId);
-                    return (
-                      <tr key={c.id} style={{ cursor: 'pointer', background: 'rgba(245,158,11,0.04)' }}>
-                        <td style={{ width: 32 }} onClick={e => e.stopPropagation()}>
-                          <input type="checkbox" checked={selectedIds.has(c.id)}
-                            onChange={() => toggleSelect(c.id)}
-                            style={{ cursor: 'pointer', width: 15, height: 15 }} />
-                        </td>
-                        <td style={{ width: 32 }} onClick={() => navigate(`/candidates/${c.id}`)}><span style={{ color: '#f59e0b' }}>★</span></td>
-                        <td style={{ width: 40 }} onClick={() => navigate(`/candidates/${c.id}`)}>
-                          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-elevated)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
-                            {c.photoUrl ? <img src={c.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
-                          </div>
-                        </td>
-                        <td onClick={() => navigate(`/candidates/${c.id}`)}><div style={{ fontWeight: 600 }}>{c.fullName || '—'}</div>{c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.currentTitle}</div>}</td>
-                        <td style={{ fontSize: 12 }} onClick={() => navigate(`/candidates/${c.id}`)}>{getRoleLabel(c.role)}</td>
-                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }} onClick={() => navigate(`/candidates/${c.id}`)}>{c.location || '—'}</td>
-                        <td style={{ fontSize: 12 }} onClick={() => navigate(`/candidates/${c.id}`)}>{recruiter?.name || c.recruiterName || '—'}</td>
-                        <td onClick={() => navigate(`/candidates/${c.id}`)}><span className={`status-badge status-${c.status}`}>{c.status?.replace('_', ' ')}</span></td>
-                        <td onClick={e => e.stopPropagation()}>
-                          <button onClick={e => togglePin(e, c)} title="Unpin"
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#f59e0b', padding: '0 4px' }}>★</button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60 }}>
             <span className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
@@ -577,8 +537,79 @@ export default function Candidates() {
                   </tr>
                 </thead>
                 <tbody>
+                  {/* ── Pinned rows ── */}
+                  {pinnedCandidates.map(c => {
+                    const recruiter  = getRecruiter(c.recruiterId);
+                    const isSelected = selectedIds.has(c.id);
+                    return (
+                      <tr key={`pin-${c.id}`} style={{ background: isSelected ? 'var(--accent-dim)' : 'rgba(245,158,11,0.04)' }}>
+                        <td onClick={e => e.stopPropagation()}>
+                          <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(c.id)}
+                            style={{ cursor: 'pointer', width: 15, height: 15 }} />
+                        </td>
+                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                          <span style={{ color: '#f59e0b', fontSize: 13 }}>★</span>
+                        </td>
+                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-elevated)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
+                            {c.photoUrl ? <img src={c.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
+                          </div>
+                        </td>
+                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                          <div style={{ fontWeight: 600 }}>{c.fullName || '—'}</div>
+                          {c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.currentTitle}</div>}
+                        </td>
+                        <td style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>{c.email || '—'}</td>
+                        <td style={{ fontSize: 12, cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>{getRoleLabel(c.role)}</td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>{c.location || '—'}</td>
+                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                          {recruiter ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <div style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, background: recruiter.photoUrl ? undefined : 'var(--accent-dim)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 10 }}>
+                                {recruiter.photoUrl ? <img src={recruiter.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : recruiter.name.charAt(0).toUpperCase()}
+                              </div>
+                              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{recruiter.name}</span>
+                            </div>
+                          ) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>}
+                        </td>
+                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, flexShrink: 0 }}>
+                              {(c.ownerName || '?').charAt(0).toUpperCase()}
+                            </div>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.ownerName || '—'}</span>
+                          </div>
+                        </td>
+                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                          <span className={`status-badge status-${c.status}`}>{c.status?.replace('_', ' ')}</span>
+                        </td>
+                        <td style={{ fontSize: 11, color: c.lastMessageAt ? 'var(--text-secondary)' : 'var(--text-muted)', cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                          {c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                        </td>
+                        <td>
+                          <div className="flex gap-8" onClick={e => e.stopPropagation()}>
+                            <button onClick={e => togglePin(e, c)} title="Unpin"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#f59e0b', padding: '0 4px' }}>★</button>
+                            <button className="btn btn-secondary btn-sm"
+                              onClick={e => { e.stopPropagation(); setEditCandidate(c); }}>✎ Edit</button>
+                            <button onClick={e => handleDelete(e, c.id)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: 16, padding: '0 4px' }} title="Delete">✕</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {/* ── Separator between pinned and regular ── */}
+                  {pinnedCandidates.length > 0 && candidates.length > 0 && (
+                    <tr>
+                      <td colSpan={12} style={{ padding: '4px 0', background: 'var(--bg-page)', borderTop: '2px solid var(--border)', pointerEvents: 'none' }} />
+                    </tr>
+                  )}
+
+                  {/* ── Regular rows ── */}
                   {candidates.map((c, idx) => {
-                    const recruiter = getRecruiter(c.recruiterId);
+                    const recruiter  = getRecruiter(c.recruiterId);
                     const isSelected = selectedIds.has(c.id);
                     return (
                       <tr key={c.id} style={{ background: isSelected ? 'var(--accent-dim)' : undefined }}>
@@ -595,10 +626,7 @@ export default function Candidates() {
                           </div>
                         </td>
                         <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
-                          <div style={{ fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                            {pinnedIds.has(c.id) && <span style={{ color: '#f59e0b', fontSize: 13 }}>★</span>}
-                            {c.fullName || '—'}
-                          </div>
+                          <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{c.fullName || '—'}</div>
                           {c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.currentTitle}</div>}
                         </td>
                         <td style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>{c.email || '—'}</td>
@@ -612,9 +640,7 @@ export default function Candidates() {
                               </div>
                               <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{recruiter.name}</span>
                             </div>
-                          ) : (
-                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
-                          )}
+                          ) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>}
                         </td>
                         <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
