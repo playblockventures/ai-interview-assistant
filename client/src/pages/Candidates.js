@@ -6,7 +6,11 @@ import { candidateApi, generateApi, authApi, settingsApi } from '../utils/api';
 import { AppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
-const STATUS_OPTIONS = ['pending', 'in_progress', 'success', 'failed'];
+const STATUS_LABELS = {
+  pending: 'Pending', in_progress: 'In Progress', success: 'Success',
+  no_response: 'No Response', not_interested: 'Not Interested',
+  other_job: 'Already Occupied', have_a_doubt: 'Have a Doubt',
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Add / Edit Candidate Modal
@@ -296,6 +300,19 @@ export default function Candidates() {
     if (user?.isAdmin) authApi.listUsers().then(setAllUsers).catch(() => {});
   }, [user]);
 
+  // For admin: map of userId → recruiter[] for relative filtering
+  const [allUsersRecruiters, setAllUsersRecruiters] = useState({});
+  useEffect(() => {
+    if (!user?.isAdmin || !allUsers.length) return;
+    Promise.all(
+      allUsers.map(u =>
+        settingsApi.getAll({ userId: u.id })
+          .then(d => [u.id, Array.isArray(d.recruiters) ? d.recruiters : []])
+          .catch(() => [u.id, []])
+      )
+    ).then(entries => setAllUsersRecruiters(Object.fromEntries(entries)));
+  }, [user?.isAdmin, allUsers]); // eslint-disable-line
+
   // ── Pins ──────────────────────────────────────────────────────────────────
   const [pinnedIds, setPinnedIds] = useState(new Set());
   useEffect(() => {
@@ -406,6 +423,31 @@ export default function Candidates() {
   const getRecruiter = (id)  => recruiters.find(r => r.id === id) || null;
   const resetPage    = ()    => setPage(1);
 
+  // Relative filter helpers (admin only)
+  const displayedRecruiters = user?.isAdmin
+    ? ownerFilter
+      ? (allUsersRecruiters[ownerFilter] || [])
+      : Object.values(allUsersRecruiters).flat().filter((r, i, arr) => arr.findIndex(x => x.id === r.id) === i)
+    : recruiters;
+
+  const handleOwnerFilterChange = (uid) => {
+    setOwnerFilter(uid);
+    resetPage();
+    if (uid && recruiterFilter) {
+      const userRecs = allUsersRecruiters[uid] || [];
+      if (!userRecs.some(r => r.id === recruiterFilter)) setRecruiterFilter('');
+    }
+  };
+
+  const handleRecruiterFilterChange = (rid) => {
+    setRecruiterFilter(rid);
+    resetPage();
+    if (user?.isAdmin && rid && !ownerFilter) {
+      const ownerEntry = Object.entries(allUsersRecruiters).find(([, rs]) => rs.some(r => r.id === rid));
+      if (ownerEntry) setOwnerFilter(ownerEntry[0]);
+    }
+  };
+
   return (
     <div className="page">
       <div className="page-header">
@@ -430,23 +472,31 @@ export default function Candidates() {
             )}
           </div>
 
-          <select className="form-select" style={{ width: 150 }} value={statusFilter}
+          <select className="form-select" style={{ width: 160 }} value={statusFilter}
             onChange={e => { setStatusFilter(e.target.value); resetPage(); }}>
             <option value="">All Statuses</option>
-            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+            <option value="pending">Pending</option>
+            <option value="in_progress">In Progress</option>
+            <option value="success">Success</option>
+            <optgroup label="── Failed ──">
+              <option value="no_response">No Response</option>
+              <option value="not_interested">Not Interested</option>
+              <option value="other_job">Already Occupied</option>
+              <option value="have_a_doubt">Have a Doubt</option>
+            </optgroup>
           </select>
 
-          {recruiters.length > 0 && (
+          {displayedRecruiters.length > 0 && (
             <select className="form-select" style={{ width: 170 }} value={recruiterFilter}
-              onChange={e => { setRecruiterFilter(e.target.value); resetPage(); }}>
+              onChange={e => handleRecruiterFilterChange(e.target.value)}>
               <option value="">All Recruiters</option>
-              {recruiters.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              {displayedRecruiters.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
           )}
 
           {user?.isAdmin && allUsers.length > 0 && (
             <select className="form-select" style={{ width: 170 }} value={ownerFilter}
-              onChange={e => { setOwnerFilter(e.target.value); resetPage(); }}>
+              onChange={e => handleOwnerFilterChange(e.target.value)}>
               <option value="">All Users</option>
               {allUsers.map(u => (
                 <option key={u.id} value={u.id}>
@@ -581,7 +631,7 @@ export default function Candidates() {
                           </div>
                         </td>
                         <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
-                          <span className={`status-badge status-${c.status}`}>{c.status?.replace('_', ' ')}</span>
+                          <span className={`status-badge status-${c.status}`}>{STATUS_LABELS[c.status] || c.status?.replace(/_/g, ' ')}</span>
                         </td>
                         <td style={{ fontSize: 11, color: c.lastMessageAt ? 'var(--text-secondary)' : 'var(--text-muted)', cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
                           {c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
@@ -651,7 +701,7 @@ export default function Candidates() {
                           </div>
                         </td>
                         <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
-                          <span className={`status-badge status-${c.status}`}>{c.status?.replace('_', ' ')}</span>
+                          <span className={`status-badge status-${c.status}`}>{STATUS_LABELS[c.status] || c.status?.replace(/_/g, ' ')}</span>
                         </td>
                         <td style={{ fontSize: 11, color: c.lastMessageAt ? 'var(--text-secondary)' : 'var(--text-muted)', cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
                           {c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}

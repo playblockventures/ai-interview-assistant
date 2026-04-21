@@ -4,11 +4,17 @@ import { candidateApi, authApi, settingsApi } from '../utils/api';
 import { AppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
+const FAILED_STATUSES = ['failed', 'no_response', 'not_interested', 'other_job', 'have_a_doubt'];
+
 const STATUS_CONFIG = {
-  pending:     { label: 'Pending',     color: 'var(--pending)',     hex: '#f5a623' },
-  in_progress: { label: 'In Progress', color: 'var(--in-progress)', hex: '#4a9eff' },
-  success:     { label: 'Success',     color: 'var(--success)',     hex: '#00d4aa' },
-  failed:      { label: 'Failed',      color: 'var(--error)',       hex: '#ff6b6b' },
+  pending:        { label: 'Pending',          color: 'var(--pending)',     hex: '#f5a623' },
+  in_progress:    { label: 'In Progress',      color: 'var(--in-progress)', hex: '#4a9eff' },
+  success:        { label: 'Success',          color: 'var(--success)',     hex: '#00d4aa' },
+  failed:         { label: 'Failed',           color: 'var(--error)',       hex: '#ff6b6b' },
+  no_response:    { label: 'No Response',      color: 'var(--error)',       hex: '#ff6b6b' },
+  not_interested: { label: 'Not Interested',   color: 'var(--error)',       hex: '#ff6b6b' },
+  other_job:      { label: 'Already Occupied', color: 'var(--error)',       hex: '#ff6b6b' },
+  have_a_doubt:   { label: 'Have a Doubt',     color: 'var(--error)',       hex: '#ff6b6b' },
 };
 
 // ── Reusable mini components ──────────────────────────────────────────────────
@@ -224,9 +230,12 @@ export default function Dashboard() {
     const all = allCandidates;
     if (!all.length) return null;
 
-    // Status counts
+    // Status counts — all failed variants aggregated under 'failed'
     const statusCounts = { pending: 0, in_progress: 0, success: 0, failed: 0 };
-    all.forEach(c => { if (statusCounts[c.status] !== undefined) statusCounts[c.status]++; });
+    all.forEach(c => {
+      const key = FAILED_STATUSES.includes(c.status) ? 'failed' : c.status;
+      if (statusCounts[key] !== undefined) statusCounts[key]++;
+    });
 
     // Conversion rate (success / total)
     const conversionRate = all.length > 0 ? Math.round((statusCounts.success / all.length) * 100) : 0;
@@ -268,7 +277,8 @@ export default function Dashboard() {
         recruiterStats[c.recruiterId] = { total: 0, success: 0, in_progress: 0, pending: 0, failed: 0 };
       }
       recruiterStats[c.recruiterId].total++;
-      if (recruiterStats[c.recruiterId][c.status] !== undefined) recruiterStats[c.recruiterId][c.status]++;
+      const rKey = FAILED_STATUSES.includes(c.status) ? 'failed' : c.status;
+      if (recruiterStats[c.recruiterId][rKey] !== undefined) recruiterStats[c.recruiterId][rKey]++;
     });
 
     const recruiterPerf = Object.entries(recruiterStats)
@@ -282,7 +292,7 @@ export default function Dashboard() {
       .slice(0, 6);
 
     // Avg time in pipeline (days from createdAt for completed candidates)
-    const completedCandidates = all.filter(c => ['success', 'failed'].includes(c.status) && c.createdAt && c.updatedAt);
+    const completedCandidates = all.filter(c => (c.status === 'success' || FAILED_STATUSES.includes(c.status)) && c.createdAt && c.updatedAt);
     const avgDays = completedCandidates.length > 0
       ? Math.round(completedCandidates.reduce((sum, c) => {
           return sum + (new Date(c.updatedAt) - new Date(c.createdAt)) / (1000 * 60 * 60 * 24);
@@ -867,7 +877,7 @@ export default function Dashboard() {
                         {analytics.roleBreakdown.map((rb, i) => {
                           const roleCands = allCandidates.filter(c => roles.find(r => r.label === rb.label && r.value === c.role) || (roles.find(r => r.label === rb.label)?.value === c.role));
                           const sc = { pending: 0, in_progress: 0, success: 0, failed: 0 };
-                          roleCands.forEach(c => { if (sc[c.status] !== undefined) sc[c.status]++; });
+                          roleCands.forEach(c => { const k = FAILED_STATUSES.includes(c.status) ? 'failed' : c.status; if (sc[k] !== undefined) sc[k]++; });
                           const decided = sc.success + sc.failed;
                           const sr = decided > 0 ? Math.round((sc.success / decided) * 100) : null;
                           return (

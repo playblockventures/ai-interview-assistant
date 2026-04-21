@@ -34,10 +34,13 @@ const MESSAGE_TYPES = [
 ];
 
 const STATUS_OPTIONS = [
-  { value: 'pending',     label: 'Pending' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'success',     label: 'Success' },
-  { value: 'failed',      label: 'Failed' },
+  { value: 'pending',        label: 'Pending' },
+  { value: 'in_progress',    label: 'In Progress' },
+  { value: 'success',        label: 'Success' },
+  { value: 'no_response',    label: 'No Response' },
+  { value: 'not_interested', label: 'Not Interested' },
+  { value: 'other_job',      label: 'Already Occupied' },
+  { value: 'have_a_doubt',   label: 'Have a Doubt' },
 ];
 
 function RecruiterSelect({ value, onChange }) {
@@ -90,7 +93,7 @@ function CompanySelectInline({ value, onChange }) {
 function ScenarioTab({ candidate, onScenarioApplied }) {
   const { roles } = useContext(AppContext);
   const [config, setConfig] = useState({
-    role: candidate.role || '', goal: '', tone: 'professional',
+    role: candidate.role || '', goal: '', tone: localStorage.getItem(`tone_${candidate.id}`) || 'professional',
     customInstructions: '', recruiterId: candidate.recruiterId || '',
     companyId: candidate.companyId || '',
   });
@@ -101,7 +104,10 @@ function ScenarioTab({ candidate, onScenarioApplied }) {
   const [editing,   setEditing]   = useState(false);
   const [editText,  setEditText]  = useState('');
   const [saving,    setSaving]    = useState(false);
-  const set = (k, v) => setConfig(p => ({ ...p, [k]: v }));
+  const set = (k, v) => {
+    setConfig(p => ({ ...p, [k]: v }));
+    if (k === 'tone') localStorage.setItem(`tone_${candidate.id}`, v);
+  };
 
   const generate = async () => {
     setLoading(true);
@@ -358,7 +364,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
   const { roles, recruiters } = useContext(AppContext);
   const { user } = useAuth();
   const [config, setConfig] = useState({
-    role: candidate.role || '', tone: 'professional',
+    role: candidate.role || '', tone: localStorage.getItem(`tone_${candidate.id}`) || 'professional',
     recruiterId: candidate.recruiterId || '',
     customInstructions: '',
     companyId: candidate.companyId || '',
@@ -626,7 +632,10 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
     } catch (e) { toast.error(e.message); }
   };
 
-  const set = (k, v) => setConfig(p => ({ ...p, [k]: v }));
+  const set = (k, v) => {
+    setConfig(p => ({ ...p, [k]: v }));
+    if (k === 'tone') localStorage.setItem(`tone_${candidate.id}`, v);
+  };
 
   const hasLastAssistant = history.some(m => m.role === 'assistant');
 

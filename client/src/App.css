@@ -273,7 +273,11 @@ body {
 .status-pending { background: rgba(152,152,184,0.15); color: var(--pending); }
 .status-in_progress { background: rgba(108,99,255,0.15); color: var(--in-progress); }
 .status-success { background: rgba(0,212,170,0.15); color: var(--success); }
-.status-failed { background: rgba(255,107,107,0.15); color: var(--error); }
+.status-failed,
+.status-no_response,
+.status-not_interested,
+.status-other_job,
+.status-have_a_doubt { background: rgba(255,107,107,0.15); color: var(--error); }
 
 /* Grid */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
