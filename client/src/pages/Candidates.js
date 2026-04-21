@@ -538,7 +538,7 @@ export default function Candidates() {
                 </thead>
                 <tbody>
                   {/* ── Pinned rows ── */}
-                  {pinnedCandidates.map(c => {
+                  {pinnedCandidates.map((c, pidx) => {
                     const recruiter  = getRecruiter(c.recruiterId);
                     const isSelected = selectedIds.has(c.id);
                     return (
@@ -548,7 +548,7 @@ export default function Candidates() {
                             style={{ cursor: 'pointer', width: 15, height: 15 }} />
                         </td>
                         <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
-                          <span style={{ color: '#f59e0b', fontSize: 13 }}>★</span>
+                          <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>{pidx + 1}</span>
                         </td>
                         <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
                           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-elevated)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
@@ -618,7 +618,7 @@ export default function Candidates() {
                             style={{ cursor: 'pointer', width: 15, height: 15 }} />
                         </td>
                         <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
-                          {(page - 1) * pageSize + idx + 1}
+                          {pinnedCandidates.length + (page - 1) * pageSize + idx + 1}
                         </td>
                         <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
                           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-elevated)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
