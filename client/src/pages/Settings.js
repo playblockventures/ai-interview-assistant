@@ -94,7 +94,10 @@ function RolesSection({ dbConnected }) {
 
 // ── Company Interview Scenario ────────────────────────────────────────────────
 function CompanyScenarioSection({ dbConnected }) {
-  const { companies, companyScenarios, companyScenario: legacyScenario, refreshSettings } = useContext(AppContext);
+  const { companies: allCompanies, companyScenarios, companyScenario: legacyScenario, refreshSettings } = useContext(AppContext);
+  const { user } = useAuth();
+  // For admin, `allCompanies` is the merged list from all users. Only show the current user's own companies here.
+  const companies = allCompanies.filter(c => !c._ownerUserId || c._ownerUserId === user?.id);
 
   // Seed helper: if the new map is empty but the legacy single-value exists,
   // show it under the Default ('') tab so existing data is not lost.
