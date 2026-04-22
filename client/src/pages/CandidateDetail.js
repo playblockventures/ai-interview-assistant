@@ -24,6 +24,7 @@ const TONES = [
   { value: 'casual',       label: 'Casual' },
   { value: 'assertive',    label: 'Assertive' },
   { value: 'feminine',     label: 'Feminine' },
+  { value: 'humor',        label: 'Humor' },
 ];
 
 const MESSAGE_TYPES = [
