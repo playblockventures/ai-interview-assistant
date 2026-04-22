@@ -221,7 +221,7 @@ export default function Dashboard() {
     (async () => {
       try {
         const [recentData, statsData, pinsData, activeData] = await Promise.all([
-          candidateApi.getRecent(8),
+          candidateApi.getRecent(20),
           candidateApi.getStats(),
           settingsApi.getPins().catch(() => ({ pins: [] })),
           candidateApi.getActiveWithResponseTime(),
