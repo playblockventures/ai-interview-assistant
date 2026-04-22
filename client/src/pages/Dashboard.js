@@ -339,9 +339,13 @@ export default function Dashboard() {
   const getRoleLabel = (val) => roles.find(r => r.value === val)?.label || val || '—';
   const getRecruiter = (id)  => recruiters.find(r => r.id === id) || null;
   // Always resolve owner name from live users list — never trust stale ownerName field
-  const getOwnerName  = (c)  => allUsers.find(u => u.id === c.ownerId)?.displayName
-                              || allUsers.find(u => u.id === c.ownerId)?.username
-                              || c.ownerName || '—';
+  const getOwnerName  = (c)  => {
+    // Non-admin: all visible candidates belong to the current user — use live profile name
+    if (!user?.isAdmin && c.ownerId === user?.id)
+      return user?.displayName || user?.username || c.ownerName || '—';
+    const u = allUsers.find(u => u.id === c.ownerId);
+    return u?.displayName || u?.username || c.ownerName || '—';
+  };
 
   const formatAvgResponse = (ms) => {
     if (ms === null || ms === undefined) return '—';
