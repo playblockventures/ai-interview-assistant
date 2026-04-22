@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useContext, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { candidateApi, authApi, settingsApi } from '../utils/api';
 import { AppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -193,15 +193,14 @@ function GroupHeader({ photoUrl, initial, name, subtitle, count }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const navigate = useNavigate();
   const openTab = (path) => {
     const a = document.createElement('a');
     a.href = path; a.target = '_blank'; a.rel = 'noopener noreferrer';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
   const navTo = (e, path) => {
-    if (e.ctrlKey || e.metaKey || e.button === 1) { e.preventDefault(); openTab(path); }
-    else navigate(path);
+    if (e.ctrlKey || e.metaKey) { e.preventDefault(); openTab(path); }
+    else window.location.href = path;
   };
   const { user }                 = useAuth();
   const { recruiters, roles }    = useContext(AppContext);
