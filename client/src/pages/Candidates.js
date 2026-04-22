@@ -276,8 +276,13 @@ function loadFilters() {
 
 export default function Candidates() {
   const navigate = useNavigate();
+  const openTab = (path) => {
+    const a = document.createElement('a');
+    a.href = path; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  };
   const navTo = (e, path) => {
-    if (e.ctrlKey || e.metaKey) { window.open(path, '_blank'); e.preventDefault(); }
+    if (e.ctrlKey || e.metaKey || e.button === 1) { e.preventDefault(); openTab(path); }
     else navigate(path);
   };
   const { user } = useAuth();
@@ -608,7 +613,7 @@ export default function Candidates() {
                     const recruiter  = getRecruiter(c.recruiterId);
                     const isSelected = selectedIds.has(c.id);
                     return (
-                      <tr key={`pin-${c.id}`} style={{ background: isSelected ? 'var(--accent-dim)' : 'rgba(245,158,11,0.04)', cursor: 'pointer' }} onClick={e => navTo(e, `/candidates/${c.id}`)} onAuxClick={() => window.open(`/candidates/${c.id}`, '_blank')}>
+                      <tr key={`pin-${c.id}`} style={{ background: isSelected ? 'var(--accent-dim)' : 'rgba(245,158,11,0.04)', cursor: 'pointer' }} onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }}>
                         <td onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(c.id)}
                             style={{ cursor: 'pointer', width: 15, height: 15 }} />
@@ -678,7 +683,7 @@ export default function Candidates() {
                     const recruiter  = getRecruiter(c.recruiterId);
                     const isSelected = selectedIds.has(c.id);
                     return (
-                      <tr key={c.id} style={{ background: isSelected ? 'var(--accent-dim)' : undefined, cursor: 'pointer' }} onClick={e => navTo(e, `/candidates/${c.id}`)} onAuxClick={() => window.open(`/candidates/${c.id}`, '_blank')}>
+                      <tr key={c.id} style={{ background: isSelected ? 'var(--accent-dim)' : undefined, cursor: 'pointer' }} onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }}>
                         <td onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(c.id)}
                             style={{ cursor: 'pointer', width: 15, height: 15 }} />

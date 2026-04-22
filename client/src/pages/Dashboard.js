@@ -194,8 +194,13 @@ function GroupHeader({ photoUrl, initial, name, subtitle, count }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate();
+  const openTab = (path) => {
+    const a = document.createElement('a');
+    a.href = path; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  };
   const navTo = (e, path) => {
-    if (e.ctrlKey || e.metaKey) { window.open(path, '_blank'); e.preventDefault(); }
+    if (e.ctrlKey || e.metaKey || e.button === 1) { e.preventDefault(); openTab(path); }
     else navigate(path);
   };
   const { user }                 = useAuth();
@@ -435,7 +440,7 @@ export default function Dashboard() {
   const CandidateRow = ({ c, index }) => {
     const recruiter = getRecruiter(c.recruiterId);
     return (
-      <tr onClick={e => navTo(e, `/candidates/${c.id}`)} onAuxClick={() => window.open(`/candidates/${c.id}`, '_blank')} style={{ cursor: 'pointer' }}>
+      <tr onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }} style={{ cursor: 'pointer' }}>
         <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{index + 1}</td>
         <td><Avatar src={c.photoUrl} name={c.fullName} size={28} /></td>
         <td>
@@ -711,7 +716,7 @@ export default function Dashboard() {
                           {group.candidates.map(c => {
                             const recruiter = getRecruiter(c.recruiterId);
                             return (
-                              <div key={c.id} onClick={e => navTo(e, `/candidates/${c.id}`)} onAuxClick={() => window.open(`/candidates/${c.id}`, '_blank')}
+                              <div key={c.id} onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }}
                                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', cursor: 'pointer', minWidth: 220 }}>
                                 <Avatar src={c.photoUrl} name={c.fullName} size={28} />
                                 <div style={{ minWidth: 0 }}>
@@ -774,7 +779,7 @@ export default function Dashboard() {
                         {activeCandidates.map((c, i) => {
                           const recruiter = getRecruiter(c.recruiterId);
                           return (
-                            <tr key={c.id} style={{ cursor: 'pointer' }} onClick={e => navTo(e, `/candidates/${c.id}`)} onAuxClick={() => window.open(`/candidates/${c.id}`, '_blank')}>
+                            <tr key={c.id} style={{ cursor: 'pointer' }} onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }}>
                               <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                               <td>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -845,7 +850,7 @@ export default function Dashboard() {
                           const days = Math.floor((Date.now() - new Date(lastActivity)) / (1000 * 60 * 60 * 24));
                           const recruiter = getRecruiter(c.recruiterId);
                           return (
-                            <tr key={c.id} onClick={e => navTo(e, `/candidates/${c.id}`)} onAuxClick={() => window.open(`/candidates/${c.id}`, '_blank')} style={{ cursor: 'pointer' }}>
+                            <tr key={c.id} onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }} style={{ cursor: 'pointer' }}>
                               <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                               <td><Avatar src={c.photoUrl} name={c.fullName} size={26} /></td>
                               <td style={{ fontWeight: 600 }}>{c.fullName || '—'}</td>
@@ -887,7 +892,7 @@ export default function Dashboard() {
                         {pinnedCandidates.map((c, i) => {
                           const recruiter = getRecruiter(c.recruiterId);
                           return (
-                            <tr key={c.id} onClick={e => navTo(e, `/candidates/${c.id}`)} onAuxClick={() => window.open(`/candidates/${c.id}`, '_blank')} style={{ cursor: 'pointer' }}>
+                            <tr key={c.id} onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }} style={{ cursor: 'pointer' }}>
                               <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                               <td><Avatar src={c.photoUrl} name={c.fullName} size={26} /></td>
                               <td style={{ fontWeight: 600 }}>{c.fullName || '—'}</td>
@@ -1036,7 +1041,7 @@ export default function Dashboard() {
                           const days = Math.floor((Date.now() - new Date(lastActivity)) / (1000 * 60 * 60 * 24));
                           const recruiter = getRecruiter(c.recruiterId);
                           return (
-                            <tr key={c.id} onClick={e => navTo(e, `/candidates/${c.id}`)} onAuxClick={() => window.open(`/candidates/${c.id}`, '_blank')} style={{ cursor: 'pointer' }}>
+                            <tr key={c.id} onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }} style={{ cursor: 'pointer' }}>
                               <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                               <td><Avatar src={c.photoUrl} name={c.fullName} size={26} /></td>
                               <td style={{ fontWeight: 600 }}>{c.fullName || '—'}</td>
@@ -1067,7 +1072,7 @@ export default function Dashboard() {
                       <thead><tr><th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th><th></th><th>Candidate</th><th>Role</th><th>Recruiter</th><th>Added By</th><th>Date</th></tr></thead>
                       <tbody>
                         {allCandidates.filter(c => c.status === 'success').slice(0, 5).map((c, i) => (
-                          <tr key={c.id} onClick={e => navTo(e, `/candidates/${c.id}`)} onAuxClick={() => window.open(`/candidates/${c.id}`, '_blank')} style={{ cursor: 'pointer' }}>
+                          <tr key={c.id} onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }} style={{ cursor: 'pointer' }}>
                             <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                             <td><Avatar src={c.photoUrl} name={c.fullName} size={26} /></td>
                             <td style={{ fontWeight: 600, color: 'var(--success)' }}>{c.fullName || '—'}</td>
