@@ -14,7 +14,7 @@ const LIST_FIELDS = [
 
 const Candidate = {
   // Fetch list using field projection — avoids downloading huge resumeText/conversationHistory
-  async findAll({ status, search, page = 1, limit = 20, recruiterId, ownerId, isAdmin, ids } = {}) {
+  async findAll({ status, search, page = 1, limit = 20, recruiterId, ownerId, isAdmin, ids, fromDate, toDate } = {}) {
     const db = getDB();
 
     // Use .select() so Firestore only returns the fields we need for the list view
@@ -45,6 +45,14 @@ const Candidate = {
       return bTime.localeCompare(aTime);
     });
 
+    if (fromDate || toDate) {
+      const from = fromDate ? new Date(fromDate).getTime() : 0;
+      const to   = toDate   ? new Date(toDate + 'T23:59:59.999Z').getTime() : Infinity;
+      docs = docs.filter(d => {
+        const t = new Date(d.createdAt || 0).getTime();
+        return t >= from && t <= to;
+      });
+    }
     if (recruiterId) docs = docs.filter(d => d.recruiterId === recruiterId);
     if (search) {
       const s = search.toLowerCase();

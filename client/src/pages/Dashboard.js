@@ -210,6 +210,46 @@ const normalizeCountry = (location) => {
   return parts[parts.length - 1] || null;
 };
 
+// ── Date range picker ─────────────────────────────────────────────────────────
+const PRESETS = [
+  { label: '1W', days: 7 },
+  { label: '2W', days: 14 },
+  { label: '1M', days: 30 },
+  { label: '3M', days: 90 },
+  { label: 'All', days: null },
+];
+const isoToday = () => new Date().toISOString().split('T')[0];
+const isoDaysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split('T')[0]; };
+
+function DateRangePicker({ fromDate, toDate, onChange }) {
+  const today = isoToday();
+  const active = PRESETS.find(p =>
+    p.days === null ? (!fromDate && !toDate) : (fromDate === isoDaysAgo(p.days) && toDate === today)
+  );
+  const apply = (days) => {
+    if (days === null) onChange('', '');
+    else onChange(isoDaysAgo(days), today);
+  };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Period:</span>
+      {PRESETS.map(p => (
+        <button key={p.label} onClick={() => apply(p.days)}
+          className={`btn btn-sm ${active?.label === p.label ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ minWidth: 38, padding: '3px 8px', fontSize: 11 }}>
+          {p.label}
+        </button>
+      ))}
+      <span style={{ color: 'var(--border)', margin: '0 2px' }}>|</span>
+      <input type="date" className="form-input" style={{ width: 132, height: 30, fontSize: 11 }}
+        value={fromDate} onChange={e => onChange(e.target.value, toDate)} />
+      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>→</span>
+      <input type="date" className="form-input" style={{ width: 132, height: 30, fontSize: 11 }}
+        value={toDate} onChange={e => onChange(fromDate, e.target.value)} />
+    </div>
+  );
+}
+
 // ── Reusable mini components ──────────────────────────────────────────────────
 function Avatar({ src, name, size = 32 }) {
   return (
@@ -405,6 +445,8 @@ export default function Dashboard() {
   const [activeView,       setActiveView]       = useState('overview');
   const [pinnedCandidates, setPinnedCandidates] = useState([]);
   const [activeCandidates, setActiveCandidates] = useState([]);
+  const [fromDate,         setFromDate]         = useState(() => isoDaysAgo(7));
+  const [toDate,           setToDate]           = useState(() => isoToday());
 
   useEffect(() => {
     if (user?.isAdmin) authApi.listUsers().then(setAllUsers).catch(() => {});
@@ -430,9 +472,20 @@ export default function Dashboard() {
     })();
   }, []);
 
+  // ── Date-filtered candidates ──────────────────────────────────────────────
+  const filteredCandidates = useMemo(() => {
+    if (!fromDate && !toDate) return allCandidates;
+    const from = fromDate ? new Date(fromDate).getTime() : 0;
+    const to   = toDate   ? new Date(toDate + 'T23:59:59.999Z').getTime() : Infinity;
+    return allCandidates.filter(c => {
+      const t = new Date(c.createdAt || 0).getTime();
+      return t >= from && t <= to;
+    });
+  }, [allCandidates, fromDate, toDate]);
+
   // ── Analytics computations ────────────────────────────────────────────────
   const analytics = useMemo(() => {
-    const all = allCandidates;
+    const all = filteredCandidates;
     if (!all.length) return null;
 
     // Status counts — each status tracked individually
@@ -533,9 +586,9 @@ export default function Dashboard() {
       .sort((a, b) => b.total - a.total);
 
     return { statusCounts, totalFailed, conversionRate, successRate, roleBreakdown, locationBreakdown, recruiterPerf, avgDays, monthlyTrend, userBreakdown };
-  }, [allCandidates, roles, recruiters, allUsers]);
+  }, [filteredCandidates, roles, recruiters, allUsers]);
 
-  const total = allCandidates.length;
+  const total = filteredCandidates.length;
   const getRoleLabel = (val) => roles.find(r => r.value === val)?.label || val || '—';
   const getRecruiter = (id)  => recruiters.find(r => r.id === id) || null;
   // Always resolve owner name from live users list — never trust stale ownerName field
@@ -610,15 +663,15 @@ export default function Dashboard() {
   // Group helpers
   const groupedByRecruiter = useMemo(() => {
     const g = {};
-    allCandidates.forEach(c => { const k = c.recruiterId || '__none__'; if (!g[k]) g[k] = []; g[k].push(c); });
+    filteredCandidates.forEach(c => { const k = c.recruiterId || '__none__'; if (!g[k]) g[k] = []; g[k].push(c); });
     return g;
-  }, [allCandidates]);
+  }, [filteredCandidates]);
 
   const groupedByUser = useMemo(() => {
     const g = {};
-    allCandidates.forEach(c => { const k = c.ownerId || '__none__'; if (!g[k]) g[k] = []; g[k].push(c); });
+    filteredCandidates.forEach(c => { const k = c.ownerId || '__none__'; if (!g[k]) g[k] = []; g[k].push(c); });
     return g;
-  }, [allCandidates]);
+  }, [filteredCandidates]);
 
   const groupButtons = [
     { mode: 'none',      label: 'Recent' },
@@ -714,6 +767,14 @@ export default function Dashboard() {
           {/* ══════════════ OVERVIEW TAB ══════════════ */}
           {activeView === 'overview' && (
             <>
+              {/* Date range filter */}
+              <div className="card" style={{ marginBottom: 20, padding: '12px 16px' }}>
+                <DateRangePicker
+                  fromDate={fromDate} toDate={toDate}
+                  onChange={(f, t) => { setFromDate(f); setToDate(t); }}
+                />
+              </div>
+
               {/* KPI stat cards */}
               <div className="grid-4" style={{ marginBottom: 24 }}>
                 <StatCard icon="◈" label="Total Candidates" value={total} color="var(--accent)"
@@ -1283,6 +1344,12 @@ export default function Dashboard() {
           {/* ══════════════ CANDIDATES TAB ══════════════ */}
           {activeView === 'candidates' && (
             <div className="card">
+              <div style={{ marginBottom: 16 }}>
+                <DateRangePicker
+                  fromDate={fromDate} toDate={toDate}
+                  onChange={(f, t) => { setFromDate(f); setToDate(t); }}
+                />
+              </div>
               <div className="flex items-center justify-between mb-16">
                 <div className="card-title">
                   {groupMode === 'none' ? 'Recent Candidates' : groupMode === 'recruiter' ? 'By Recruiter' : 'By Hiring Manager'}
@@ -1296,10 +1363,10 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {allCandidates.length === 0 ? (
+              {filteredCandidates.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-state-icon">◈</div>
-                  <div className="empty-state-title">No candidates yet</div>
+                  <div className="empty-state-title">No candidates in this period</div>
                   <Link to="/candidates" className="btn btn-primary">Add Candidate</Link>
                 </div>
               ) : groupMode === 'none' ? (

@@ -6,6 +6,44 @@ import { candidateApi, generateApi, authApi, settingsApi } from '../utils/api';
 import { AppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
+// ── Date range picker ────────────────────────────────────────────────────────
+const DATE_PRESETS = [
+  { label: '1W', days: 7 }, { label: '2W', days: 14 },
+  { label: '1M', days: 30 }, { label: '3M', days: 90 },
+  { label: 'All', days: null },
+];
+const isoToday = () => new Date().toISOString().split('T')[0];
+const isoDaysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split('T')[0]; };
+
+function DateRangePicker({ fromDate, toDate, onChange }) {
+  const today = isoToday();
+  const active = DATE_PRESETS.find(p =>
+    p.days === null ? (!fromDate && !toDate) : (fromDate === isoDaysAgo(p.days) && toDate === today)
+  );
+  const apply = (days) => {
+    if (days === null) onChange('', '');
+    else onChange(isoDaysAgo(days), today);
+  };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Period:</span>
+      {DATE_PRESETS.map(p => (
+        <button key={p.label} onClick={() => apply(p.days)}
+          className={`btn btn-sm ${active?.label === p.label ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ minWidth: 38, padding: '3px 8px', fontSize: 11 }}>
+          {p.label}
+        </button>
+      ))}
+      <span style={{ color: 'var(--border)', margin: '0 2px' }}>|</span>
+      <input type="date" className="form-input" style={{ width: 132, height: 30, fontSize: 11 }}
+        value={fromDate} onChange={e => onChange(e.target.value, toDate)} />
+      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>→</span>
+      <input type="date" className="form-input" style={{ width: 132, height: 30, fontSize: 11 }}
+        value={toDate} onChange={e => onChange(fromDate, e.target.value)} />
+    </div>
+  );
+}
+
 const formatDate = (iso) => {
   if (!iso) return '—';
   const diff = Date.now() - new Date(iso).getTime();
@@ -302,6 +340,8 @@ export default function Candidates() {
   const [ownerFilter,      setOwnerFilter]      = useState(saved.ownerFilter     || '');
   const [page,             setPage]             = useState(saved.page            || 1);
   const [pageSize,         setPageSize]         = useState(saved.pageSize        || 20);
+  const [fromDate,         setFromDate]         = useState(() => isoDaysAgo(7));
+  const [toDate,           setToDate]           = useState(() => isoToday());
 
   // ── Selection state ────────────────────────────────────────────────────────
   const [selectedIds,   setSelectedIds]   = useState(new Set());
@@ -350,6 +390,8 @@ export default function Candidates() {
       const params = { search, status: statusFilter, page, limit: pageSize };
       if (recruiterFilter) params.recruiterId = recruiterFilter;
       if (user?.isAdmin && ownerFilter) params.ownerId = ownerFilter;
+      if (fromDate) params.fromDate = fromDate;
+      if (toDate)   params.toDate   = toDate;
       const data = await candidateApi.getAll(params);
       const pinSet = pinnedIds;
       setCandidates((data.candidates || []).filter(c => !pinSet.has(c.id)));
@@ -360,7 +402,7 @@ export default function Candidates() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, recruiterFilter, ownerFilter, page, pageSize, user, pinnedIds]);
+  }, [search, statusFilter, recruiterFilter, ownerFilter, page, pageSize, user, pinnedIds, fromDate, toDate]);
 
   useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
 
@@ -479,6 +521,13 @@ export default function Candidates() {
       </div>
 
       <div className="card">
+        {/* ── Date range filter ── */}
+        <div style={{ marginBottom: 12 }}>
+          <DateRangePicker
+            fromDate={fromDate} toDate={toDate}
+            onChange={(f, t) => { setFromDate(f); setToDate(t); setPage(1); }}
+          />
+        </div>
         {/* ── Filter bar ── */}
         <div className="flex gap-12 mb-16" style={{ flexWrap: 'wrap' }}>
           <div className="input-wrap" style={{ flex: 1, minWidth: 200, position: 'relative' }}>

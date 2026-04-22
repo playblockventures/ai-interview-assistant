@@ -64,9 +64,9 @@ router.get('/recent', async (req, res) => {
 // GET all — scoped by user unless admin
 router.get('/', async (req, res) => {
   try {
-    const { status, search, page = 1, limit = 20, recruiterId, ownerId: ownerIdParam, ids } = req.query;
+    const { status, search, page = 1, limit = 20, recruiterId, ownerId: ownerIdParam, ids, fromDate, toDate } = req.query;
     const result = await Candidate.findAll({
-      status, search, page, limit, recruiterId,
+      status, search, page, limit, recruiterId, fromDate, toDate,
       ownerId: req.user.isAdmin ? (ownerIdParam || null) : req.user.id,
       isAdmin: req.user.isAdmin,
       ids: ids ? ids.split(',').filter(Boolean) : undefined,
