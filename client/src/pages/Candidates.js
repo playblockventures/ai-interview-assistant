@@ -276,6 +276,10 @@ function loadFilters() {
 
 export default function Candidates() {
   const navigate = useNavigate();
+  const navTo = (e, path) => {
+    if (e.ctrlKey || e.metaKey) { window.open(path, '_blank'); e.preventDefault(); }
+    else navigate(path);
+  };
   const { user } = useAuth();
   const { roles, recruiters } = useContext(AppContext);
 
@@ -604,27 +608,27 @@ export default function Candidates() {
                     const recruiter  = getRecruiter(c.recruiterId);
                     const isSelected = selectedIds.has(c.id);
                     return (
-                      <tr key={`pin-${c.id}`} style={{ background: isSelected ? 'var(--accent-dim)' : 'rgba(245,158,11,0.04)' }}>
+                      <tr key={`pin-${c.id}`} style={{ background: isSelected ? 'var(--accent-dim)' : 'rgba(245,158,11,0.04)', cursor: 'pointer' }} onClick={e => navTo(e, `/candidates/${c.id}`)} onAuxClick={() => window.open(`/candidates/${c.id}`, '_blank')}>
                         <td onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(c.id)}
                             style={{ cursor: 'pointer', width: 15, height: 15 }} />
                         </td>
-                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                        <td style={{ cursor: 'pointer' }}>
                           <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>{pidx + 1}</span>
                         </td>
-                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                        <td style={{ cursor: 'pointer' }}>
                           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-elevated)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
                             {c.photoUrl ? <img src={c.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
                           </div>
                         </td>
-                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                        <td style={{ cursor: 'pointer' }}>
                           <div style={{ fontWeight: 600 }}>{c.fullName || '—'}</div>
                           {c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.currentTitle}</div>}
                         </td>
-                        <td style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>{c.email || '—'}</td>
-                        <td style={{ fontSize: 12, cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>{getRoleLabel(c.role)}</td>
-                        <td style={{ fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>{c.location || '—'}</td>
-                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                        <td style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, cursor: 'pointer' }}>{c.email || '—'}</td>
+                        <td style={{ fontSize: 12, cursor: 'pointer' }}>{getRoleLabel(c.role)}</td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }}>{c.location || '—'}</td>
+                        <td style={{ cursor: 'pointer' }}>
                           {recruiter ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <div style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, background: recruiter.photoUrl ? undefined : 'var(--accent-dim)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 10 }}>
@@ -634,7 +638,7 @@ export default function Candidates() {
                             </div>
                           ) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>}
                         </td>
-                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                        <td style={{ cursor: 'pointer' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                             <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, flexShrink: 0 }}>
                               {(c.ownerName || '?').charAt(0).toUpperCase()}
@@ -642,10 +646,10 @@ export default function Candidates() {
                             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.ownerName || '—'}</span>
                           </div>
                         </td>
-                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                        <td style={{ cursor: 'pointer' }}>
                           <span className={`status-badge status-${c.status}`}>{STATUS_LABELS[c.status] || c.status?.replace(/_/g, ' ')}</span>
                         </td>
-                        <td style={{ fontSize: 11, color: c.lastMessageAt ? 'var(--text-secondary)' : 'var(--text-muted)', cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                        <td style={{ fontSize: 11, color: c.lastMessageAt ? 'var(--text-secondary)' : 'var(--text-muted)', cursor: 'pointer' }}>
                           {formatDate(c.lastMessageAt)}
                         </td>
                         <td>
@@ -674,27 +678,27 @@ export default function Candidates() {
                     const recruiter  = getRecruiter(c.recruiterId);
                     const isSelected = selectedIds.has(c.id);
                     return (
-                      <tr key={c.id} style={{ background: isSelected ? 'var(--accent-dim)' : undefined }}>
+                      <tr key={c.id} style={{ background: isSelected ? 'var(--accent-dim)' : undefined, cursor: 'pointer' }} onClick={e => navTo(e, `/candidates/${c.id}`)} onAuxClick={() => window.open(`/candidates/${c.id}`, '_blank')}>
                         <td onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(c.id)}
                             style={{ cursor: 'pointer', width: 15, height: 15 }} />
                         </td>
-                        <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                        <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, cursor: 'pointer' }}>
                           {(page === 1 ? pinnedCandidates.length : 0) + (page - 1) * pageSize + idx + 1}
                         </td>
-                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                        <td style={{ cursor: 'pointer' }}>
                           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-elevated)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
                             {c.photoUrl ? <img src={c.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
                           </div>
                         </td>
-                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                        <td style={{ cursor: 'pointer' }}>
                           <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{c.fullName || '—'}</div>
                           {c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.currentTitle}</div>}
                         </td>
-                        <td style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>{c.email || '—'}</td>
-                        <td style={{ fontSize: 12, cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>{getRoleLabel(c.role)}</td>
-                        <td style={{ fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>{c.location || '—'}</td>
-                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                        <td style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, cursor: 'pointer' }}>{c.email || '—'}</td>
+                        <td style={{ fontSize: 12, cursor: 'pointer' }}>{getRoleLabel(c.role)}</td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }}>{c.location || '—'}</td>
+                        <td style={{ cursor: 'pointer' }}>
                           {recruiter ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <div style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, background: recruiter.photoUrl ? undefined : 'var(--accent-dim)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 10 }}>
@@ -704,7 +708,7 @@ export default function Candidates() {
                             </div>
                           ) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>}
                         </td>
-                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                        <td style={{ cursor: 'pointer' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                             <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, flexShrink: 0 }}>
                               {(c.ownerName || '?').charAt(0).toUpperCase()}
@@ -712,10 +716,10 @@ export default function Candidates() {
                             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.ownerName || '—'}</span>
                           </div>
                         </td>
-                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                        <td style={{ cursor: 'pointer' }}>
                           <span className={`status-badge status-${c.status}`}>{STATUS_LABELS[c.status] || c.status?.replace(/_/g, ' ')}</span>
                         </td>
-                        <td style={{ fontSize: 11, color: c.lastMessageAt ? 'var(--text-secondary)' : 'var(--text-muted)', cursor: 'pointer' }} onClick={() => navigate(`/candidates/${c.id}`)}>
+                        <td style={{ fontSize: 11, color: c.lastMessageAt ? 'var(--text-secondary)' : 'var(--text-muted)', cursor: 'pointer' }}>
                           {formatDate(c.lastMessageAt)}
                         </td>
                         <td>
