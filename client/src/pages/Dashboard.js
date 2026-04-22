@@ -320,6 +320,7 @@ export default function Dashboard() {
     try {
       sessionStorage.setItem('candidates_filters', JSON.stringify({
         search: '', statusFilter: '', recruiterFilter: '', ownerFilter: '', page: 1,
+        fromDate, toDate,
         ...filters,
       }));
     } catch {}

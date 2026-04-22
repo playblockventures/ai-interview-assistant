@@ -340,8 +340,8 @@ export default function Candidates() {
   const [ownerFilter,      setOwnerFilter]      = useState(saved.ownerFilter     || '');
   const [page,             setPage]             = useState(saved.page            || 1);
   const [pageSize,         setPageSize]         = useState(saved.pageSize        || 20);
-  const [fromDate,         setFromDate]         = useState(() => isoDaysAgo(7));
-  const [toDate,           setToDate]           = useState(() => isoToday());
+  const [fromDate,         setFromDate]         = useState(saved.fromDate || isoDaysAgo(7));
+  const [toDate,           setToDate]           = useState(saved.toDate   || isoToday());
 
   // ── Selection state ────────────────────────────────────────────────────────
   const [selectedIds,   setSelectedIds]   = useState(new Set());
@@ -350,9 +350,9 @@ export default function Candidates() {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(FILTER_KEY, JSON.stringify({ search, statusFilter, recruiterFilter, ownerFilter, page, pageSize }));
+      sessionStorage.setItem(FILTER_KEY, JSON.stringify({ search, statusFilter, recruiterFilter, ownerFilter, page, pageSize, fromDate, toDate }));
     } catch {}
-  }, [search, statusFilter, recruiterFilter, ownerFilter, page, pageSize]);
+  }, [search, statusFilter, recruiterFilter, ownerFilter, page, pageSize, fromDate, toDate]);
 
   // For admin: list of all users to filter/move by
   const [allUsers, setAllUsers] = useState([]);
