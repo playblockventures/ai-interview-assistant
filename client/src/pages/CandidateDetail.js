@@ -247,7 +247,8 @@ function ScenarioTab({ candidate, onScenarioApplied }) {
 function OutreachTab({ candidate }) {
   const { roles } = useContext(AppContext);
   const [config, setConfig] = useState({
-    role: candidate.role || '', messageType: 'outreach', tone: 'professional',
+    role: candidate.role || '', messageType: 'outreach',
+    tone: localStorage.getItem(`tone_${candidate.id}`) || 'professional',
     goal: '', customInstructions: '', recruiterId: candidate.recruiterId || '',
     companyId: candidate.companyId || '',
   });
@@ -257,7 +258,10 @@ function OutreachTab({ candidate }) {
   const [editing,  setEditing]  = useState(false);
   const [editText, setEditText] = useState('');
   const [saving,   setSaving]   = useState(false);
-  const set = (k, v) => setConfig(p => ({ ...p, [k]: v }));
+  const set = (k, v) => {
+    if (k === 'tone') localStorage.setItem(`tone_${candidate.id}`, v);
+    setConfig(p => ({ ...p, [k]: v }));
+  };
 
   const startEdit  = () => { setEditText(message); setEditing(true); };
   const cancelEdit = () => { setEditing(false); setEditText(''); };
