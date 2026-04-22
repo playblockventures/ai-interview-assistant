@@ -407,8 +407,9 @@ export default function Dashboard() {
     };
     Object.values(nameMap).forEach(g  => addGroup(g, 'name'));
     Object.values(emailMap).forEach(g => addGroup(g, 'email'));
-    // Hide groups where all candidates have had a decision made (status != pending)
-    return result.filter(g => g.candidates.some(c => c.status === 'pending'));
+    // Hide groups only when every candidate has reached a terminal status
+    const UNDECIDED = new Set(['pending', 'in_progress']);
+    return result.filter(g => g.candidates.some(c => UNDECIDED.has(c.status)));
   }, [allCandidates]);
 
   // Group helpers
