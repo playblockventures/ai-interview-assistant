@@ -1034,14 +1034,14 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {allCandidates.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-state-icon">◈</div>
-                  <div className="empty-state-title">No candidates in this period</div>
-                  <Link to="/candidates" className="btn btn-primary">Add Candidate</Link>
-                </div>
-              ) : groupMode === 'none' ? (
-                <GroupTable candidates={recent} />
+              {groupMode === 'none' ? (
+                recent.length === 0
+                  ? <div className="empty-state"><div className="empty-state-icon">◈</div><div className="empty-state-title">No recent candidates</div><Link to="/candidates" className="btn btn-primary">Add Candidate</Link></div>
+                  : <GroupTable candidates={recent} />
+              ) : !allCandidatesLoaded ? (
+                <div style={{ textAlign: 'center', padding: 40 }}><span className="spinner" style={{ width: 28, height: 28, borderWidth: 2 }} /></div>
+              ) : allCandidates.length === 0 ? (
+                <div className="empty-state"><div className="empty-state-icon">◈</div><div className="empty-state-title">No candidates yet</div><Link to="/candidates" className="btn btn-primary">Add Candidate</Link></div>
               ) : groupMode === 'recruiter' ? (
                 <div>
                   {recruiters.map(r => {
