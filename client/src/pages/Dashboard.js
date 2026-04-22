@@ -321,7 +321,10 @@ export default function Dashboard() {
     const userStats = {};
     all.forEach(c => {
       const key = c.ownerId || '__none__';
-      if (!userStats[key]) userStats[key] = { name: c.ownerName || 'Unknown', total: 0, success: 0, in_progress: 0 };
+      if (!userStats[key]) {
+        const u = allUsers.find(u => u.id === c.ownerId);
+        userStats[key] = { name: u?.displayName || u?.username || c.ownerName || 'Unknown', total: 0, success: 0, in_progress: 0 };
+      }
       userStats[key].total++;
       if (userStats[key][c.status] !== undefined) userStats[key][c.status]++;
     });
@@ -330,11 +333,15 @@ export default function Dashboard() {
       .sort((a, b) => b.total - a.total);
 
     return { statusCounts, conversionRate, successRate, roleBreakdown, locationBreakdown, recruiterPerf, avgDays, monthlyTrend, userBreakdown };
-  }, [allCandidates, roles, recruiters]);
+  }, [allCandidates, roles, recruiters, allUsers]);
 
   const total = allCandidates.length;
   const getRoleLabel = (val) => roles.find(r => r.value === val)?.label || val || '—';
   const getRecruiter = (id)  => recruiters.find(r => r.id === id) || null;
+  // Always resolve owner name from live users list — never trust stale ownerName field
+  const getOwnerName  = (c)  => allUsers.find(u => u.id === c.ownerId)?.displayName
+                              || allUsers.find(u => u.id === c.ownerId)?.username
+                              || c.ownerName || '—';
 
   const formatAvgResponse = (ms) => {
     if (ms === null || ms === undefined) return '—';
@@ -441,9 +448,9 @@ export default function Dashboard() {
           <td>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 600, color: 'var(--text-muted)' }}>
-                {(c.ownerName || '?').charAt(0).toUpperCase()}
+                {(getOwnerName(c) || '?').charAt(0).toUpperCase()}
               </div>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.ownerName || '—'}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{getOwnerName(c)}</span>
             </div>
           </td>
         )}
@@ -708,9 +715,9 @@ export default function Dashboard() {
                                         ◈ {recruiter.name}
                                       </span>
                                     )}
-                                    {c.ownerName && (
+                                    {c.ownerId && (
                                       <span style={{ fontSize: 9, color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 8, border: '1px solid var(--border)' }}>
-                                        👤 {c.ownerName}
+                                        👤 {getOwnerName(c)}
                                       </span>
                                     )}
                                   </div>
@@ -781,7 +788,7 @@ export default function Dashboard() {
                                 ) : '—'}
                               </td>
                               {user?.isAdmin && (
-                                <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.ownerName || '—'}</td>
+                                <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{getOwnerName(c)}</td>
                               )}
                               <td><span className={`status-badge status-${c.status}`}>{STATUS_CONFIG[c.status]?.label || c.status}</span></td>
                               <td style={{ textAlign: 'right' }}>
@@ -839,7 +846,7 @@ export default function Dashboard() {
                               </td>
                               <td><span style={{ color: days > 14 ? 'var(--error)' : 'var(--warning)', fontWeight: 700, fontSize: 13 }}>{days}d</span></td>
                               <td style={{ fontSize: 12 }}>{recruiter?.name || c.recruiterName || '—'}</td>
-                              <td style={{ fontSize: 12 }}>{c.ownerName || '—'}</td>
+                              <td style={{ fontSize: 12 }}>{getOwnerName(c)}</td>
                             </tr>
                           );
                         })}
@@ -876,7 +883,7 @@ export default function Dashboard() {
                               <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
                               <td><span className={`status-badge status-${c.status}`}>{STATUS_CONFIG[c.status]?.label || c.status}</span></td>
                               <td style={{ fontSize: 12 }}>{recruiter?.name || c.recruiterName || '—'}</td>
-                              <td style={{ fontSize: 12 }}>{c.ownerName || '—'}</td>
+                              <td style={{ fontSize: 12 }}>{getOwnerName(c)}</td>
                             </tr>
                           );
                         })}
@@ -1030,7 +1037,7 @@ export default function Dashboard() {
                               </td>
                               <td><span style={{ color: days > 14 ? 'var(--error)' : 'var(--warning)', fontWeight: 700, fontSize: 13 }}>{days}d</span></td>
                               <td style={{ fontSize: 12 }}>{recruiter?.name || c.recruiterName || '—'}</td>
-                              <td style={{ fontSize: 12 }}>{c.ownerName || '—'}</td>
+                              <td style={{ fontSize: 12 }}>{getOwnerName(c)}</td>
                             </tr>
                           );
                         })}
@@ -1055,7 +1062,7 @@ export default function Dashboard() {
                             <td style={{ fontWeight: 600, color: 'var(--success)' }}>{c.fullName || '—'}</td>
                             <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
                             <td style={{ fontSize: 12 }}>{getRecruiter(c.recruiterId)?.name || '—'}</td>
-                            <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.ownerName || '—'}</td>
+                            <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getOwnerName(c)}</td>
                             <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : '—'}</td>
                           </tr>
                         ))}
