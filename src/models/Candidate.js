@@ -1,4 +1,5 @@
 const { getDB } = require('../utils/firebase');
+const { normalizeCountry } = require('../utils/locationNormalize');
 
 const COL = 'candidates';
 const now = () => new Date().toISOString();
@@ -82,6 +83,154 @@ const Candidate = {
     if (ownerId) query = query.where('ownerId', '==', ownerId);
     const snapshot = await query.get();
     return snapshot.docs.map(docToObj);
+  },
+
+  // Server-side analytics computation — replaces client-side useMemo for dashboard
+  async computeAnalytics({ ownerId, isAdmin, fromDate, toDate } = {}) {
+    const db = getDB();
+    const ANALYTICS_FIELDS = [
+      'fullName', 'email', 'photoUrl', 'currentTitle', 'status', 'role', 'location',
+      'recruiterId', 'recruiterName', 'ownerId', 'ownerName',
+      'companyId', 'companyName', 'createdAt', 'updatedAt', 'lastMessageAt',
+    ];
+    const FAILED_STATUSES = ['failed', 'no_response', 'not_interested', 'other_job', 'have_a_doubt'];
+
+    let query = db.collection(COL).select(...ANALYTICS_FIELDS);
+    if (ownerId) query = query.where('ownerId', '==', ownerId);
+    const snapshot = await query.get();
+    const allDocs = snapshot.docs.map(docToObj);
+
+    // ── Stale candidates (unfiltered — operational alert) ──────────────────
+    const staleCandidates = allDocs
+      .filter(c => {
+        if (c.status !== 'in_progress') return false;
+        const last = c.lastMessageAt || c.createdAt;
+        return (Date.now() - new Date(last)) / (1000 * 60 * 60 * 24) > 3;
+      })
+      .sort((a, b) => {
+        const ad = (Date.now() - new Date(a.lastMessageAt || a.createdAt)) / 86400000;
+        const bd = (Date.now() - new Date(b.lastMessageAt || b.createdAt)) / 86400000;
+        return bd - ad;
+      });
+
+    // ── Duplicate groups (unfiltered — operational alert) ──────────────────
+    const nameMap = {}, emailMap = {};
+    allDocs.forEach(c => {
+      const name  = (c.fullName || '').toLowerCase().trim();
+      const email = (c.email    || '').toLowerCase().trim();
+      if (name)  { if (!nameMap[name])   nameMap[name]  = []; nameMap[name].push(c);  }
+      if (email) { if (!emailMap[email]) emailMap[email] = []; emailMap[email].push(c); }
+    });
+    const seenKeys = new Set();
+    const duplicateGroups = [];
+    const addGroup = (group, reason) => {
+      if (group.length < 2) return;
+      const key = group.map(c => c.id).sort().join(',');
+      if (seenKeys.has(key)) return;
+      seenKeys.add(key);
+      const UNDECIDED = new Set(['pending', 'in_progress']);
+      if (!group.some(c => UNDECIDED.has(c.status))) return;
+      duplicateGroups.push({ reason, value: group[0][reason === 'name' ? 'fullName' : 'email'], candidates: group });
+    };
+    Object.values(nameMap).forEach(g  => addGroup(g, 'name'));
+    Object.values(emailMap).forEach(g => addGroup(g, 'email'));
+
+    // ── Monthly trend (unfiltered — historical view) ───────────────────────
+    const now = new Date();
+    const monthlyTrend = Array.from({ length: 6 }, (_, i) => {
+      const d    = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      const count = allDocs.filter(c => { const cd = new Date(c.createdAt); return cd >= d && cd < next; }).length;
+      return { label: d.toLocaleDateString('en', { month: 'short' }), value: count };
+    });
+
+    // ── Weekly activity (unfiltered — last 8 weeks) ────────────────────────
+    const weeklyActivity = Array.from({ length: 8 }, (_, w) => {
+      const wIdx = 7 - w;
+      const weekStart = new Date(now); weekStart.setDate(now.getDate() - wIdx * 7); weekStart.setHours(0, 0, 0, 0);
+      const weekEnd   = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 7);
+      const count = allDocs.filter(c => { const d = new Date(c.createdAt); return d >= weekStart && d < weekEnd; }).length;
+      const label = wIdx === 0 ? 'This week' : wIdx === 1 ? 'Last week' : `${wIdx}w ago`;
+      return { label, count };
+    });
+
+    // ── Apply date filter for aggregate stats ──────────────────────────────
+    let docs = allDocs;
+    if (fromDate || toDate) {
+      const from = fromDate ? new Date(fromDate).getTime() : 0;
+      const to   = toDate   ? new Date(toDate + 'T23:59:59.999Z').getTime() : Infinity;
+      docs = allDocs.filter(c => {
+        const t = new Date(c.createdAt || 0).getTime();
+        return t >= from && t <= to;
+      });
+    }
+
+    const total = docs.length;
+
+    // Status counts
+    const statusCounts = { pending: 0, in_progress: 0, success: 0, failed: 0, no_response: 0, not_interested: 0, other_job: 0, have_a_doubt: 0 };
+    docs.forEach(c => { if (statusCounts[c.status] !== undefined) statusCounts[c.status]++; });
+    const totalFailed = FAILED_STATUSES.reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
+    const conversionRate = total > 0 ? Math.round((statusCounts.success / total) * 100) : 0;
+    const decided = statusCounts.success + totalFailed;
+    const successRate = decided > 0 ? Math.round((statusCounts.success / decided) * 100) : 0;
+
+    // Role breakdown — top 6 (raw values; client resolves label from roles list)
+    const roleCounts = {};
+    docs.forEach(c => { if (c.role) roleCounts[c.role] = (roleCounts[c.role] || 0) + 1; });
+    const roleBreakdown = Object.entries(roleCounts)
+      .sort((a, b) => b[1] - a[1]).slice(0, 6)
+      .map(([roleValue, value]) => ({ roleValue, value }));
+
+    // Location breakdown — normalized, top 6
+    const locCounts = {};
+    docs.forEach(c => {
+      const country = normalizeCountry(c.location);
+      if (country) locCounts[country] = (locCounts[country] || 0) + 1;
+    });
+    const locationBreakdown = Object.entries(locCounts)
+      .sort((a, b) => b[1] - a[1]).slice(0, 6)
+      .map(([label, value]) => ({ label, value }));
+
+    // Recruiter performance — top 6
+    const recruiterStats = {};
+    docs.forEach(c => {
+      if (!c.recruiterId) return;
+      if (!recruiterStats[c.recruiterId]) {
+        recruiterStats[c.recruiterId] = { name: c.recruiterName || 'Unknown', total: 0, success: 0, in_progress: 0, pending: 0, failed: 0 };
+      }
+      recruiterStats[c.recruiterId].total++;
+      const rKey = FAILED_STATUSES.includes(c.status) ? 'failed' : c.status;
+      if (recruiterStats[c.recruiterId][rKey] !== undefined) recruiterStats[c.recruiterId][rKey]++;
+    });
+    const recruiterPerf = Object.entries(recruiterStats)
+      .map(([id, s]) => ({ id, ...s, successRate: s.total > 0 ? Math.round((s.success / s.total) * 100) : 0 }))
+      .sort((a, b) => b.total - a.total).slice(0, 6);
+
+    // Avg time to decision (days)
+    const completed = docs.filter(c => (c.status === 'success' || FAILED_STATUSES.includes(c.status)) && c.createdAt && c.updatedAt);
+    const avgDays = completed.length > 0
+      ? Math.round(completed.reduce((sum, c) => sum + (new Date(c.updatedAt) - new Date(c.createdAt)) / 86400000, 0) / completed.length)
+      : null;
+
+    // User (hiring manager) breakdown
+    const userStats = {};
+    docs.forEach(c => {
+      const key = c.ownerId || '__none__';
+      if (!userStats[key]) userStats[key] = { id: c.ownerId || null, name: c.ownerName || 'Unknown', total: 0, success: 0, in_progress: 0 };
+      userStats[key].total++;
+      if (userStats[key][c.status] !== undefined) userStats[key][c.status]++;
+    });
+    const userBreakdown = Object.values(userStats)
+      .map(s => ({ ...s, successRate: s.total > 0 ? Math.round((s.success / s.total) * 100) : 0 }))
+      .sort((a, b) => b.total - a.total);
+
+    return {
+      total, statusCounts, totalFailed, conversionRate, successRate,
+      roleBreakdown, locationBreakdown, recruiterPerf, avgDays,
+      monthlyTrend, weeklyActivity, userBreakdown,
+      staleCandidates, duplicateGroups,
+    };
   },
 
   // Active candidates with avg response time computed from conversationHistory timestamps

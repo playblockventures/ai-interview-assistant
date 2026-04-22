@@ -17,199 +17,6 @@ const STATUS_CONFIG = {
   have_a_doubt:   { label: 'Have a Doubt',     color: 'var(--error)',       hex: '#ff6b6b' },
 };
 
-// ── Location normalization ────────────────────────────────────────────────────
-const COUNTRY_ALIASES = {
-  // Native-language → English
-  'polska': 'Poland', 'niemcy': 'Germany', 'deutschland': 'Germany',
-  'españa': 'Spain', 'espana': 'Spain', 'nederland': 'Netherlands',
-  'the netherlands': 'Netherlands', 'türkiye': 'Turkey', 'turkiye': 'Turkey',
-  'россия': 'Russia', 'brasil': 'Brazil', 'österreich': 'Austria', 'osterreich': 'Austria',
-  'magyarország': 'Hungary', 'magyarorszag': 'Hungary',
-  'česká republika': 'Czech Republic', 'ceska republika': 'Czech Republic', 'czechia': 'Czech Republic',
-  'schweiz': 'Switzerland', 'suisse': 'Switzerland', 'svizzera': 'Switzerland',
-  'belgië': 'Belgium', 'belgique': 'Belgium', 'belgie': 'Belgium',
-  'slovensko': 'Slovakia', 'slovenija': 'Slovenia', 'hrvatska': 'Croatia',
-  'românia': 'Romania', 'българия': 'Bulgaria', 'srbija': 'Serbia',
-  'україна': 'Ukraine', 'беларусь': 'Belarus', 'latvija': 'Latvia',
-  'lietuva': 'Lithuania', 'eesti': 'Estonia', 'suomi': 'Finland',
-  'sverige': 'Sweden', 'norge': 'Norway', 'danmark': 'Denmark',
-  'maroc': 'Morocco', 'الإمارات': 'United Arab Emirates', 'السعودية': 'Saudi Arabia',
-  'مصر': 'Egypt', 'الجزائر': 'Algeria',
-  // English variants / abbreviations
-  'us': 'United States', 'usa': 'United States', 'u.s.a.': 'United States',
-  'u.s.': 'United States', 'united states of america': 'United States',
-  'uk': 'United Kingdom', 'u.k.': 'United Kingdom', 'great britain': 'United Kingdom',
-  'england': 'United Kingdom', 'scotland': 'United Kingdom',
-  'wales': 'United Kingdom', 'northern ireland': 'United Kingdom',
-  'republic of korea': 'South Korea', 'korea': 'South Korea',
-  'uae': 'United Arab Emirates', 'emirates': 'United Arab Emirates',
-  'ksa': 'Saudi Arabia',
-  // Canonical spellings (handle lowercase lookups)
-  'france': 'France', 'germany': 'Germany', 'italy': 'Italy', 'spain': 'Spain',
-  'portugal': 'Portugal', 'greece': 'Greece', 'poland': 'Poland', 'ukraine': 'Ukraine',
-  'russia': 'Russia', 'turkey': 'Turkey', 'israel': 'Israel', 'india': 'India',
-  'china': 'China', 'japan': 'Japan', 'singapore': 'Singapore', 'australia': 'Australia',
-  'canada': 'Canada', 'brazil': 'Brazil', 'mexico': 'Mexico', 'argentina': 'Argentina',
-  'colombia': 'Colombia', 'peru': 'Peru', 'chile': 'Chile', 'south africa': 'South Africa',
-  'kenya': 'Kenya', 'nigeria': 'Nigeria', 'ghana': 'Ghana', 'egypt': 'Egypt',
-  'morocco': 'Morocco', 'thailand': 'Thailand', 'indonesia': 'Indonesia',
-  'malaysia': 'Malaysia', 'philippines': 'Philippines', 'vietnam': 'Vietnam',
-  'taiwan': 'Taiwan', 'pakistan': 'Pakistan', 'bangladesh': 'Bangladesh',
-  'netherlands': 'Netherlands', 'belgium': 'Belgium', 'austria': 'Austria',
-  'switzerland': 'Switzerland', 'sweden': 'Sweden', 'norway': 'Norway',
-  'denmark': 'Denmark', 'finland': 'Finland', 'ireland': 'Ireland',
-  'hungary': 'Hungary', 'czech republic': 'Czech Republic', 'romania': 'Romania',
-  'bulgaria': 'Bulgaria', 'serbia': 'Serbia', 'croatia': 'Croatia',
-  'slovakia': 'Slovakia', 'slovenia': 'Slovenia', 'lithuania': 'Lithuania',
-  'latvia': 'Latvia', 'estonia': 'Estonia', 'belarus': 'Belarus',
-  'south korea': 'South Korea', 'united arab emirates': 'United Arab Emirates',
-  'saudi arabia': 'Saudi Arabia', 'new zealand': 'New Zealand',
-};
-const CITY_TO_COUNTRY = {
-  // Poland
-  'warsaw': 'Poland', 'kraków': 'Poland', 'krakow': 'Poland', 'poznań': 'Poland',
-  'poznan': 'Poland', 'wrocław': 'Poland', 'wroclaw': 'Poland', 'gdańsk': 'Poland',
-  'gdansk': 'Poland', 'łódź': 'Poland', 'lodz': 'Poland', 'katowice': 'Poland',
-  'szczecin': 'Poland', 'bydgoszcz': 'Poland', 'lublin': 'Poland', 'gdynia': 'Poland',
-  // Germany
-  'berlin': 'Germany', 'munich': 'Germany', 'münchen': 'Germany', 'munchen': 'Germany',
-  'hamburg': 'Germany', 'frankfurt': 'Germany', 'cologne': 'Germany', 'köln': 'Germany',
-  'koln': 'Germany', 'stuttgart': 'Germany', 'düsseldorf': 'Germany', 'dusseldorf': 'Germany',
-  'dortmund': 'Germany', 'essen': 'Germany', 'leipzig': 'Germany', 'bremen': 'Germany',
-  'hannover': 'Germany', 'nuremberg': 'Germany', 'nürnberg': 'Germany',
-  // UK
-  'london': 'United Kingdom', 'manchester': 'United Kingdom', 'birmingham': 'United Kingdom',
-  'glasgow': 'United Kingdom', 'edinburgh': 'United Kingdom', 'liverpool': 'United Kingdom',
-  'leeds': 'United Kingdom', 'bristol': 'United Kingdom', 'sheffield': 'United Kingdom',
-  'cardiff': 'United Kingdom', 'belfast': 'United Kingdom', 'newcastle': 'United Kingdom',
-  // France
-  'paris': 'France', 'lyon': 'France', 'marseille': 'France', 'toulouse': 'France',
-  'nice': 'France', 'nantes': 'France', 'strasbourg': 'France', 'bordeaux': 'France',
-  // Netherlands
-  'amsterdam': 'Netherlands', 'rotterdam': 'Netherlands', 'the hague': 'Netherlands',
-  'den haag': 'Netherlands', 'utrecht': 'Netherlands', 'eindhoven': 'Netherlands',
-  // Spain
-  'madrid': 'Spain', 'barcelona': 'Spain', 'valencia': 'Spain', 'seville': 'Spain',
-  'sevilla': 'Spain', 'zaragoza': 'Spain', 'málaga': 'Spain', 'malaga': 'Spain', 'bilbao': 'Spain',
-  // Italy
-  'rome': 'Italy', 'roma': 'Italy', 'milan': 'Italy', 'milano': 'Italy',
-  'naples': 'Italy', 'napoli': 'Italy', 'turin': 'Italy', 'torino': 'Italy',
-  'florence': 'Italy', 'firenze': 'Italy', 'bologna': 'Italy', 'venice': 'Italy',
-  // Portugal
-  'lisbon': 'Portugal', 'lisboa': 'Portugal', 'porto': 'Portugal',
-  // Czech Republic
-  'prague': 'Czech Republic', 'praha': 'Czech Republic', 'brno': 'Czech Republic', 'ostrava': 'Czech Republic',
-  // Hungary
-  'budapest': 'Hungary', 'debrecen': 'Hungary',
-  // Romania
-  'bucharest': 'Romania', 'bucurești': 'Romania', 'cluj': 'Romania', 'timisoara': 'Romania',
-  // Bulgaria
-  'sofia': 'Bulgaria', 'plovdiv': 'Bulgaria', 'varna': 'Bulgaria',
-  // Serbia
-  'belgrade': 'Serbia', 'beograd': 'Serbia', 'novi sad': 'Serbia',
-  // Croatia
-  'zagreb': 'Croatia', 'split': 'Croatia',
-  // Slovakia
-  'bratislava': 'Slovakia', 'košice': 'Slovakia', 'kosice': 'Slovakia',
-  // Slovenia
-  'ljubljana': 'Slovenia',
-  // Ukraine
-  'kyiv': 'Ukraine', 'kiev': 'Ukraine', 'kharkiv': 'Ukraine', 'odesa': 'Ukraine',
-  'lviv': 'Ukraine', 'dnipro': 'Ukraine',
-  // Russia
-  'moscow': 'Russia', 'moskva': 'Russia', 'saint petersburg': 'Russia',
-  'st. petersburg': 'Russia', 'novosibirsk': 'Russia', 'yekaterinburg': 'Russia',
-  // Scandinavia
-  'stockholm': 'Sweden', 'gothenburg': 'Sweden', 'göteborg': 'Sweden', 'malmö': 'Sweden', 'malmo': 'Sweden',
-  'oslo': 'Norway', 'bergen': 'Norway',
-  'copenhagen': 'Denmark', 'københavn': 'Denmark',
-  'helsinki': 'Finland', 'espoo': 'Finland', 'tampere': 'Finland',
-  // Ireland
-  'dublin': 'Ireland', 'cork': 'Ireland',
-  // Greece
-  'athens': 'Greece', 'athina': 'Greece', 'thessaloniki': 'Greece',
-  // Austria
-  'vienna': 'Austria', 'wien': 'Austria', 'graz': 'Austria', 'linz': 'Austria',
-  // Switzerland
-  'zurich': 'Switzerland', 'zürich': 'Switzerland', 'geneva': 'Switzerland',
-  'genève': 'Switzerland', 'bern': 'Switzerland', 'basel': 'Switzerland',
-  // Belgium
-  'brussels': 'Belgium', 'bruxelles': 'Belgium', 'brussel': 'Belgium',
-  'antwerp': 'Belgium', 'antwerpen': 'Belgium', 'ghent': 'Belgium', 'gent': 'Belgium',
-  // Baltics
-  'vilnius': 'Lithuania', 'kaunas': 'Lithuania', 'riga': 'Latvia', 'tallinn': 'Estonia',
-  // Turkey
-  'istanbul': 'Turkey', 'ankara': 'Turkey', 'izmir': 'Turkey',
-  // Israel
-  'tel aviv': 'Israel', 'jerusalem': 'Israel', 'haifa': 'Israel',
-  // Gulf
-  'dubai': 'United Arab Emirates', 'abu dhabi': 'United Arab Emirates', 'sharjah': 'United Arab Emirates',
-  'riyadh': 'Saudi Arabia', 'jeddah': 'Saudi Arabia', 'dammam': 'Saudi Arabia',
-  // Egypt & Africa
-  'cairo': 'Egypt', 'alexandria': 'Egypt',
-  'johannesburg': 'South Africa', 'cape town': 'South Africa', 'durban': 'South Africa',
-  'nairobi': 'Kenya', 'lagos': 'Nigeria', 'abuja': 'Nigeria', 'accra': 'Ghana',
-  'casablanca': 'Morocco', 'rabat': 'Morocco', 'marrakech': 'Morocco',
-  // India
-  'mumbai': 'India', 'delhi': 'India', 'new delhi': 'India', 'bangalore': 'India',
-  'bengaluru': 'India', 'hyderabad': 'India', 'chennai': 'India', 'pune': 'India',
-  'kolkata': 'India', 'ahmedabad': 'India', 'jaipur': 'India', 'surat': 'India',
-  // China
-  'beijing': 'China', 'shanghai': 'China', 'shenzhen': 'China', 'guangzhou': 'China',
-  'chengdu': 'China', 'hangzhou': 'China', 'wuhan': 'China',
-  // Japan
-  'tokyo': 'Japan', 'osaka': 'Japan', 'yokohama': 'Japan', 'nagoya': 'Japan',
-  'sapporo': 'Japan', 'fukuoka': 'Japan', 'kyoto': 'Japan',
-  // Korea
-  'seoul': 'South Korea', 'busan': 'South Korea', 'incheon': 'South Korea',
-  'daegu': 'South Korea', 'daejeon': 'South Korea',
-  // SEA
-  'singapore': 'Singapore', 'kuala lumpur': 'Malaysia', 'penang': 'Malaysia',
-  'bangkok': 'Thailand', 'chiang mai': 'Thailand',
-  'hanoi': 'Vietnam', 'ho chi minh city': 'Vietnam', 'saigon': 'Vietnam',
-  'jakarta': 'Indonesia', 'surabaya': 'Indonesia',
-  'manila': 'Philippines', 'cebu': 'Philippines',
-  'taipei': 'Taiwan',
-  // Australia / NZ
-  'sydney': 'Australia', 'melbourne': 'Australia', 'brisbane': 'Australia',
-  'perth': 'Australia', 'adelaide': 'Australia', 'canberra': 'Australia',
-  'auckland': 'New Zealand', 'wellington': 'New Zealand', 'christchurch': 'New Zealand',
-  // Canada
-  'toronto': 'Canada', 'vancouver': 'Canada', 'montreal': 'Canada',
-  'calgary': 'Canada', 'ottawa': 'Canada', 'edmonton': 'Canada',
-  // USA
-  'new york': 'United States', 'nyc': 'United States', 'los angeles': 'United States',
-  'chicago': 'United States', 'houston': 'United States', 'phoenix': 'United States',
-  'philadelphia': 'United States', 'san antonio': 'United States', 'san diego': 'United States',
-  'dallas': 'United States', 'san jose': 'United States', 'austin': 'United States',
-  'san francisco': 'United States', 'seattle': 'United States', 'denver': 'United States',
-  'boston': 'United States', 'nashville': 'United States', 'atlanta': 'United States',
-  'miami': 'United States', 'portland': 'United States', 'las vegas': 'United States',
-  'washington': 'United States', 'washington dc': 'United States', 'detroit': 'United States',
-  'silicon valley': 'United States', 'bay area': 'United States',
-  // Latin America
-  'são paulo': 'Brazil', 'sao paulo': 'Brazil', 'rio de janeiro': 'Brazil',
-  'brasília': 'Brazil', 'brasilia': 'Brazil', 'belo horizonte': 'Brazil',
-  'mexico city': 'Mexico', 'guadalajara': 'Mexico', 'monterrey': 'Mexico',
-  'buenos aires': 'Argentina', 'bogotá': 'Colombia', 'bogota': 'Colombia',
-  'medellín': 'Colombia', 'medellin': 'Colombia', 'lima': 'Peru', 'santiago': 'Chile',
-  // Pakistan / Bangladesh
-  'karachi': 'Pakistan', 'lahore': 'Pakistan', 'islamabad': 'Pakistan', 'dhaka': 'Bangladesh',
-};
-
-const normalizeCountry = (location) => {
-  if (!location) return null;
-  const parts = location.split(',').map(p => p.trim()).filter(Boolean);
-  // Try each part from last (country) to first (city), checking alias then city maps
-  for (let i = parts.length - 1; i >= 0; i--) {
-    const key = parts[i].toLowerCase().replace(/\s+/g, ' ').trim();
-    if (COUNTRY_ALIASES[key]) return COUNTRY_ALIASES[key];
-    if (CITY_TO_COUNTRY[key]) return CITY_TO_COUNTRY[key];
-  }
-  // Fall back: return last part as-is (best guess at country)
-  return parts[parts.length - 1] || null;
-};
-
 // ── Date range picker ─────────────────────────────────────────────────────────
 const PRESETS = [
   { label: '1W', days: 7 },
@@ -357,30 +164,8 @@ function FunnelChart({ stages }) {
 }
 
 // ── Activity timeline ─────────────────────────────────────────────────────────
-function ActivityTimeline({ candidates }) {
-  // Group candidates added per week (last 8 weeks)
-  const weeks = useMemo(() => {
-    const now    = new Date();
-    const result = [];
-    for (let w = 7; w >= 0; w--) {
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() - w * 7);
-      weekStart.setHours(0, 0, 0, 0);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 7);
-
-      const count = candidates.filter(c => {
-        const d = new Date(c.createdAt);
-        return d >= weekStart && d < weekEnd;
-      }).length;
-
-      const label = w === 0 ? 'This week' : w === 1 ? 'Last week' : `${w}w ago`;
-      result.push({ label, count, weekStart });
-    }
-    return result;
-  }, [candidates]);
-
-  const max = Math.max(...weeks.map(w => w.count), 1);
+function ActivityTimeline({ weeks }) {
+  const max = Math.max(...(weeks || []).map(w => w.count), 1);
 
   return (
     <div>
@@ -437,7 +222,10 @@ export default function Dashboard() {
   };
   const { user }                 = useAuth();
   const { recruiters, roles }    = useContext(AppContext);
+  const [serverAnalytics,  setServerAnalytics]  = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [allCandidates,    setAllCandidates]    = useState([]);
+  const [allCandidatesLoaded, setAllCandidatesLoaded] = useState(false);
   const [recent,           setRecent]           = useState([]);
   const [loading,          setLoading]          = useState(true);
   const [groupMode,        setGroupMode]        = useState('none');
@@ -452,143 +240,60 @@ export default function Dashboard() {
     if (user?.isAdmin) authApi.listUsers().then(setAllUsers).catch(() => {});
   }, [user]);
 
+  // Initial load — analytics + recent + active + pins in parallel
   useEffect(() => {
     (async () => {
       try {
-        const [recentData, statsData, pinsData, activeData] = await Promise.all([
+        const [analyticsData, recentData, pinsData, activeData] = await Promise.all([
+          candidateApi.getAnalytics({ fromDate, toDate }),
           candidateApi.getRecent(20),
-          candidateApi.getStats(),
           settingsApi.getPins().catch(() => ({ pins: [] })),
           candidateApi.getActiveWithResponseTime(),
         ]);
+        setServerAnalytics(analyticsData);
         setRecent(recentData.candidates || []);
-        const all = statsData.candidates || [];
-        setAllCandidates(all);
-        const pinIds = new Set(pinsData.pins || []);
-        setPinnedCandidates(all.filter(c => pinIds.has(c.id)));
         setActiveCandidates(activeData.candidates || []);
+        // Seed pinned candidates from stale/duplicate lists already in analytics
+        const allKnown = [
+          ...(analyticsData.staleCandidates || []),
+          ...(analyticsData.duplicateGroups || []).flatMap(g => g.candidates),
+        ];
+        const pinIds = new Set(pinsData.pins || []);
+        const pinned = [...pinIds].map(id => allKnown.find(c => c.id === id)).filter(Boolean);
+        setPinnedCandidates(pinned);
       } catch (e) { console.error(e); }
-      finally { setLoading(false); }
+      finally { setLoading(false); setAnalyticsLoading(false); }
     })();
-  }, []);
+  }, []); // eslint-disable-line
 
-  // ── Date-filtered candidates ──────────────────────────────────────────────
-  const filteredCandidates = useMemo(() => {
-    if (!fromDate && !toDate) return allCandidates;
-    const from = fromDate ? new Date(fromDate).getTime() : 0;
-    const to   = toDate   ? new Date(toDate + 'T23:59:59.999Z').getTime() : Infinity;
-    return allCandidates.filter(c => {
-      const t = new Date(c.createdAt || 0).getTime();
-      return t >= from && t <= to;
-    });
-  }, [allCandidates, fromDate, toDate]);
+  // Re-fetch analytics when date range changes (after initial load)
+  useEffect(() => {
+    if (loading) return; // skip — initial load handles first fetch
+    setAnalyticsLoading(true);
+    candidateApi.getAnalytics({ fromDate, toDate })
+      .then(setServerAnalytics)
+      .catch(console.error)
+      .finally(() => setAnalyticsLoading(false));
+  }, [fromDate, toDate]); // eslint-disable-line
 
-  // ── Analytics computations ────────────────────────────────────────────────
-  const analytics = useMemo(() => {
-    const all = filteredCandidates;
-    if (!all.length) return null;
+  // Lazy-load all candidates for Candidates tab group view + Deep Analysis role breakdown
+  useEffect(() => {
+    if (!['candidates', 'pipeline'].includes(activeView) || allCandidatesLoaded) return;
+    candidateApi.getStats()
+      .then(d => { setAllCandidates(d.candidates || []); setAllCandidatesLoaded(true); })
+      .catch(console.error);
+  }, [activeView, allCandidatesLoaded]);
 
-    // Status counts — each status tracked individually
-    const statusCounts = { pending: 0, in_progress: 0, success: 0, failed: 0, no_response: 0, not_interested: 0, other_job: 0, have_a_doubt: 0 };
-    all.forEach(c => { if (statusCounts[c.status] !== undefined) statusCounts[c.status]++; });
+  const analytics = serverAnalytics;
+  const total = analytics?.total ?? 0;
 
-    // Total across all failed variants (for success-rate denominator)
-    const totalFailed = FAILED_STATUSES.reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
-
-    // Conversion rate (success / total)
-    const conversionRate = all.length > 0 ? Math.round((statusCounts.success / all.length) * 100) : 0;
-
-    // Success rate (success / (success + all-failed)) — excludes still-in-pipeline
-    const decided = statusCounts.success + totalFailed;
-    const successRate = decided > 0 ? Math.round((statusCounts.success / decided) * 100) : 0;
-
-    // Role breakdown — top 6
-    const roleCounts = {};
-    all.forEach(c => { if (c.role) roleCounts[c.role] = (roleCounts[c.role] || 0) + 1; });
-    const roleBreakdown = Object.entries(roleCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([val, count]) => ({
-        label: roles.find(r => r.value === val)?.label || val,
-        value: count,
-        roleValue: val,
-      }));
-
-    // Location breakdown — normalized to English country names, top 6
-    const locCounts = {};
-    all.forEach(c => {
-      const country = normalizeCountry(c.location);
-      if (country) locCounts[country] = (locCounts[country] || 0) + 1;
-    });
-    const locationBreakdown = Object.entries(locCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([label, value]) => ({ label, value }));
-
-    // Recruiter performance
-    const recruiterStats = {};
-    all.forEach(c => {
-      if (!c.recruiterId) return;
-      if (!recruiterStats[c.recruiterId]) {
-        recruiterStats[c.recruiterId] = { total: 0, success: 0, in_progress: 0, pending: 0, failed: 0 };
-      }
-      recruiterStats[c.recruiterId].total++;
-      const rKey = FAILED_STATUSES.includes(c.status) ? 'failed' : c.status;
-      if (recruiterStats[c.recruiterId][rKey] !== undefined) recruiterStats[c.recruiterId][rKey]++;
-    });
-
-    const recruiterPerf = Object.entries(recruiterStats)
-      .map(([id, s]) => ({
-        id,
-        name: recruiters.find(r => r.id === id)?.name || 'Unknown',
-        ...s,
-        successRate: s.total > 0 ? Math.round((s.success / s.total) * 100) : 0,
-      }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 6);
-
-    // Avg time in pipeline (days from createdAt for completed candidates)
-    const completedCandidates = all.filter(c => (c.status === 'success' || FAILED_STATUSES.includes(c.status)) && c.createdAt && c.updatedAt);
-    const avgDays = completedCandidates.length > 0
-      ? Math.round(completedCandidates.reduce((sum, c) => {
-          return sum + (new Date(c.updatedAt) - new Date(c.createdAt)) / (1000 * 60 * 60 * 24);
-        }, 0) / completedCandidates.length)
-      : null;
-
-    // Monthly trend — candidates added per month (last 6 months)
-    const now = new Date();
-    const monthlyTrend = Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
-      const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-      const count = all.filter(c => {
-        const cd = new Date(c.createdAt);
-        return cd >= d && cd < next;
-      }).length;
-      return {
-        label: d.toLocaleDateString('en', { month: 'short' }),
-        value: count,
-      };
-    });
-
-    // User (hiring manager) breakdown — admin only
-    const userStats = {};
-    all.forEach(c => {
-      const key = c.ownerId || '__none__';
-      if (!userStats[key]) {
-        const u = allUsers.find(u => u.id === c.ownerId);
-        userStats[key] = { name: u?.displayName || u?.username || c.ownerName || 'Unknown', total: 0, success: 0, in_progress: 0 };
-      }
-      userStats[key].total++;
-      if (userStats[key][c.status] !== undefined) userStats[key][c.status]++;
-    });
-    const userBreakdown = Object.entries(userStats)
-      .map(([id, s]) => ({ id, ...s, successRate: s.total > 0 ? Math.round((s.success / s.total) * 100) : 0 }))
-      .sort((a, b) => b.total - a.total);
-
-    return { statusCounts, totalFailed, conversionRate, successRate, roleBreakdown, locationBreakdown, recruiterPerf, avgDays, monthlyTrend, userBreakdown };
-  }, [filteredCandidates, roles, recruiters, allUsers]);
-
-  const total = filteredCandidates.length;
+  // Resolve role labels client-side (server returns raw roleValue)
+  const roleBreakdown = useMemo(() =>
+    (analytics?.roleBreakdown || []).map(rb => ({
+      ...rb,
+      label: roles.find(r => r.value === rb.roleValue)?.label || rb.roleValue,
+    })),
+  [analytics?.roleBreakdown, roles]);
   const getRoleLabel = (val) => roles.find(r => r.value === val)?.label || val || '—';
   const getRecruiter = (id)  => recruiters.find(r => r.id === id) || null;
   // Always resolve owner name from live users list — never trust stale ownerName field
@@ -621,57 +326,22 @@ export default function Dashboard() {
     window.location.href = '/candidates';
   };
 
-  // Stale candidates — in_progress with no message for 3+ days
-  // Use lastMessageAt (actual message time) or createdAt — NOT updatedAt (profile edits shouldn't reset the clock)
-  const staleCandidates = useMemo(() => {
-    return allCandidates.filter(c => {
-      if (c.status !== 'in_progress') return false;
-      const lastActivity = c.lastMessageAt || c.createdAt;
-      const days = (Date.now() - new Date(lastActivity)) / (1000 * 60 * 60 * 24);
-      return days > 3;
-    }).sort((a, b) => {
-      const aDays = (Date.now() - new Date(a.lastMessageAt || a.createdAt)) / 86400000;
-      const bDays = (Date.now() - new Date(b.lastMessageAt || b.createdAt)) / 86400000;
-      return bDays - aDays; // most overdue first
-    });
-  }, [allCandidates]);
-
-  // Duplicate profiles — same name or same email
-  const duplicateGroups = useMemo(() => {
-    const nameMap = {}, emailMap = {};
-    allCandidates.forEach(c => {
-      const name  = (c.fullName || '').toLowerCase().trim();
-      const email = (c.email    || '').toLowerCase().trim();
-      if (name)  { if (!nameMap[name])   nameMap[name]  = []; nameMap[name].push(c);  }
-      if (email) { if (!emailMap[email]) emailMap[email] = []; emailMap[email].push(c); }
-    });
-    const seen = new Set(), result = [];
-    const addGroup = (group, reason) => {
-      if (group.length < 2) return;
-      const key = group.map(c => c.id).sort().join(',');
-      if (seen.has(key)) return;
-      seen.add(key);
-      result.push({ reason, value: group[0][reason === 'name' ? 'fullName' : 'email'], candidates: group });
-    };
-    Object.values(nameMap).forEach(g  => addGroup(g, 'name'));
-    Object.values(emailMap).forEach(g => addGroup(g, 'email'));
-    // Hide groups only when every candidate has reached a terminal status
-    const UNDECIDED = new Set(['pending', 'in_progress']);
-    return result.filter(g => g.candidates.some(c => UNDECIDED.has(c.status)));
-  }, [allCandidates]);
+  // Stale candidates + duplicate groups — computed server-side, no client useMemo needed
+  const staleCandidates = analytics?.staleCandidates || [];
+  const duplicateGroups = analytics?.duplicateGroups || [];
 
   // Group helpers
   const groupedByRecruiter = useMemo(() => {
     const g = {};
-    filteredCandidates.forEach(c => { const k = c.recruiterId || '__none__'; if (!g[k]) g[k] = []; g[k].push(c); });
+    allCandidates.forEach(c => { const k = c.recruiterId || '__none__'; if (!g[k]) g[k] = []; g[k].push(c); });
     return g;
-  }, [filteredCandidates]);
+  }, [allCandidates]);
 
   const groupedByUser = useMemo(() => {
     const g = {};
-    filteredCandidates.forEach(c => { const k = c.ownerId || '__none__'; if (!g[k]) g[k] = []; g[k].push(c); });
+    allCandidates.forEach(c => { const k = c.ownerId || '__none__'; if (!g[k]) g[k] = []; g[k].push(c); });
     return g;
-  }, [filteredCandidates]);
+  }, [allCandidates]);
 
   const groupButtons = [
     { mode: 'none',      label: 'Recent' },
@@ -768,11 +438,12 @@ export default function Dashboard() {
           {activeView === 'overview' && (
             <>
               {/* Date range filter */}
-              <div className="card" style={{ marginBottom: 20, padding: '12px 16px' }}>
+              <div className="card" style={{ marginBottom: 20, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 16 }}>
                 <DateRangePicker
                   fromDate={fromDate} toDate={toDate}
                   onChange={(f, t) => { setFromDate(f); setToDate(t); }}
                 />
+                {analyticsLoading && <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2, flexShrink: 0 }} />}
               </div>
 
               {/* KPI stat cards */}
@@ -825,7 +496,7 @@ export default function Dashboard() {
                 <div className="card">
                   <div className="card-title">Weekly Activity</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Candidates added per week (last 8 weeks)</div>
-                  <ActivityTimeline candidates={allCandidates} />
+                  <ActivityTimeline weeks={analytics?.weeklyActivity || []} />
                 </div>
               </div>
 
@@ -833,9 +504,9 @@ export default function Dashboard() {
               <div className="grid-2" style={{ marginBottom: 20 }}>
                 <div className="card">
                   <div className="card-title">Candidates by Role</div>
-                  {analytics?.roleBreakdown.length ? (
+                  {roleBreakdown.length ? (
                     <BarChart
-                      data={analytics.roleBreakdown}
+                      data={roleBreakdown}
                       colorFn={(_, i) => `hsl(${160 + i * 30}, 70%, 55%)`}
                       onClickItem={(d) => navigateFiltered({ search: d.roleValue })}
                     />
@@ -1225,7 +896,7 @@ export default function Dashboard() {
               <div className="card" style={{ marginBottom: 20 }}>
                 <div className="card-title">Role × Status Breakdown</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>How each role is distributed across pipeline stages</div>
-                {analytics?.roleBreakdown.length > 0 ? (
+                {roleBreakdown.length > 0 ? (
                   <div className="table-wrap">
                     <table className="data-table">
                       <thead>
@@ -1241,8 +912,8 @@ export default function Dashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {analytics.roleBreakdown.map((rb, i) => {
-                          const roleCands = allCandidates.filter(c => roles.find(r => r.label === rb.label && r.value === c.role) || (roles.find(r => r.label === rb.label)?.value === c.role));
+                        {roleBreakdown.map((rb, i) => {
+                          const roleCands = allCandidates.filter(c => c.role === rb.roleValue);
                           const sc = { pending: 0, in_progress: 0, success: 0, failed: 0 };
                           roleCands.forEach(c => { const k = FAILED_STATUSES.includes(c.status) ? 'failed' : c.status; if (sc[k] !== undefined) sc[k]++; });
                           const decided = sc.success + sc.failed;
@@ -1363,7 +1034,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {filteredCandidates.length === 0 ? (
+              {allCandidates.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-state-icon">◈</div>
                   <div className="empty-state-title">No candidates in this period</div>

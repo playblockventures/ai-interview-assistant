@@ -26,6 +26,19 @@ const attachmentUpload = multer({
 
 router.use(requireAuth);
 
+// GET analytics — server-computed aggregations for dashboard overview
+router.get('/analytics', async (req, res) => {
+  try {
+    const { fromDate, toDate } = req.query;
+    const result = await Candidate.computeAnalytics({
+      ownerId: req.user.isAdmin ? null : req.user.id,
+      isAdmin: req.user.isAdmin,
+      fromDate, toDate,
+    });
+    res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET stats — lightweight aggregate for dashboard (no large fields)
 router.get('/stats', async (req, res) => {
   try {

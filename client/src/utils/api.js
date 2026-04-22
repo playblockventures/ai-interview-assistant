@@ -42,6 +42,7 @@ export const candidateApi = {
   getActiveWithResponseTime: () => api.get('/candidates/active-response'),
   getByIds:     (ids)      => api.get('/candidates', { params: { ids: ids.join(',') } }),
   getStats:     ()         => api.get('/candidates/stats'),
+  getAnalytics: (params)   => api.get('/candidates/analytics', { params }),
   getRecent:    (limit)    => api.get('/candidates/recent', { params: { limit } }),
   getById:      (id)       => api.get(`/candidates/${id}`),
   create:       (formData) => api.post('/candidates', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
