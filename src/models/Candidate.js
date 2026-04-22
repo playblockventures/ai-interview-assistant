@@ -86,23 +86,29 @@ const Candidate = {
     const docs = snapshot.docs.map(docToObj);
 
     const withAvg = docs.map(c => {
-      const msgs = (c.conversationHistory || [])
-        .map(m => m.timestamp || m.createdAt)
-        .filter(Boolean)
-        .map(t => new Date(t).getTime())
-        .filter(t => !isNaN(t))
-        .sort((a, b) => a - b);
+      const history = (c.conversationHistory || []);
 
-      let avgMs = null;
-      if (msgs.length >= 2) {
-        let total = 0;
-        for (let i = 1; i < msgs.length; i++) total += msgs[i] - msgs[i - 1];
-        avgMs = total / (msgs.length - 1);
+      // Only measure assistant→candidate reply gaps (skip recruiter follow-up prompts)
+      const gaps = [];
+      let lastAssistantMs = null;
+      for (const m of history) {
+        const ms = new Date(m.timestamp || m.createdAt || 0).getTime();
+        if (!ms) continue;
+        if (m.role === 'assistant') {
+          lastAssistantMs = ms;
+        } else if (m.role === 'user' && m.fromCandidate !== false && lastAssistantMs !== null) {
+          // fromCandidate is true (manual insert) or undefined (legacy message) → count it
+          gaps.push(ms - lastAssistantMs);
+          lastAssistantMs = null; // reset: don't double-count on consecutive user messages
+        }
       }
+
+      const avgMs = gaps.length > 0 ? gaps.reduce((a, b) => a + b, 0) / gaps.length : null;
+      const messageCount = history.length;
 
       // Strip large fields before returning to client
       const { conversationHistory, resumeText, interviewScenarios, ...rest } = c;
-      return { ...rest, avgResponseMs: avgMs, messageCount: msgs.length };
+      return { ...rest, avgResponseMs: avgMs, messageCount };
     });
 
     // Candidates with measured avg response time first (shortest = most active), then unmeasured
