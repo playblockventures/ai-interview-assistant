@@ -435,18 +435,18 @@ export default function Dashboard() {
     const all = allCandidates;
     if (!all.length) return null;
 
-    // Status counts — all failed variants aggregated under 'failed'
-    const statusCounts = { pending: 0, in_progress: 0, success: 0, failed: 0 };
-    all.forEach(c => {
-      const key = FAILED_STATUSES.includes(c.status) ? 'failed' : c.status;
-      if (statusCounts[key] !== undefined) statusCounts[key]++;
-    });
+    // Status counts — each status tracked individually
+    const statusCounts = { pending: 0, in_progress: 0, success: 0, failed: 0, no_response: 0, not_interested: 0, other_job: 0, have_a_doubt: 0 };
+    all.forEach(c => { if (statusCounts[c.status] !== undefined) statusCounts[c.status]++; });
+
+    // Total across all failed variants (for success-rate denominator)
+    const totalFailed = FAILED_STATUSES.reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
 
     // Conversion rate (success / total)
     const conversionRate = all.length > 0 ? Math.round((statusCounts.success / all.length) * 100) : 0;
 
-    // Success rate (success / (success + failed)) — excludes still-in-pipeline
-    const decided = statusCounts.success + statusCounts.failed;
+    // Success rate (success / (success + all-failed)) — excludes still-in-pipeline
+    const decided = statusCounts.success + totalFailed;
     const successRate = decided > 0 ? Math.round((statusCounts.success / decided) * 100) : 0;
 
     // Role breakdown — top 6
@@ -532,7 +532,7 @@ export default function Dashboard() {
       .map(([id, s]) => ({ id, ...s, successRate: s.total > 0 ? Math.round((s.success / s.total) * 100) : 0 }))
       .sort((a, b) => b.total - a.total);
 
-    return { statusCounts, conversionRate, successRate, roleBreakdown, locationBreakdown, recruiterPerf, avgDays, monthlyTrend, userBreakdown };
+    return { statusCounts, totalFailed, conversionRate, successRate, roleBreakdown, locationBreakdown, recruiterPerf, avgDays, monthlyTrend, userBreakdown };
   }, [allCandidates, roles, recruiters, allUsers]);
 
   const total = allCandidates.length;
@@ -722,7 +722,7 @@ export default function Dashboard() {
                   sub={total > 0 ? `${Math.round(((analytics?.statusCounts.in_progress || 0) / total) * 100)}% of pipeline` : ''}
                   onClick={() => navigateFiltered({ statusFilter: 'in_progress' })} />
                 <StatCard icon="●" label="Success Rate" value={`${analytics?.successRate || 0}%`} color="var(--success)"
-                  sub={`${analytics?.statusCounts.success || 0} hired of ${(analytics?.statusCounts.success || 0) + (analytics?.statusCounts.failed || 0)} decided`}
+                  sub={`${analytics?.statusCounts.success || 0} hired of ${(analytics?.statusCounts.success || 0) + (analytics?.totalFailed || 0)} decided`}
                   onClick={() => navigateFiltered({ statusFilter: 'success' })} />
                 <StatCard icon="⏱" label="Avg. Time to Decision" value={analytics?.avgDays != null ? `${analytics.avgDays}d` : '—'} color="var(--warning)"
                   sub="days from add to outcome" />
@@ -1122,8 +1122,8 @@ export default function Dashboard() {
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>How candidates progress through your pipeline</div>
                   <FunnelChart stages={[
                     { label: 'Added to Pipeline',  icon: '◈', value: total,                                        color: 'var(--accent)' },
-                    { label: 'Engaged (In Progress)', icon: '◑', value: (analytics?.statusCounts.in_progress || 0) + (analytics?.statusCounts.success || 0) + (analytics?.statusCounts.failed || 0), color: 'var(--in-progress)' },
-                    { label: 'Decision Reached',   icon: '⊕', value: (analytics?.statusCounts.success || 0) + (analytics?.statusCounts.failed || 0), color: 'var(--warning)' },
+                    { label: 'Engaged (In Progress)', icon: '◑', value: (analytics?.statusCounts.in_progress || 0) + (analytics?.statusCounts.success || 0) + (analytics?.totalFailed || 0), color: 'var(--in-progress)' },
+                    { label: 'Decision Reached',   icon: '⊕', value: (analytics?.statusCounts.success || 0) + (analytics?.totalFailed || 0), color: 'var(--warning)' },
                     { label: 'Successfully Hired', icon: '●', value: analytics?.statusCounts.success || 0,          color: 'var(--success)' },
                   ]} />
                   <div style={{ marginTop: 16, padding: '10px 14px', background: 'rgba(0,212,170,0.06)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(0,212,170,0.15)' }}>
