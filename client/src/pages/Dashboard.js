@@ -17,6 +17,199 @@ const STATUS_CONFIG = {
   have_a_doubt:   { label: 'Have a Doubt',     color: 'var(--error)',       hex: '#ff6b6b' },
 };
 
+// ── Location normalization ────────────────────────────────────────────────────
+const COUNTRY_ALIASES = {
+  // Native-language → English
+  'polska': 'Poland', 'niemcy': 'Germany', 'deutschland': 'Germany',
+  'españa': 'Spain', 'espana': 'Spain', 'nederland': 'Netherlands',
+  'the netherlands': 'Netherlands', 'türkiye': 'Turkey', 'turkiye': 'Turkey',
+  'россия': 'Russia', 'brasil': 'Brazil', 'österreich': 'Austria', 'osterreich': 'Austria',
+  'magyarország': 'Hungary', 'magyarorszag': 'Hungary',
+  'česká republika': 'Czech Republic', 'ceska republika': 'Czech Republic', 'czechia': 'Czech Republic',
+  'schweiz': 'Switzerland', 'suisse': 'Switzerland', 'svizzera': 'Switzerland',
+  'belgië': 'Belgium', 'belgique': 'Belgium', 'belgie': 'Belgium',
+  'slovensko': 'Slovakia', 'slovenija': 'Slovenia', 'hrvatska': 'Croatia',
+  'românia': 'Romania', 'българия': 'Bulgaria', 'srbija': 'Serbia',
+  'україна': 'Ukraine', 'беларусь': 'Belarus', 'latvija': 'Latvia',
+  'lietuva': 'Lithuania', 'eesti': 'Estonia', 'suomi': 'Finland',
+  'sverige': 'Sweden', 'norge': 'Norway', 'danmark': 'Denmark',
+  'maroc': 'Morocco', 'الإمارات': 'United Arab Emirates', 'السعودية': 'Saudi Arabia',
+  'مصر': 'Egypt', 'الجزائر': 'Algeria',
+  // English variants / abbreviations
+  'us': 'United States', 'usa': 'United States', 'u.s.a.': 'United States',
+  'u.s.': 'United States', 'united states of america': 'United States',
+  'uk': 'United Kingdom', 'u.k.': 'United Kingdom', 'great britain': 'United Kingdom',
+  'england': 'United Kingdom', 'scotland': 'United Kingdom',
+  'wales': 'United Kingdom', 'northern ireland': 'United Kingdom',
+  'republic of korea': 'South Korea', 'korea': 'South Korea',
+  'uae': 'United Arab Emirates', 'emirates': 'United Arab Emirates',
+  'ksa': 'Saudi Arabia',
+  // Canonical spellings (handle lowercase lookups)
+  'france': 'France', 'germany': 'Germany', 'italy': 'Italy', 'spain': 'Spain',
+  'portugal': 'Portugal', 'greece': 'Greece', 'poland': 'Poland', 'ukraine': 'Ukraine',
+  'russia': 'Russia', 'turkey': 'Turkey', 'israel': 'Israel', 'india': 'India',
+  'china': 'China', 'japan': 'Japan', 'singapore': 'Singapore', 'australia': 'Australia',
+  'canada': 'Canada', 'brazil': 'Brazil', 'mexico': 'Mexico', 'argentina': 'Argentina',
+  'colombia': 'Colombia', 'peru': 'Peru', 'chile': 'Chile', 'south africa': 'South Africa',
+  'kenya': 'Kenya', 'nigeria': 'Nigeria', 'ghana': 'Ghana', 'egypt': 'Egypt',
+  'morocco': 'Morocco', 'thailand': 'Thailand', 'indonesia': 'Indonesia',
+  'malaysia': 'Malaysia', 'philippines': 'Philippines', 'vietnam': 'Vietnam',
+  'taiwan': 'Taiwan', 'pakistan': 'Pakistan', 'bangladesh': 'Bangladesh',
+  'netherlands': 'Netherlands', 'belgium': 'Belgium', 'austria': 'Austria',
+  'switzerland': 'Switzerland', 'sweden': 'Sweden', 'norway': 'Norway',
+  'denmark': 'Denmark', 'finland': 'Finland', 'ireland': 'Ireland',
+  'hungary': 'Hungary', 'czech republic': 'Czech Republic', 'romania': 'Romania',
+  'bulgaria': 'Bulgaria', 'serbia': 'Serbia', 'croatia': 'Croatia',
+  'slovakia': 'Slovakia', 'slovenia': 'Slovenia', 'lithuania': 'Lithuania',
+  'latvia': 'Latvia', 'estonia': 'Estonia', 'belarus': 'Belarus',
+  'south korea': 'South Korea', 'united arab emirates': 'United Arab Emirates',
+  'saudi arabia': 'Saudi Arabia', 'new zealand': 'New Zealand',
+};
+const CITY_TO_COUNTRY = {
+  // Poland
+  'warsaw': 'Poland', 'kraków': 'Poland', 'krakow': 'Poland', 'poznań': 'Poland',
+  'poznan': 'Poland', 'wrocław': 'Poland', 'wroclaw': 'Poland', 'gdańsk': 'Poland',
+  'gdansk': 'Poland', 'łódź': 'Poland', 'lodz': 'Poland', 'katowice': 'Poland',
+  'szczecin': 'Poland', 'bydgoszcz': 'Poland', 'lublin': 'Poland', 'gdynia': 'Poland',
+  // Germany
+  'berlin': 'Germany', 'munich': 'Germany', 'münchen': 'Germany', 'munchen': 'Germany',
+  'hamburg': 'Germany', 'frankfurt': 'Germany', 'cologne': 'Germany', 'köln': 'Germany',
+  'koln': 'Germany', 'stuttgart': 'Germany', 'düsseldorf': 'Germany', 'dusseldorf': 'Germany',
+  'dortmund': 'Germany', 'essen': 'Germany', 'leipzig': 'Germany', 'bremen': 'Germany',
+  'hannover': 'Germany', 'nuremberg': 'Germany', 'nürnberg': 'Germany',
+  // UK
+  'london': 'United Kingdom', 'manchester': 'United Kingdom', 'birmingham': 'United Kingdom',
+  'glasgow': 'United Kingdom', 'edinburgh': 'United Kingdom', 'liverpool': 'United Kingdom',
+  'leeds': 'United Kingdom', 'bristol': 'United Kingdom', 'sheffield': 'United Kingdom',
+  'cardiff': 'United Kingdom', 'belfast': 'United Kingdom', 'newcastle': 'United Kingdom',
+  // France
+  'paris': 'France', 'lyon': 'France', 'marseille': 'France', 'toulouse': 'France',
+  'nice': 'France', 'nantes': 'France', 'strasbourg': 'France', 'bordeaux': 'France',
+  // Netherlands
+  'amsterdam': 'Netherlands', 'rotterdam': 'Netherlands', 'the hague': 'Netherlands',
+  'den haag': 'Netherlands', 'utrecht': 'Netherlands', 'eindhoven': 'Netherlands',
+  // Spain
+  'madrid': 'Spain', 'barcelona': 'Spain', 'valencia': 'Spain', 'seville': 'Spain',
+  'sevilla': 'Spain', 'zaragoza': 'Spain', 'málaga': 'Spain', 'malaga': 'Spain', 'bilbao': 'Spain',
+  // Italy
+  'rome': 'Italy', 'roma': 'Italy', 'milan': 'Italy', 'milano': 'Italy',
+  'naples': 'Italy', 'napoli': 'Italy', 'turin': 'Italy', 'torino': 'Italy',
+  'florence': 'Italy', 'firenze': 'Italy', 'bologna': 'Italy', 'venice': 'Italy',
+  // Portugal
+  'lisbon': 'Portugal', 'lisboa': 'Portugal', 'porto': 'Portugal',
+  // Czech Republic
+  'prague': 'Czech Republic', 'praha': 'Czech Republic', 'brno': 'Czech Republic', 'ostrava': 'Czech Republic',
+  // Hungary
+  'budapest': 'Hungary', 'debrecen': 'Hungary',
+  // Romania
+  'bucharest': 'Romania', 'bucurești': 'Romania', 'cluj': 'Romania', 'timisoara': 'Romania',
+  // Bulgaria
+  'sofia': 'Bulgaria', 'plovdiv': 'Bulgaria', 'varna': 'Bulgaria',
+  // Serbia
+  'belgrade': 'Serbia', 'beograd': 'Serbia', 'novi sad': 'Serbia',
+  // Croatia
+  'zagreb': 'Croatia', 'split': 'Croatia',
+  // Slovakia
+  'bratislava': 'Slovakia', 'košice': 'Slovakia', 'kosice': 'Slovakia',
+  // Slovenia
+  'ljubljana': 'Slovenia',
+  // Ukraine
+  'kyiv': 'Ukraine', 'kiev': 'Ukraine', 'kharkiv': 'Ukraine', 'odesa': 'Ukraine',
+  'lviv': 'Ukraine', 'dnipro': 'Ukraine',
+  // Russia
+  'moscow': 'Russia', 'moskva': 'Russia', 'saint petersburg': 'Russia',
+  'st. petersburg': 'Russia', 'novosibirsk': 'Russia', 'yekaterinburg': 'Russia',
+  // Scandinavia
+  'stockholm': 'Sweden', 'gothenburg': 'Sweden', 'göteborg': 'Sweden', 'malmö': 'Sweden', 'malmo': 'Sweden',
+  'oslo': 'Norway', 'bergen': 'Norway',
+  'copenhagen': 'Denmark', 'københavn': 'Denmark',
+  'helsinki': 'Finland', 'espoo': 'Finland', 'tampere': 'Finland',
+  // Ireland
+  'dublin': 'Ireland', 'cork': 'Ireland',
+  // Greece
+  'athens': 'Greece', 'athina': 'Greece', 'thessaloniki': 'Greece',
+  // Austria
+  'vienna': 'Austria', 'wien': 'Austria', 'graz': 'Austria', 'linz': 'Austria',
+  // Switzerland
+  'zurich': 'Switzerland', 'zürich': 'Switzerland', 'geneva': 'Switzerland',
+  'genève': 'Switzerland', 'bern': 'Switzerland', 'basel': 'Switzerland',
+  // Belgium
+  'brussels': 'Belgium', 'bruxelles': 'Belgium', 'brussel': 'Belgium',
+  'antwerp': 'Belgium', 'antwerpen': 'Belgium', 'ghent': 'Belgium', 'gent': 'Belgium',
+  // Baltics
+  'vilnius': 'Lithuania', 'kaunas': 'Lithuania', 'riga': 'Latvia', 'tallinn': 'Estonia',
+  // Turkey
+  'istanbul': 'Turkey', 'ankara': 'Turkey', 'izmir': 'Turkey',
+  // Israel
+  'tel aviv': 'Israel', 'jerusalem': 'Israel', 'haifa': 'Israel',
+  // Gulf
+  'dubai': 'United Arab Emirates', 'abu dhabi': 'United Arab Emirates', 'sharjah': 'United Arab Emirates',
+  'riyadh': 'Saudi Arabia', 'jeddah': 'Saudi Arabia', 'dammam': 'Saudi Arabia',
+  // Egypt & Africa
+  'cairo': 'Egypt', 'alexandria': 'Egypt',
+  'johannesburg': 'South Africa', 'cape town': 'South Africa', 'durban': 'South Africa',
+  'nairobi': 'Kenya', 'lagos': 'Nigeria', 'abuja': 'Nigeria', 'accra': 'Ghana',
+  'casablanca': 'Morocco', 'rabat': 'Morocco', 'marrakech': 'Morocco',
+  // India
+  'mumbai': 'India', 'delhi': 'India', 'new delhi': 'India', 'bangalore': 'India',
+  'bengaluru': 'India', 'hyderabad': 'India', 'chennai': 'India', 'pune': 'India',
+  'kolkata': 'India', 'ahmedabad': 'India', 'jaipur': 'India', 'surat': 'India',
+  // China
+  'beijing': 'China', 'shanghai': 'China', 'shenzhen': 'China', 'guangzhou': 'China',
+  'chengdu': 'China', 'hangzhou': 'China', 'wuhan': 'China',
+  // Japan
+  'tokyo': 'Japan', 'osaka': 'Japan', 'yokohama': 'Japan', 'nagoya': 'Japan',
+  'sapporo': 'Japan', 'fukuoka': 'Japan', 'kyoto': 'Japan',
+  // Korea
+  'seoul': 'South Korea', 'busan': 'South Korea', 'incheon': 'South Korea',
+  'daegu': 'South Korea', 'daejeon': 'South Korea',
+  // SEA
+  'singapore': 'Singapore', 'kuala lumpur': 'Malaysia', 'penang': 'Malaysia',
+  'bangkok': 'Thailand', 'chiang mai': 'Thailand',
+  'hanoi': 'Vietnam', 'ho chi minh city': 'Vietnam', 'saigon': 'Vietnam',
+  'jakarta': 'Indonesia', 'surabaya': 'Indonesia',
+  'manila': 'Philippines', 'cebu': 'Philippines',
+  'taipei': 'Taiwan',
+  // Australia / NZ
+  'sydney': 'Australia', 'melbourne': 'Australia', 'brisbane': 'Australia',
+  'perth': 'Australia', 'adelaide': 'Australia', 'canberra': 'Australia',
+  'auckland': 'New Zealand', 'wellington': 'New Zealand', 'christchurch': 'New Zealand',
+  // Canada
+  'toronto': 'Canada', 'vancouver': 'Canada', 'montreal': 'Canada',
+  'calgary': 'Canada', 'ottawa': 'Canada', 'edmonton': 'Canada',
+  // USA
+  'new york': 'United States', 'nyc': 'United States', 'los angeles': 'United States',
+  'chicago': 'United States', 'houston': 'United States', 'phoenix': 'United States',
+  'philadelphia': 'United States', 'san antonio': 'United States', 'san diego': 'United States',
+  'dallas': 'United States', 'san jose': 'United States', 'austin': 'United States',
+  'san francisco': 'United States', 'seattle': 'United States', 'denver': 'United States',
+  'boston': 'United States', 'nashville': 'United States', 'atlanta': 'United States',
+  'miami': 'United States', 'portland': 'United States', 'las vegas': 'United States',
+  'washington': 'United States', 'washington dc': 'United States', 'detroit': 'United States',
+  'silicon valley': 'United States', 'bay area': 'United States',
+  // Latin America
+  'são paulo': 'Brazil', 'sao paulo': 'Brazil', 'rio de janeiro': 'Brazil',
+  'brasília': 'Brazil', 'brasilia': 'Brazil', 'belo horizonte': 'Brazil',
+  'mexico city': 'Mexico', 'guadalajara': 'Mexico', 'monterrey': 'Mexico',
+  'buenos aires': 'Argentina', 'bogotá': 'Colombia', 'bogota': 'Colombia',
+  'medellín': 'Colombia', 'medellin': 'Colombia', 'lima': 'Peru', 'santiago': 'Chile',
+  // Pakistan / Bangladesh
+  'karachi': 'Pakistan', 'lahore': 'Pakistan', 'islamabad': 'Pakistan', 'dhaka': 'Bangladesh',
+};
+
+const normalizeCountry = (location) => {
+  if (!location) return null;
+  const parts = location.split(',').map(p => p.trim()).filter(Boolean);
+  // Try each part from last (country) to first (city), checking alias then city maps
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const key = parts[i].toLowerCase().replace(/\s+/g, ' ').trim();
+    if (COUNTRY_ALIASES[key]) return COUNTRY_ALIASES[key];
+    if (CITY_TO_COUNTRY[key]) return CITY_TO_COUNTRY[key];
+  }
+  // Fall back: return last part as-is (best guess at country)
+  return parts[parts.length - 1] || null;
+};
+
 // ── Reusable mini components ──────────────────────────────────────────────────
 function Avatar({ src, name, size = 32 }) {
   return (
@@ -268,13 +461,11 @@ export default function Dashboard() {
         roleValue: val,
       }));
 
-    // Location breakdown — top 6
+    // Location breakdown — normalized to English country names, top 6
     const locCounts = {};
     all.forEach(c => {
-      if (c.location) {
-        const loc = c.location.split(',').pop().trim() || c.location;
-        locCounts[loc] = (locCounts[loc] || 0) + 1;
-      }
+      const country = normalizeCountry(c.location);
+      if (country) locCounts[country] = (locCounts[country] || 0) + 1;
     });
     const locationBreakdown = Object.entries(locCounts)
       .sort((a, b) => b[1] - a[1])
