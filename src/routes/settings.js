@@ -334,8 +334,9 @@ function buildResumeText(profile) {
   const headline = profile.headline || profile.sub_title || profile.occupation || '';
   if (headline) lines.push(`Headline: ${headline}`);
 
-  // Bio / summary
-  const summary = profile.summary || profile.about || profile.description || '';
+  // Bio / summary — pick longest available field to avoid Piloterr-truncated versions
+  const aboutCandidates = [profile.summary, profile.about, profile.description, profile.bio].filter(Boolean);
+  const summary = aboutCandidates.reduce((longest, s) => s.length > longest.length ? s : longest, '');
   if (summary) lines.push(`\nSummary:\n${summary}`);
 
   // Experience — Piloterr uses "experiences" with "job_title" field

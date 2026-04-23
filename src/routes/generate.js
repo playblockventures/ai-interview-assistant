@@ -101,15 +101,16 @@ function buildCandidateContext(candidate) {
   const lp = candidate.linkedinProfile;
 
   if (lp) {
-    // About / summary
-    const summary = lp.summary || lp.about || lp.description || '';
+    // About / summary — pick the longest available field to avoid truncated versions
+    const aboutCandidates = [lp.summary, lp.about, lp.description, lp.bio].filter(Boolean);
+    const summary = aboutCandidates.reduce((longest, s) => s.length > longest.length ? s : longest, '');
     if (summary) lines.push(`\nAbout:\n${summary}`);
 
-    // Experience — top 6 entries
+    // Experience — top 8 entries, full descriptions (no truncation)
     const experiences = lp.experiences || lp.experience || [];
     if (Array.isArray(experiences) && experiences.length) {
       lines.push('\nExperience:');
-      experiences.slice(0, 6).forEach(e => {
+      experiences.slice(0, 8).forEach(e => {
         const title   = e.job_title || e.title || e.role || '';
         const company = e.company || e.company_name || '';
         const start   = e.start_date || '';
@@ -117,7 +118,7 @@ function buildCandidateContext(candidate) {
         const dateStr = start ? ` (${start} – ${end})` : '';
         const header  = [title, company].filter(Boolean).join(' at ');
         if (header) lines.push(`  • ${header}${dateStr}`);
-        if (e.description) lines.push(`    ${e.description.substring(0, 300)}`);
+        if (e.description) lines.push(`    ${e.description}`);
       });
     }
 
