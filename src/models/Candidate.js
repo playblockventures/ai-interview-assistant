@@ -255,6 +255,9 @@ const Candidate = {
           lastAssistantMs = ms;
         } else if (m.role === 'user' && m.fromCandidate !== false && lastAssistantMs !== null) {
           // fromCandidate is true (manual insert) or undefined (legacy message) → count it
+          // Skip non-responses and trivial placeholders
+          const content = (m.content || '').trim();
+          if (content === '[no response]' || content === '.') continue;
           gaps.push(ms - lastAssistantMs);
           lastAssistantMs = null; // reset: don't double-count on consecutive user messages
         }
