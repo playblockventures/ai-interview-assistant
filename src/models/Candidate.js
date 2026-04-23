@@ -264,7 +264,7 @@ const Candidate = {
       }
 
       const avgMs = gaps.length > 0 ? gaps.reduce((a, b) => a + b, 0) / gaps.length : null;
-      const messageCount = history.length;
+      const messageCount = candidateMsgTimes.length;
 
       // Duration since last outbound message (or candidate creation if no messages)
       const lastContactAt = c.lastMessageAt || c.updatedAt || c.createdAt;
@@ -278,7 +278,7 @@ const Candidate = {
     // Only include candidates with recent activity (last contact within 14 days)
     const ACTIVE_THRESHOLD_MS = 14 * 24 * 60 * 60 * 1000;
     return withAvg
-      .filter(c => c.messageCount > 0 && c.durationSinceLastMessageMs <= ACTIVE_THRESHOLD_MS)
+      .filter(c => c.messageCount >= 5 && c.durationSinceLastMessageMs <= ACTIVE_THRESHOLD_MS)
       .sort((a, b) => a.durationSinceLastMessageMs - b.durationSinceLastMessageMs)
       .slice(0, parseInt(limit));
   },
