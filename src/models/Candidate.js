@@ -245,22 +245,22 @@ const Candidate = {
     const withAvg = docs.map(c => {
       const history = (c.conversationHistory || []);
 
-      // Only measure assistant→candidate reply gaps (skip recruiter follow-up prompts)
-      const gaps = [];
-      let lastAssistantMs = null;
-      for (const m of history) {
-        const ms = new Date(m.timestamp || m.createdAt || 0).getTime();
-        if (!ms) continue;
-        if (m.role === 'assistant') {
-          lastAssistantMs = ms;
-        } else if (m.role === 'user' && m.fromCandidate !== false && lastAssistantMs !== null) {
-          // fromCandidate is true (manual insert) or undefined (legacy message) → count it
-          // Skip messages wrapped in [] (placeholders like [no response], [busy], etc.) and bare dot
+      // Measure gaps between consecutive candidate messages (recruiter/assistant messages ignored)
+      const candidateMsgTimes = history
+        .filter(m => {
+          if (m.role !== 'user') return false;
+          if (m.fromCandidate === false) return false;
           const content = (m.content || '').trim();
-          if (/^\[.*\]$/.test(content) || content === '.') continue;
-          gaps.push(ms - lastAssistantMs);
-          lastAssistantMs = null; // reset: don't double-count on consecutive user messages
-        }
+          if (/^\[.*\]$/.test(content) || content === '.') return false;
+          return true;
+        })
+        .map(m => new Date(m.timestamp || m.createdAt || 0).getTime())
+        .filter(ms => ms > 0)
+        .sort((a, b) => a - b);
+
+      const gaps = [];
+      for (let i = 1; i < candidateMsgTimes.length; i++) {
+        gaps.push(candidateMsgTimes[i] - candidateMsgTimes[i - 1]);
       }
 
       const avgMs = gaps.length > 0 ? gaps.reduce((a, b) => a + b, 0) / gaps.length : null;
