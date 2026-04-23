@@ -34,6 +34,7 @@ const TONES = {
   casual:       'casual and conversational',
   assertive:    'direct and assertive',
   feminine:     'empathetic, warm, and nurturing',
+  humor:        'light-hearted and humorous while staying professional',
 };
 
 async function resolveRoleLabel(role) {
@@ -85,10 +86,86 @@ async function getRecruiterContext(recruiterId, userId) {
   } catch (_) { return ''; }
 }
 
-// Build candidate context string
-function buildCandidateContext(candidate, resumeLength = 2000) {
+// Build rich candidate context from structured LinkedIn data or resumeText fallback
+function buildCandidateContext(candidate) {
   if (!candidate) return '';
-  return `\n--- CANDIDATE PROFILE ---\nName: ${candidate.fullName || 'N/A'}\nEmail: ${candidate.email || 'N/A'}\nPhone: ${candidate.phone || 'N/A'}\nLocation: ${candidate.location || 'N/A'}\nCurrent Title: ${candidate.currentTitle || 'N/A'}\nLinkedIn: ${candidate.linkedinUrl || 'N/A'}\nResume:\n${candidate.resumeText?.substring(0, resumeLength) || 'Not provided'}`;
+
+  const lines = ['\n--- CANDIDATE PROFILE ---'];
+  lines.push(`Name: ${candidate.fullName || 'N/A'}`);
+  if (candidate.currentTitle) lines.push(`Current Title: ${candidate.currentTitle}`);
+  if (candidate.location)     lines.push(`Location: ${candidate.location}`);
+  if (candidate.email)        lines.push(`Email: ${candidate.email}`);
+  if (candidate.phone)        lines.push(`Phone: ${candidate.phone}`);
+  if (candidate.linkedinUrl)  lines.push(`LinkedIn: ${candidate.linkedinUrl}`);
+
+  const lp = candidate.linkedinProfile;
+
+  if (lp) {
+    // About / summary
+    const summary = lp.summary || lp.about || lp.description || '';
+    if (summary) lines.push(`\nAbout:\n${summary}`);
+
+    // Experience — top 6 entries
+    const experiences = lp.experiences || lp.experience || [];
+    if (Array.isArray(experiences) && experiences.length) {
+      lines.push('\nExperience:');
+      experiences.slice(0, 6).forEach(e => {
+        const title   = e.job_title || e.title || e.role || '';
+        const company = e.company || e.company_name || '';
+        const start   = e.start_date || '';
+        const end     = e.end_date || 'present';
+        const dateStr = start ? ` (${start} – ${end})` : '';
+        const header  = [title, company].filter(Boolean).join(' at ');
+        if (header) lines.push(`  • ${header}${dateStr}`);
+        if (e.description) lines.push(`    ${e.description.substring(0, 300)}`);
+      });
+    }
+
+    // Education
+    const educations = lp.educations || lp.education || [];
+    if (Array.isArray(educations) && educations.length) {
+      lines.push('\nEducation:');
+      educations.slice(0, 4).forEach(e => {
+        const degree = e.degree_name || e.degree || e.field_of_study || '';
+        const school = e.school || e.school_name || '';
+        const start  = e.start_year || (e.start_date ? e.start_date.slice(0, 4) : '');
+        const end    = e.end_year   || (e.end_date   ? e.end_date.slice(0, 4)   : '');
+        const dateStr = (start || end) ? ` (${[start, end].filter(Boolean).join('–')})` : '';
+        const header  = [degree, school].filter(Boolean).join(' at ');
+        if (header) lines.push(`  • ${header}${dateStr}`);
+      });
+    }
+
+    // Certifications
+    const certs = lp.certifications || [];
+    if (Array.isArray(certs) && certs.length) {
+      lines.push('\nCertifications:');
+      certs.slice(0, 8).forEach(c => {
+        const name = c.name || c.title || (typeof c === 'string' ? c : '');
+        const org  = c.authority || c.organization || c.issuer || '';
+        if (name) lines.push(`  • ${name}${org ? ' — ' + org : ''}`);
+      });
+    }
+
+    // Skills
+    const skills = lp.skills || [];
+    if (Array.isArray(skills) && skills.length) {
+      const skillNames = skills.slice(0, 20).map(s => (typeof s === 'string' ? s : s.name || '')).filter(Boolean);
+      if (skillNames.length) lines.push(`\nSkills: ${skillNames.join(', ')}`);
+    }
+
+    // Languages
+    const langs = lp.languages || [];
+    if (Array.isArray(langs) && langs.length) {
+      const langNames = langs.map(l => (typeof l === 'string' ? l : l.name || '')).filter(Boolean);
+      if (langNames.length) lines.push(`Languages: ${langNames.join(', ')}`);
+    }
+  } else if (candidate.resumeText) {
+    // Fallback: raw resume text (up to 6000 chars)
+    lines.push(`\nBackground:\n${candidate.resumeText.substring(0, 6000)}`);
+  }
+
+  return lines.join('\n');
 }
 
 // ── POST /generate/scenario ───────────────────────────────────────────────────
@@ -220,7 +297,7 @@ router.post('/outreach', async (req, res) => {
     const roleLabel     = await resolveRoleLabel(role);
     const toneLabel     = TONES[tone] || tone;
     const messageLabel  = MESSAGE_TYPE_LABELS[messageType] || messageType;
-    const candidateContext = buildCandidateContext(candidate, 1000);
+    const candidateContext = buildCandidateContext(candidate);
 
     // Priority order (last = highest): knowledge base → recruiter/candidate profile → custom instructions
     const systemPrompt = [
@@ -317,7 +394,7 @@ router.post('/conversation', async (req, res) => {
         : '',
       // 3. Recruiter & candidate profile
       recruiterContext,
-      candidate ? `\n\n--- CANDIDATE ---\n${buildCandidateContext(candidate, 1500)}` : '',
+      candidate ? `\n\n--- CANDIDATE ---\n${buildCandidateContext(candidate)}` : '',
       // 2a. Company interview framework/scenario
       companyScenario
         ? `\n\n=== COMPANY INTERVIEW FRAMEWORK ===\n${companyScenario}\n=== END ===`
@@ -498,7 +575,7 @@ router.post('/call-script', async (req, res) => {
     const companyScenario  = await getCompanyScenario(req.user.id, companyId);
     const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
     const roleLabel        = await resolveRoleLabel(role || candidate?.role);
-    const candidateContext = buildCandidateContext(candidate, 1500);
+    const candidateContext = buildCandidateContext(candidate);
 
     // Look up company name for the intro
     let companyIntro = '';

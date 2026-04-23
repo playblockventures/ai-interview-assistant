@@ -303,16 +303,17 @@ router.post('/extract-linkedin', requireAuth, async (req, res) => {
 
     const result = {
       fullName,
-      email:        profile.email || '',  // usually empty; included if API returns it
-      phone:        profile.phone || profile.phone_number || '',
+      email:          profile.email || '',
+      phone:          profile.phone || profile.phone_number || '',
       location,
       currentTitle,
       linkedinUrl,
       photoUrl,
-      resumeText:   buildResumeText(profile),
+      resumeText:     buildResumeText(profile),
+      linkedinProfile: profile,  // full structured data for rich AI context
     };
 
-    res.json({ ...result, _raw: profile });
+    res.json(result);
   } catch (err) {
     const status = err.response?.status;
     const piloterrBody = err.response?.data;

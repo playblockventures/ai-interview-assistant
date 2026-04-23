@@ -91,6 +91,7 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
   const [saving, setSaving]                 = useState(false);
   const [linkedinInput, setLinkedinInput]   = useState('');
   const [extractingLi, setExtractingLi]     = useState(false);
+  const [linkedinProfile, setLinkedinProfile] = useState(initial?.linkedinProfile || null);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -166,6 +167,7 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
       }));
       if (data.photoUrl) { setPhotoPreview(data.photoUrl); setPhotoData(data.photoUrl); }
       if (data.resumeText) setResumeText(data.resumeText);
+      if (data.linkedinProfile) setLinkedinProfile(data.linkedinProfile);
       toast.success('LinkedIn profile extracted — fields auto-filled');
     } catch (e) { toast.error(e.message); }
     finally { setExtractingLi(false); }
@@ -183,6 +185,7 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
       fd.set('companyName',   getCompanyName(form.companyId));
       if (photoData) fd.append('photoUrl', photoData);
       if (resumeFile) fd.append('resume', resumeFile);
+      if (linkedinProfile) fd.append('linkedinProfile', JSON.stringify(linkedinProfile));
       if (isEdit) {
         await candidateApi.update(initial.id, fd);
         toast.success('Candidate updated!');

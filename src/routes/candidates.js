@@ -103,7 +103,7 @@ router.post('/', upload.single('resume'), async (req, res) => {
   try {
     const { fullName, email, linkedinUrl, phone, location, currentTitle, photoUrl,
             role, resumeUrl, recruiterId, recruiterName, companyId, companyName,
-            resumeText: bodyText } = req.body;
+            resumeText: bodyText, linkedinProfile: linkedinProfileRaw } = req.body;
 
     let resumeText = bodyText || '', resumeFileName = '';
     if (req.file) {
@@ -111,17 +111,21 @@ router.post('/', upload.single('resume'), async (req, res) => {
       resumeFileName = req.file.originalname;
     }
 
+    let linkedinProfile = null;
+    try { if (linkedinProfileRaw) linkedinProfile = JSON.parse(linkedinProfileRaw); } catch (_) {}
+
     const candidate = await Candidate.create({
       fullName, email, linkedinUrl, phone, location, currentTitle,
-      photoUrl:      photoUrl      || '',
+      photoUrl:        photoUrl        || '',
       role, resumeText, resumeFileName,
-      resumeUrl:     resumeUrl     || '',
-      recruiterId:   recruiterId   || '',
-      recruiterName: recruiterName || '',
-      companyId:     companyId     || '',
-      companyName:   companyName   || '',
-      ownerId:       req.user.id,
-      ownerName:     req.user.displayName || req.user.username,
+      resumeUrl:       resumeUrl       || '',
+      recruiterId:     recruiterId     || '',
+      recruiterName:   recruiterName   || '',
+      companyId:       companyId       || '',
+      companyName:     companyName     || '',
+      linkedinProfile: linkedinProfile || null,
+      ownerId:         req.user.id,
+      ownerName:       req.user.displayName || req.user.username,
     });
     res.status(201).json(candidate);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -137,6 +141,9 @@ router.put('/:id', upload.single('resume'), async (req, res) => {
     if (req.file) {
       updates.resumeText     = await extractTextFromBuffer(req.file.buffer, req.file.originalname);
       updates.resumeFileName = req.file.originalname;
+    }
+    if (updates.linkedinProfile) {
+      try { updates.linkedinProfile = JSON.parse(updates.linkedinProfile); } catch (_) { delete updates.linkedinProfile; }
     }
     res.json(await Candidate.update(req.params.id, updates));
   } catch (err) { res.status(500).json({ error: err.message }); }
