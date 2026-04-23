@@ -263,15 +263,20 @@ const Candidate = {
       const avgMs = gaps.length > 0 ? gaps.reduce((a, b) => a + b, 0) / gaps.length : null;
       const messageCount = history.length;
 
+      // Duration since last outbound message (or candidate creation if no messages)
+      const lastContactAt = c.lastMessageAt || c.updatedAt || c.createdAt;
+      const durationSinceLastMessageMs = Date.now() - new Date(lastContactAt || 0).getTime();
+
       // Strip large fields before returning to client
       const { conversationHistory, resumeText, interviewScenarios, ...rest } = c;
-      return { ...rest, avgResponseMs: avgMs, messageCount };
+      return { ...rest, avgResponseMs: avgMs, messageCount, durationSinceLastMessageMs };
     });
 
-    // Candidates with measured avg response time first (shortest = most active), then unmeasured
+    // Only include candidates with recent activity (last contact within 14 days)
+    const ACTIVE_THRESHOLD_MS = 14 * 24 * 60 * 60 * 1000;
     return withAvg
-      .filter(c => c.messageCount >= 5 && c.avgResponseMs !== null)
-      .sort((a, b) => a.avgResponseMs - b.avgResponseMs)
+      .filter(c => c.messageCount > 0 && c.durationSinceLastMessageMs <= ACTIVE_THRESHOLD_MS)
+      .sort((a, b) => a.durationSinceLastMessageMs - b.durationSinceLastMessageMs)
       .slice(0, parseInt(limit));
   },
 

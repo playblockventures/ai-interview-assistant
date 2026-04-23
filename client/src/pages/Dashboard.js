@@ -671,14 +671,14 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* Active Candidates — sorted by avg response time */}
+              {/* Active Candidates — sorted by time since last contact */}
               {activeCandidates.length > 0 && (
                 <div className="card" style={{ marginBottom: 20 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                     <div>
-                      <div className="card-title" style={{ marginBottom: 2 }}>Active Candidates — Avg. Response Time</div>
+                      <div className="card-title" style={{ marginBottom: 2 }}>Active Candidates — Awaiting Follow-up</div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        {activeCandidates.length} in progress · 5+ messages · shortest avg. response time first
+                        {activeCandidates.length} in progress · contacted within 14 days · most recent first
                       </div>
                     </div>
                     <button className="btn btn-secondary btn-sm" onClick={() => navigateFiltered({ statusFilter: 'in_progress' })}>
@@ -695,7 +695,7 @@ export default function Dashboard() {
                           <th>Recruiter</th>
                           {user?.isAdmin && <th>Owner</th>}
                           <th>Status</th>
-                          <th style={{ textAlign: 'right' }}>Avg Response</th>
+                          <th style={{ textAlign: 'right' }}>Last Contact</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -731,16 +731,12 @@ export default function Dashboard() {
                               )}
                               <td><span className={`status-badge status-${c.status}`}>{STATUS_CONFIG[c.status]?.label || c.status}</span></td>
                               <td style={{ textAlign: 'right' }}>
-                                {c.avgResponseMs !== null && c.avgResponseMs !== undefined ? (
-                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
-                                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>
-                                      {formatAvgResponse(c.avgResponseMs)}
-                                    </span>
-                                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.messageCount} msg{c.messageCount !== 1 ? 's' : ''}</span>
-                                  </div>
-                                ) : (
-                                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>No messages</span>
-                                )}
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+                                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>
+                                    {formatAvgResponse(c.durationSinceLastMessageMs)}
+                                  </span>
+                                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.messageCount} msg{c.messageCount !== 1 ? 's' : ''}</span>
+                                </div>
                               </td>
                             </tr>
                           );

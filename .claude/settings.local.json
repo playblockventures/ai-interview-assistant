@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:docs.piloterr.com)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
