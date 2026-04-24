@@ -634,119 +634,150 @@ export default function Candidates() {
           </div>
         ) : (
           <>
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 32 }} onClick={e => e.stopPropagation()}>
-                      <input type="checkbox"
-                        checked={allSelected}
-                        ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
-                        onChange={toggleSelectAll}
-                        style={{ cursor: 'pointer', width: 15, height: 15 }}
-                        title={allSelected ? 'Deselect all on page' : 'Select all on page'} />
-                    </th>
-                    <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
-                    <th style={{ width: 40 }}></th>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Location</th>
-                    <th>Recruiter</th>
-                    <th>Added By</th>
-                    <th>Status</th>
-                    <th>Last Message</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* ── Pinned rows — first page only ── */}
-                  {page === 1 && pinnedCandidates.map((c, pidx) => {
-                    const recruiter  = getRecruiter(c.recruiterId);
-                    const isSelected = selectedIds.has(c.id);
-                    return (
-                      <tr key={`pin-${c.id}`} style={{ background: isSelected ? 'var(--accent-dim)' : 'rgba(245,158,11,0.04)', cursor: 'pointer' }} onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }}>
-                        <td onClick={e => e.stopPropagation()}>
-                          <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(c.id)}
-                            style={{ cursor: 'pointer', width: 15, height: 15 }} />
-                        </td>
-                        <td style={{ cursor: 'pointer' }}>
-                          <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>{pidx + 1}</span>
-                        </td>
-                        <td style={{ cursor: 'pointer' }}>
-                          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-elevated)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
-                            {c.photoUrl ? <img src={c.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
-                          </div>
-                        </td>
-                        <td style={{ cursor: 'pointer' }}>
-                          <div style={{ fontWeight: 600 }}>{c.fullName || '—'}</div>
-                          {c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.currentTitle}</div>}
-                        </td>
-                        <td style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, cursor: 'pointer' }}>{c.email || '—'}</td>
-                        <td style={{ fontSize: 12, cursor: 'pointer' }}>{getRoleLabel(c.role)}</td>
-                        <td style={{ fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }}>{c.location || '—'}</td>
-                        <td style={{ cursor: 'pointer' }}>
-                          {recruiter ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <div style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, background: recruiter.photoUrl ? undefined : 'var(--accent-dim)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 10 }}>
-                                {recruiter.photoUrl ? <img src={recruiter.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : recruiter.name.charAt(0).toUpperCase()}
-                              </div>
-                              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{recruiter.name}</span>
-                            </div>
-                          ) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>}
-                        </td>
-                        <td style={{ cursor: 'pointer' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, flexShrink: 0 }}>
-                              {(c.ownerName || '?').charAt(0).toUpperCase()}
-                            </div>
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.ownerName || '—'}</span>
-                          </div>
-                        </td>
-                        <td style={{ cursor: 'pointer' }}>
-                          <span className={`status-badge status-${c.status}`}>{STATUS_LABELS[c.status] || c.status?.replace(/_/g, ' ')}</span>
-                        </td>
-                        <td style={{ fontSize: 11, color: c.lastMessageAt ? 'var(--text-secondary)' : 'var(--text-muted)', cursor: 'pointer' }}>
-                          {formatDate(c.lastMessageAt)}
-                        </td>
-                        <td>
-                          <div className="flex gap-8" onClick={e => e.stopPropagation()}>
-                            <button onClick={e => togglePin(e, c)} title="Unpin"
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#f59e0b', padding: '0 4px' }}>★</button>
-                            <button className="btn btn-secondary btn-sm"
-                              onClick={e => { e.stopPropagation(); setEditCandidate(c); }}>✎ Edit</button>
-                            <button onClick={e => handleDelete(e, c.id)}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: 16, padding: '0 4px' }} title="Delete">✕</button>
-                          </div>
-                        </td>
+            {/* ── Pinned candidates — separate section ── */}
+            {pinnedCandidates.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '0 2px' }}>
+                  <span style={{ fontSize: 14, color: '#f59e0b' }}>★</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#f59e0b' }}>Pinned Candidates</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>({pinnedCandidates.length})</span>
+                </div>
+                <div className="table-wrap" style={{ border: '1px solid rgba(245,158,11,0.25)', borderRadius: 8, overflow: 'hidden' }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 32 }} onClick={e => e.stopPropagation()}></th>
+                        <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
+                        <th style={{ width: 40 }}></th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Location</th>
+                        <th>Recruiter</th>
+                        <th>Added By</th>
+                        <th>Status</th>
+                        <th>Last Message</th>
+                        <th></th>
                       </tr>
-                    );
-                  })}
+                    </thead>
+                    <tbody>
+                      {pinnedCandidates.map((c, pidx) => {
+                        const recruiter  = getRecruiter(c.recruiterId);
+                        const isSelected = selectedIds.has(c.id);
+                        return (
+                          <tr key={`pin-${c.id}`} style={{ background: isSelected ? 'var(--accent-dim)' : 'rgba(245,158,11,0.04)', cursor: 'pointer' }} onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }}>
+                            <td onClick={e => e.stopPropagation()}>
+                              <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(c.id)}
+                                style={{ cursor: 'pointer', width: 15, height: 15 }} />
+                            </td>
+                            <td style={{ cursor: 'pointer' }}>
+                              <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>{pidx + 1}</span>
+                            </td>
+                            <td style={{ cursor: 'pointer' }}>
+                              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-elevated)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
+                                {c.photoUrl ? <img src={c.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
+                              </div>
+                            </td>
+                            <td style={{ cursor: 'pointer' }}>
+                              <div style={{ fontWeight: 600 }}>{c.fullName || '—'}</div>
+                              {c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.currentTitle}</div>}
+                            </td>
+                            <td style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, cursor: 'pointer' }}>{c.email || '—'}</td>
+                            <td style={{ fontSize: 12, cursor: 'pointer' }}>{getRoleLabel(c.role)}</td>
+                            <td style={{ fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }}>{c.location || '—'}</td>
+                            <td style={{ cursor: 'pointer' }}>
+                              {recruiter ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <div style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, background: recruiter.photoUrl ? undefined : 'var(--accent-dim)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 10 }}>
+                                    {recruiter.photoUrl ? <img src={recruiter.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : recruiter.name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{recruiter.name}</span>
+                                </div>
+                              ) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>}
+                            </td>
+                            <td style={{ cursor: 'pointer' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, flexShrink: 0 }}>
+                                  {(c.ownerName || '?').charAt(0).toUpperCase()}
+                                </div>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.ownerName || '—'}</span>
+                              </div>
+                            </td>
+                            <td style={{ cursor: 'pointer' }}>
+                              <span className={`status-badge status-${c.status}`}>{STATUS_LABELS[c.status] || c.status?.replace(/_/g, ' ')}</span>
+                            </td>
+                            <td style={{ fontSize: 11, color: c.lastMessageAt ? 'var(--text-secondary)' : 'var(--text-muted)', cursor: 'pointer' }}>
+                              {formatDate(c.lastMessageAt)}
+                            </td>
+                            <td>
+                              <div className="flex gap-8" onClick={e => e.stopPropagation()}>
+                                <button onClick={e => togglePin(e, c)} title="Unpin"
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#f59e0b', padding: '0 4px' }}>★</button>
+                                <button className="btn btn-secondary btn-sm"
+                                  onClick={e => { e.stopPropagation(); setEditCandidate(c); }}>✎ Edit</button>
+                                <button onClick={e => handleDelete(e, c.id)}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: 16, padding: '0 4px' }} title="Delete">✕</button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
-                  {/* ── Separator between pinned and regular ── */}
-                  {page === 1 && pinnedCandidates.length > 0 && candidates.length > 0 && (
-                    <tr>
-                      <td colSpan={12} style={{ padding: '4px 0', background: 'var(--bg-page)', borderTop: '2px solid var(--border)', pointerEvents: 'none' }} />
-                    </tr>
-                  )}
-
-                  {/* ── Regular rows ── */}
-                  {candidates.map((c, idx) => {
-                    const recruiter  = getRecruiter(c.recruiterId);
-                    const isSelected = selectedIds.has(c.id);
-                    return (
-                      <tr key={c.id} style={{ background: isSelected ? 'var(--accent-dim)' : undefined, cursor: 'pointer' }} onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }}>
-                        <td onClick={e => e.stopPropagation()}>
-                          <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(c.id)}
-                            style={{ cursor: 'pointer', width: 15, height: 15 }} />
-                        </td>
-                        <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, cursor: 'pointer' }}>
-                          {(page === 1 ? pinnedCandidates.length : 0) + (page - 1) * pageSize + idx + 1}
-                        </td>
-                        <td style={{ cursor: 'pointer' }}>
-                          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-elevated)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
-                            {c.photoUrl ? <img src={c.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
-                          </div>
+            {/* ── General candidates section ── */}
+            {candidates.length > 0 && (
+              <>
+                {pinnedCandidates.length > 0 && (
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, padding: '0 2px' }}>
+                    All Candidates <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>({total})</span>
+                  </div>
+                )}
+                <div className="table-wrap">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 32 }} onClick={e => e.stopPropagation()}>
+                          <input type="checkbox"
+                            checked={allSelected}
+                            ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                            onChange={toggleSelectAll}
+                            style={{ cursor: 'pointer', width: 15, height: 15 }}
+                            title={allSelected ? 'Deselect all on page' : 'Select all on page'} />
+                        </th>
+                        <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
+                        <th style={{ width: 40 }}></th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Location</th>
+                        <th>Recruiter</th>
+                        <th>Added By</th>
+                        <th>Status</th>
+                        <th>Last Message</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {candidates.map((c, idx) => {
+                        const recruiter  = getRecruiter(c.recruiterId);
+                        const isSelected = selectedIds.has(c.id);
+                        return (
+                          <tr key={c.id} style={{ background: isSelected ? 'var(--accent-dim)' : undefined, cursor: 'pointer' }} onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }}>
+                            <td onClick={e => e.stopPropagation()}>
+                              <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(c.id)}
+                                style={{ cursor: 'pointer', width: 15, height: 15 }} />
+                            </td>
+                            <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, cursor: 'pointer' }}>
+                              {(page - 1) * pageSize + idx + 1}
+                            </td>
+                            <td style={{ cursor: 'pointer' }}>
+                              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-elevated)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
+                                {c.photoUrl ? <img src={c.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
+                              </div>
                         </td>
                         <td style={{ cursor: 'pointer' }}>
                           <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{c.fullName || '—'}</div>
@@ -796,37 +827,39 @@ export default function Candidates() {
                       </tr>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-
-            {total > pageSize && (() => {
-              const totalPages = Math.ceil(total / pageSize);
-              const delta = 2;
-              const pages = [];
-              for (let i = 1; i <= totalPages; i++) {
-                if (i === 1 || i === totalPages || (i >= page - delta && i <= page + delta)) {
-                  pages.push(i);
-                } else if (pages[pages.length - 1] !== '...') {
-                  pages.push('...');
-                }
-              }
-              return (
-                <div className="flex items-center gap-8 mt-16" style={{ paddingTop: 12, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
-                  <button className="btn btn-secondary btn-sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>←</button>
-                  {pages.map((p, i) =>
-                    p === '...'
-                      ? <span key={`ellipsis-${i}`} style={{ fontSize: 12, color: 'var(--text-muted)', padding: '0 2px' }}>…</span>
-                      : <button key={p} className="btn btn-sm" onClick={() => setPage(p)}
-                          style={{ minWidth: 32, fontWeight: page === p ? 700 : 400, background: page === p ? 'var(--accent)' : 'var(--bg-elevated)', color: page === p ? '#fff' : 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 }}>
-                          {p}
-                        </button>
-                  )}
-                  <button className="btn btn-secondary btn-sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>→</button>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 4 }}>{total} total</span>
+                    </tbody>
+                  </table>
                 </div>
-              );
-            })()}
+
+                {total > pageSize && (() => {
+                  const totalPages = Math.ceil(total / pageSize);
+                  const delta = 2;
+                  const pages = [];
+                  for (let i = 1; i <= totalPages; i++) {
+                    if (i === 1 || i === totalPages || (i >= page - delta && i <= page + delta)) {
+                      pages.push(i);
+                    } else if (pages[pages.length - 1] !== '...') {
+                      pages.push('...');
+                    }
+                  }
+                  return (
+                    <div className="flex items-center gap-8 mt-16" style={{ paddingTop: 12, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                      <button className="btn btn-secondary btn-sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>←</button>
+                      {pages.map((p, i) =>
+                        p === '...'
+                          ? <span key={`ellipsis-${i}`} style={{ fontSize: 12, color: 'var(--text-muted)', padding: '0 2px' }}>…</span>
+                          : <button key={p} className="btn btn-sm" onClick={() => setPage(p)}
+                              style={{ minWidth: 32, fontWeight: page === p ? 700 : 400, background: page === p ? 'var(--accent)' : 'var(--bg-elevated)', color: page === p ? '#fff' : 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 }}>
+                              {p}
+                            </button>
+                      )}
+                      <button className="btn btn-secondary btn-sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>→</button>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 4 }}>{total} total</span>
+                    </div>
+                  );
+                })()}
+              </>
+            )}
           </>
         )}
       </div>
