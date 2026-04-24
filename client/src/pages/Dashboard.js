@@ -253,14 +253,12 @@ export default function Dashboard() {
         setServerAnalytics(analyticsData);
         setRecent(recentData.candidates || []);
         setActiveCandidates(activeData.candidates || []);
-        // Seed pinned candidates from stale/duplicate lists already in analytics
-        const allKnown = [
-          ...(analyticsData.staleCandidates || []),
-          ...(analyticsData.duplicateGroups || []).flatMap(g => g.candidates),
-        ];
-        const pinIds = new Set(pinsData.pins || []);
-        const pinned = [...pinIds].map(id => allKnown.find(c => c.id === id)).filter(Boolean);
-        setPinnedCandidates(pinned);
+        const pinIds = pinsData.pins || [];
+        if (pinIds.length) {
+          candidateApi.getByIds(pinIds)
+            .then(d => setPinnedCandidates(d.candidates || []))
+            .catch(() => {});
+        }
       } catch (e) { console.error(e); }
       finally { setLoading(false); setAnalyticsLoading(false); }
     })();

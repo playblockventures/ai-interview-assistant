@@ -395,9 +395,9 @@ export default function Candidates() {
       if (user?.isAdmin && ownerFilter) params.ownerId = ownerFilter;
       if (fromDate) params.fromDate = fromDate;
       if (toDate)   params.toDate   = toDate;
+      if (pinnedIds.size) params.excludeIds = [...pinnedIds].join(',');
       const data = await candidateApi.getAll(params);
-      const pinSet = pinnedIds;
-      setCandidates((data.candidates || []).filter(c => !pinSet.has(c.id)));
+      setCandidates(data.candidates || []);
       setTotal(data.total || 0);
       setSelectedIds(new Set());
     } catch (e) {
