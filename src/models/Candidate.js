@@ -11,7 +11,45 @@ const LIST_FIELDS = [
   'photoUrl', 'role', 'recruiterId', 'recruiterName', 'companyId', 'companyName',
   'ownerId', 'ownerName', 'status', 'notes', 'resumeUrl', 'resumeFileName',
   'appliedScenario', 'createdAt', 'updatedAt', 'lastMessageAt',
+  'avgResponseMs', 'candidateMessageCount', 'engagementScore', 'engagementLabel',
 ];
+
+// Compute engagement metrics from conversationHistory — same filter rules as findActiveWithResponseTime
+function computeEngagement(conversationHistory) {
+  const history = conversationHistory || [];
+
+  const candidateMsgTimes = history
+    .filter(m => {
+      if (m.role !== 'user') return false;
+      if (m.fromCandidate === false) return false;
+      const content = (m.content || '').trim();
+      if (/^\[.*\]$/.test(content) || content === '.') return false;
+      return true;
+    })
+    .map(m => new Date(m.timestamp || m.createdAt || 0).getTime())
+    .filter(ms => ms > 0)
+    .sort((a, b) => a - b);
+
+  const gaps = [];
+  for (let i = 1; i < candidateMsgTimes.length; i++) {
+    gaps.push(candidateMsgTimes[i] - candidateMsgTimes[i - 1]);
+  }
+
+  const candidateMessageCount = candidateMsgTimes.length;
+  const avgResponseMs = gaps.length > 0 ? gaps.reduce((a, b) => a + b, 0) / gaps.length : null;
+
+  // Score 1–5 based on reply count and avg response speed
+  let engagementScore = 1;
+  let engagementLabel = 'Unresponsive';
+  const avgH = avgResponseMs !== null ? avgResponseMs / 3600000 : Infinity;
+
+  if      (candidateMessageCount >= 10 && avgH < 1)  { engagementScore = 5; engagementLabel = 'Very Active'; }
+  else if (candidateMessageCount >= 5  && avgH < 4)  { engagementScore = 4; engagementLabel = 'Active'; }
+  else if (candidateMessageCount >= 3  && avgH < 24) { engagementScore = 3; engagementLabel = 'Engaged'; }
+  else if (candidateMessageCount >= 1)               { engagementScore = 2; engagementLabel = 'Passive'; }
+
+  return { avgResponseMs, candidateMessageCount, engagementScore, engagementLabel };
+}
 
 const Candidate = {
   // Fetch list using field projection — avoids downloading huge resumeText/conversationHistory
@@ -237,53 +275,32 @@ const Candidate = {
     };
   },
 
-  // Active candidates with avg response time computed from conversationHistory timestamps
+  // Active candidates — uses persisted engagement fields, no full history load needed
   async findActiveWithResponseTime({ ownerId, isAdmin, limit = 20 } = {}) {
     const db = getDB();
-    // Need full docs to access conversationHistory
-    let query = db.collection(COL).where('status', '==', 'in_progress');
+    const ACTIVE_FIELDS = [
+      'fullName', 'email', 'photoUrl', 'currentTitle', 'role',
+      'recruiterId', 'recruiterName', 'ownerId', 'ownerName', 'status',
+      'lastMessageAt', 'createdAt', 'updatedAt',
+      'avgResponseMs', 'candidateMessageCount', 'engagementScore', 'engagementLabel',
+    ];
+    let query = db.collection(COL).where('status', '==', 'in_progress').select(...ACTIVE_FIELDS);
     if (ownerId) query = query.where('ownerId', '==', ownerId);
     const snapshot = await query.get();
     const docs = snapshot.docs.map(docToObj);
 
-    const withAvg = docs.map(c => {
-      const history = (c.conversationHistory || []);
-
-      // Measure gaps between consecutive candidate messages (recruiter/assistant messages ignored)
-      const candidateMsgTimes = history
-        .filter(m => {
-          if (m.role !== 'user') return false;
-          if (m.fromCandidate === false) return false;
-          const content = (m.content || '').trim();
-          if (/^\[.*\]$/.test(content) || content === '.') return false;
-          return true;
-        })
-        .map(m => new Date(m.timestamp || m.createdAt || 0).getTime())
-        .filter(ms => ms > 0)
-        .sort((a, b) => a - b);
-
-      const gaps = [];
-      for (let i = 1; i < candidateMsgTimes.length; i++) {
-        gaps.push(candidateMsgTimes[i] - candidateMsgTimes[i - 1]);
-      }
-
-      const avgMs = gaps.length > 0 ? gaps.reduce((a, b) => a + b, 0) / gaps.length : null;
-      const messageCount = candidateMsgTimes.length;
-
-      // Duration since last outbound message (or candidate creation if no messages)
-      const lastContactAt = c.lastMessageAt || c.updatedAt || c.createdAt;
-      const durationSinceLastMessageMs = Date.now() - new Date(lastContactAt || 0).getTime();
-
-      // Strip large fields before returning to client
-      const { conversationHistory, resumeText, interviewScenarios, ...rest } = c;
-      return { ...rest, avgResponseMs: avgMs, messageCount, durationSinceLastMessageMs };
-    });
-
-    // Only include candidates with recent activity (last contact within 14 days)
     const ACTIVE_THRESHOLD_MS = 14 * 24 * 60 * 60 * 1000;
-    return withAvg
+    return docs
+      .map(c => {
+        const lastContactAt = c.lastMessageAt || c.updatedAt || c.createdAt;
+        const durationSinceLastMessageMs = Date.now() - new Date(lastContactAt || 0).getTime();
+        return { ...c, messageCount: c.candidateMessageCount || 0, durationSinceLastMessageMs };
+      })
       .filter(c => c.messageCount >= 5 && c.durationSinceLastMessageMs <= ACTIVE_THRESHOLD_MS)
-      .sort((a, b) => a.durationSinceLastMessageMs - b.durationSinceLastMessageMs)
+      .sort((a, b) =>
+        (b.engagementScore || 0) - (a.engagementScore || 0) ||
+        a.durationSinceLastMessageMs - b.durationSinceLastMessageMs
+      )
       .slice(0, parseInt(limit));
   },
 
@@ -402,10 +419,16 @@ const Candidate = {
     const withTimestamps = entries.map(e => ({ ...e, timestamp: ts, createdAt: ts }));
     const doc = await db.collection(COL).doc(id).get();
     const existing = doc.data().conversationHistory || [];
+    const updatedHistory = [...existing, ...withTimestamps];
+    const engagement = computeEngagement(updatedHistory);
     await db.collection(COL).doc(id).update({
-      conversationHistory: [...existing, ...withTimestamps],
+      conversationHistory: updatedHistory,
       lastMessageAt: ts,
       updatedAt: ts,
+      avgResponseMs:          engagement.avgResponseMs,
+      candidateMessageCount:  engagement.candidateMessageCount,
+      engagementScore:        engagement.engagementScore,
+      engagementLabel:        engagement.engagementLabel,
     });
   },
 

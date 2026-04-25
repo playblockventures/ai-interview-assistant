@@ -694,12 +694,15 @@ export default function Dashboard() {
                           <th>Recruiter</th>
                           {user?.isAdmin && <th>Owner</th>}
                           <th>Status</th>
+                          <th style={{ textAlign: 'center' }}>Engagement</th>
                           <th style={{ textAlign: 'right' }}>Last Contact</th>
                         </tr>
                       </thead>
                       <tbody>
                         {activeCandidates.map((c, i) => {
                           const recruiter = getRecruiter(c.recruiterId);
+                          const scoreColors = ['', '#9ca3af', '#f59e0b', '#3b82f6', '#10b981', '#6366f1'];
+                          const scoreColor = scoreColors[c.engagementScore || 1];
                           return (
                             <tr key={c.id} style={{ cursor: 'pointer' }} onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }}>
                               <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
@@ -729,12 +732,22 @@ export default function Dashboard() {
                                 <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{getOwnerName(c)}</td>
                               )}
                               <td><span className={`status-badge status-${c.status}`}>{STATUS_CONFIG[c.status]?.label || c.status}</span></td>
+                              <td style={{ textAlign: 'center' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                  <div style={{ display: 'flex', gap: 2 }}>
+                                    {[1,2,3,4,5].map(n => (
+                                      <div key={n} style={{ width: 8, height: 8, borderRadius: 2, background: n <= (c.engagementScore || 1) ? scoreColor : 'var(--border)' }} />
+                                    ))}
+                                  </div>
+                                  <span style={{ fontSize: 9, color: scoreColor, fontWeight: 600 }}>{c.engagementLabel || 'Unresponsive'}</span>
+                                </div>
+                              </td>
                               <td style={{ textAlign: 'right' }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
                                   <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>
                                     {formatAvgResponse(c.durationSinceLastMessageMs)}
                                   </span>
-                                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.messageCount} msg{c.messageCount !== 1 ? 's' : ''}</span>
+                                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.messageCount} repl{c.messageCount !== 1 ? 'ies' : 'y'}</span>
                                 </div>
                               </td>
                             </tr>
