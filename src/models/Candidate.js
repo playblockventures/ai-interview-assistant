@@ -12,6 +12,7 @@ const LIST_FIELDS = [
   'ownerId', 'ownerName', 'status', 'notes', 'resumeUrl', 'resumeFileName',
   'appliedScenario', 'createdAt', 'updatedAt', 'lastMessageAt',
   'avgResponseMs', 'candidateMessageCount', 'engagementScore', 'engagementLabel',
+  'aiEngagementScore', 'combinedEngagementScore',
 ];
 
 // Compute engagement metrics from conversationHistory — same filter rules as findActiveWithResponseTime
@@ -49,6 +50,65 @@ function computeEngagement(conversationHistory) {
   else if (candidateMessageCount >= 1)               { engagementScore = 2; engagementLabel = 'Passive'; }
 
   return { avgResponseMs, candidateMessageCount, engagementScore, engagementLabel };
+}
+
+// AI-powered deep engagement analysis — fire-and-forget, persists aiEngagementScore + combinedEngagementScore
+async function analyzeEngagementWithAI(id, history, baseEngagement, ownerId) {
+  try {
+    const candidateMessages = history
+      .filter(m => {
+        if (m.role !== 'user') return false;
+        if (m.fromCandidate === false) return false;
+        const content = (m.content || '').trim();
+        return !(/^\[.*\]$/.test(content) || content === '.');
+      })
+      .map(m => m.content || '')
+      .filter(Boolean)
+      .slice(-20); // analyse most recent 20 messages
+
+    if (candidateMessages.length < 2) return;
+
+    const { getOpenAIClient } = require('../utils/openai');
+    const openai = await getOpenAIClient(ownerId);
+
+    const prompt = `You are an expert recruiter analyst. Analyse the following candidate's messages from a recruitment conversation and rate their engagement level.
+
+Candidate messages (chronological order):
+${candidateMessages.map((m, i) => `[${i + 1}] ${m}`).join('\n\n')}
+
+Score the candidate's engagement from 1.0 to 10.0 (decimal allowed) based on:
+- Depth and length of responses (are they elaborating or giving one-word answers?)
+- Enthusiasm and positivity (exclamation, positive language, interest in the role)
+- Proactiveness (do they ask questions, volunteer extra information?)
+- Consistency and responsiveness (message quality across multiple replies)
+- Specificity (are they referencing details about the role/company, or generic?)
+
+Respond with ONLY a JSON object in this exact format:
+{"score": <number 1.0-10.0>, "reasoning": "<one sentence>"}`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 120,
+      temperature: 0.3,
+      response_format: { type: 'json_object' },
+    });
+
+    const parsed = JSON.parse(completion.choices[0].message.content);
+    const aiScore = Math.min(10, Math.max(1, parseFloat(parsed.score) || 5));
+
+    // Normalize base score (1–5) to 1–10 scale, then blend
+    const baseNormalized = (baseEngagement.engagementScore - 1) / 4 * 9 + 1;
+    const combined = Math.round((baseNormalized * 0.35 + aiScore * 0.65) * 10) / 10;
+
+    const db = getDB();
+    await db.collection(COL).doc(id).update({
+      aiEngagementScore:       aiScore,
+      aiEngagementReasoning:   parsed.reasoning || '',
+      combinedEngagementScore: combined,
+      updatedAt: now(),
+    });
+  } catch (_) {}
 }
 
 const Candidate = {
@@ -283,6 +343,7 @@ const Candidate = {
       'recruiterId', 'recruiterName', 'ownerId', 'ownerName', 'status',
       'lastMessageAt', 'createdAt', 'updatedAt',
       'avgResponseMs', 'candidateMessageCount', 'engagementScore', 'engagementLabel',
+      'aiEngagementScore', 'aiEngagementReasoning', 'combinedEngagementScore',
     ];
     let query = db.collection(COL).where('status', '==', 'in_progress').select(...ACTIVE_FIELDS);
     if (ownerId) query = query.where('ownerId', '==', ownerId);
@@ -297,10 +358,11 @@ const Candidate = {
         return { ...c, messageCount: c.candidateMessageCount || 0, durationSinceLastMessageMs };
       })
       .filter(c => c.messageCount >= 5 && c.durationSinceLastMessageMs <= ACTIVE_THRESHOLD_MS)
-      .sort((a, b) =>
-        (b.engagementScore || 0) - (a.engagementScore || 0) ||
-        a.durationSinceLastMessageMs - b.durationSinceLastMessageMs
-      )
+      .sort((a, b) => {
+        const scoreA = a.combinedEngagementScore ?? ((a.engagementScore || 1) - 1) / 4 * 9 + 1;
+        const scoreB = b.combinedEngagementScore ?? ((b.engagementScore || 1) - 1) / 4 * 9 + 1;
+        return scoreB - scoreA || a.durationSinceLastMessageMs - b.durationSinceLastMessageMs;
+      })
       .slice(0, parseInt(limit));
   },
 
@@ -418,7 +480,8 @@ const Candidate = {
     const ts = now();
     const withTimestamps = entries.map(e => ({ ...e, timestamp: ts, createdAt: ts }));
     const doc = await db.collection(COL).doc(id).get();
-    const existing = doc.data().conversationHistory || [];
+    const docData = doc.data();
+    const existing = docData.conversationHistory || [];
     const updatedHistory = [...existing, ...withTimestamps];
     const engagement = computeEngagement(updatedHistory);
     await db.collection(COL).doc(id).update({
@@ -430,6 +493,12 @@ const Candidate = {
       engagementScore:        engagement.engagementScore,
       engagementLabel:        engagement.engagementLabel,
     });
+
+    // Trigger AI deep analysis when new real candidate messages were added
+    const hasNewCandidateMsg = entries.some(e => e.role === 'user' && e.fromCandidate !== false);
+    if (hasNewCandidateMsg && engagement.candidateMessageCount >= 2) {
+      analyzeEngagementWithAI(id, updatedHistory, engagement, docData.ownerId).catch(() => {});
+    }
   },
 
   async clearConversation(id) {

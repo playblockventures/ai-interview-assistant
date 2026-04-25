@@ -733,13 +733,16 @@ export default function Dashboard() {
                               )}
                               <td><span className={`status-badge status-${c.status}`}>{STATUS_CONFIG[c.status]?.label || c.status}</span></td>
                               <td style={{ textAlign: 'center' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                                  <div style={{ display: 'flex', gap: 2 }}>
-                                    {[1,2,3,4,5].map(n => (
-                                      <div key={n} style={{ width: 8, height: 8, borderRadius: 2, background: n <= (c.engagementScore || 1) ? scoreColor : 'var(--border)' }} />
-                                    ))}
+                                <div title={c.aiEngagementReasoning || c.engagementLabel || ''} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: c.aiEngagementReasoning ? 'help' : 'default' }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+                                    <span style={{ fontSize: 16, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>
+                                      {c.combinedEngagementScore != null ? c.combinedEngagementScore.toFixed(1) : ((c.engagementScore || 1) * 2 - 1).toFixed(1)}
+                                    </span>
+                                    <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 400 }}>/10</span>
                                   </div>
-                                  <span style={{ fontSize: 9, color: scoreColor, fontWeight: 600 }}>{c.engagementLabel || 'Unresponsive'}</span>
+                                  <span style={{ fontSize: 9, color: scoreColor, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                    {c.engagementLabel || 'Unresponsive'}{c.aiEngagementScore != null ? ' ★' : ''}
+                                  </span>
                                 </div>
                               </td>
                               <td style={{ textAlign: 'right' }}>
