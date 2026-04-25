@@ -92,8 +92,23 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
   const [linkedinInput, setLinkedinInput]   = useState('');
   const [extractingLi, setExtractingLi]     = useState(false);
   const [linkedinProfile, setLinkedinProfile] = useState(initial?.linkedinProfile || null);
+  const [dangerousWarning, setDangerousWarning] = useState(null);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const checkDangerous = async (email, linkedinUrl) => {
+    if (isEdit) return;
+    const term = email || linkedinUrl;
+    if (!term) return;
+    try {
+      const data = await candidateApi.getAll({ search: term, status: 'dangerous', limit: 20 });
+      const match = (data.candidates || []).find(c =>
+        (email     && c.email?.toLowerCase()      === email.toLowerCase()) ||
+        (linkedinUrl && c.linkedinUrl             === linkedinUrl)
+      );
+      setDangerousWarning(match || null);
+    } catch {}
+  };
 
   const onDrop = useCallback(async (files) => {
     const file = files[0];
@@ -168,6 +183,7 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
       if (data.photoUrl) { setPhotoPreview(data.photoUrl); setPhotoData(data.photoUrl); }
       if (data.resumeText) setResumeText(data.resumeText);
       if (data.linkedinProfile) setLinkedinProfile(data.linkedinProfile);
+      await checkDangerous(data.email || '', url);
       toast.success('LinkedIn profile extracted — fields auto-filled');
     } catch (e) { toast.error(e.message); }
     finally { setExtractingLi(false); }
@@ -246,7 +262,7 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
 
         <div className="grid-2">
           <div className="form-group"><label className="form-label">Full Name</label><input className="form-input" value={form.fullName} onChange={e => set('fullName', e.target.value)} placeholder="Jane Smith" /></div>
-          <div className="form-group"><label className="form-label">Email</label><input className="form-input" type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="jane@example.com" /></div>
+          <div className="form-group"><label className="form-label">Email</label><input className="form-input" type="email" value={form.email} onChange={e => set('email', e.target.value)} onBlur={e => checkDangerous(e.target.value, form.linkedinUrl)} placeholder="jane@example.com" /></div>
           <div className="form-group"><label className="form-label">Phone</label><input className="form-input" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+1 555 000 0000" /></div>
           <div className="form-group"><label className="form-label">Location / Country</label><input className="form-input" value={form.location} onChange={e => set('location', e.target.value)} placeholder="Manila, Philippines" /></div>
           <div className="form-group"><label className="form-label">Current Title</label><input className="form-input" value={form.currentTitle} onChange={e => set('currentTitle', e.target.value)} placeholder="Senior Solidity Developer" /></div>
@@ -292,6 +308,18 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
           <div className="form-group">
             <label className="form-label">Resume URL (optional)</label>
             <input className="form-input" value={form.resumeUrl} onChange={e => set('resumeUrl', e.target.value)} placeholder="https://drive.google.com/..." />
+          </div>
+        )}
+
+        {dangerousWarning && (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', marginBottom: 12, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 8 }}>
+            <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#ef4444' }}>Dangerous Candidate</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                <strong>{dangerousWarning.fullName || 'This candidate'}</strong> is already registered and marked as <strong>Dangerous</strong>. Proceed with caution.
+              </div>
+            </div>
           </div>
         )}
 
