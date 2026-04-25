@@ -287,6 +287,21 @@ const Candidate = {
       .slice(0, parseInt(limit));
   },
 
+  // Unscoped check — finds any dangerous candidate matching email or linkedinUrl across all users
+  async checkDangerous({ email, linkedinUrl } = {}) {
+    if (!email && !linkedinUrl) return null;
+    const db = getDB();
+    const snapshot = await db.collection(COL)
+      .where('status', '==', 'dangerous')
+      .select('fullName', 'email', 'linkedinUrl', 'status', 'ownerName')
+      .get();
+    const docs = snapshot.docs.map(docToObj);
+    return docs.find(c =>
+      (email      && c.email?.toLowerCase() === email.toLowerCase()) ||
+      (linkedinUrl && c.linkedinUrl         === linkedinUrl)
+    ) || null;
+  },
+
   // Fetch just the N most recently active candidates (for dashboard recent list)
   async findRecent({ ownerId, isAdmin, limit = 8 } = {}) {
     const db = getDB();

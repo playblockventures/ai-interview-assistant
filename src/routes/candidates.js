@@ -74,6 +74,15 @@ router.get('/recent', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// GET check-dangerous — unscoped, checks if email/linkedinUrl matches any dangerous candidate
+router.get('/check-dangerous', async (req, res) => {
+  try {
+    const { email, linkedinUrl } = req.query;
+    const match = await Candidate.checkDangerous({ email, linkedinUrl });
+    res.json({ dangerous: !!match, candidate: match || null });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET all — scoped by user unless admin
 router.get('/', async (req, res) => {
   try {

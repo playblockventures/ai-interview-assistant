@@ -92,21 +92,18 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
   const [linkedinInput, setLinkedinInput]   = useState('');
   const [extractingLi, setExtractingLi]     = useState(false);
   const [linkedinProfile, setLinkedinProfile] = useState(initial?.linkedinProfile || null);
-  const [dangerousWarning, setDangerousWarning] = useState(null);
+  const [dangerousWarning, setDangerousWarning]     = useState(null);
+  const [confirmDangerous, setConfirmDangerous]     = useState(false);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const checkDangerous = async (email, linkedinUrl) => {
     if (isEdit) return;
-    const term = email || linkedinUrl;
-    if (!term) return;
+    if (!email && !linkedinUrl) return;
     try {
-      const data = await candidateApi.getAll({ search: term, status: 'dangerous', limit: 20 });
-      const match = (data.candidates || []).find(c =>
-        (email     && c.email?.toLowerCase()      === email.toLowerCase()) ||
-        (linkedinUrl && c.linkedinUrl             === linkedinUrl)
-      );
-      setDangerousWarning(match || null);
+      const data = await candidateApi.checkDangerous({ email: email || undefined, linkedinUrl: linkedinUrl || undefined });
+      setDangerousWarning(data.dangerous ? data.candidate : null);
+      setConfirmDangerous(false);
     } catch {}
   };
 
@@ -193,6 +190,10 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
   const getCompanyName   = (id) => companies.find(c => c.id === id)?.name  || '';
 
   const handleSubmit = async () => {
+    if (dangerousWarning && !confirmDangerous) {
+      setConfirmDangerous(true);
+      return;
+    }
     setSaving(true);
     try {
       const fd = new FormData();
@@ -317,16 +318,27 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
             <div>
               <div style={{ fontWeight: 700, fontSize: 13, color: '#ef4444' }}>Dangerous Candidate</div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-                <strong>{dangerousWarning.fullName || 'This candidate'}</strong> is already registered and marked as <strong>Dangerous</strong>. Proceed with caution.
+                <strong>{dangerousWarning.fullName || 'This candidate'}</strong> is already registered and marked as <strong>Dangerous</strong>.
+                {confirmDangerous && <span style={{ color: '#ef4444', fontWeight: 600 }}> Are you sure you want to add them anyway?</span>}
               </div>
             </div>
           </div>
         )}
 
         <div className="flex gap-8" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
-          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSubmit} disabled={saving || extracting}>
-            {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving...</> : isEdit ? 'Save Changes' : 'Add Candidate'}
+          <button className="btn btn-secondary" onClick={confirmDangerous ? () => setConfirmDangerous(false) : onClose}>
+            {confirmDangerous ? 'Go Back' : 'Cancel'}
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving || extracting}
+            style={confirmDangerous ? { background: '#ef4444', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 700, cursor: 'pointer', fontSize: 13 } : undefined}
+            className={confirmDangerous ? undefined : 'btn btn-primary'}>
+            {saving
+              ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving...</>
+              : confirmDangerous
+                ? '⚠️ Add Anyway'
+                : isEdit ? 'Save Changes' : 'Add Candidate'}
           </button>
         </div>
       </div>
