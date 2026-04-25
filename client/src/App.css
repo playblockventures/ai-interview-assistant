@@ -277,7 +277,8 @@ body {
 .status-no_response,
 .status-not_interested,
 .status-other_job,
-.status-have_a_doubt { background: rgba(255,107,107,0.15); color: var(--error); }
+.status-have_a_doubt,
+.status-dangerous { background: rgba(255,107,107,0.15); color: var(--error); }
 
 /* Grid */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }

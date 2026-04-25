@@ -58,7 +58,7 @@ const formatDate = (iso) => {
 const STATUS_LABELS = {
   pending: 'Pending', in_progress: 'In Progress', success: 'Success', failed: 'Failed',
   no_response: 'No Response', not_interested: 'Not Interested',
-  other_job: 'Already Occupied', have_a_doubt: 'Have a Doubt',
+  other_job: 'Already Occupied', have_a_doubt: 'Have a Doubt', dangerous: 'Dangerous',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -551,11 +551,12 @@ export default function Candidates() {
             <option value="in_progress">In Progress</option>
             <option value="success">Success</option>
             <optgroup label="Failed" style={{ color: '#ef4444' }}>
-              <option value="failed,no_response,not_interested,other_job,have_a_doubt" style={{ color: '#ef4444', fontWeight: 600 }}>Failed (any)</option>
+              <option value="failed,no_response,not_interested,other_job,have_a_doubt,dangerous" style={{ color: '#ef4444', fontWeight: 600 }}>Failed (any)</option>
               <option value="no_response"     style={{ color: '#ef4444' }}>↳ No Response</option>
               <option value="not_interested"  style={{ color: '#ef4444' }}>↳ Not Interested</option>
               <option value="other_job"       style={{ color: '#ef4444' }}>↳ Already Occupied</option>
               <option value="have_a_doubt"    style={{ color: '#ef4444' }}>↳ Have a Doubt</option>
+              <option value="dangerous"       style={{ color: '#ef4444' }}>↳ Dangerous</option>
             </optgroup>
           </select>
 

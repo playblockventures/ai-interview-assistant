@@ -44,6 +44,7 @@ const FAILED_OPTIONS = [
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'other_job',      label: 'Already Occupied' },
   { value: 'have_a_doubt',   label: 'Have a Doubt' },
+  { value: 'dangerous',      label: 'Dangerous' },
 ];
 const ALL_FAILED_VALUES = FAILED_OPTIONS.map(o => o.value);
 

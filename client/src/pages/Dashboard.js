@@ -4,7 +4,7 @@ import { candidateApi, authApi, settingsApi } from '../utils/api';
 import { AppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
-const FAILED_STATUSES = ['failed', 'no_response', 'not_interested', 'other_job', 'have_a_doubt'];
+const FAILED_STATUSES = ['failed', 'no_response', 'not_interested', 'other_job', 'have_a_doubt', 'dangerous'];
 
 const STATUS_CONFIG = {
   pending:        { label: 'Pending',          color: 'var(--pending)',     hex: '#f5a623' },
@@ -15,6 +15,7 @@ const STATUS_CONFIG = {
   not_interested: { label: 'Not Interested',   color: 'var(--error)',       hex: '#ff6b6b' },
   other_job:      { label: 'Already Occupied', color: 'var(--error)',       hex: '#ff6b6b' },
   have_a_doubt:   { label: 'Have a Doubt',     color: 'var(--error)',       hex: '#ff6b6b' },
+  dangerous:      { label: 'Dangerous',        color: 'var(--error)',       hex: '#ff6b6b' },
 };
 
 // ── Date range picker ─────────────────────────────────────────────────────────

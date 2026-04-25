@@ -97,7 +97,7 @@ const Candidate = {
       'recruiterId', 'recruiterName', 'ownerId', 'ownerName',
       'companyId', 'companyName', 'createdAt', 'updatedAt', 'lastMessageAt',
     ];
-    const FAILED_STATUSES = ['failed', 'no_response', 'not_interested', 'other_job', 'have_a_doubt'];
+    const FAILED_STATUSES = ['failed', 'no_response', 'not_interested', 'other_job', 'have_a_doubt', 'dangerous'];
 
     let query = db.collection(COL).select(...ANALYTICS_FIELDS);
     if (ownerId) query = query.where('ownerId', '==', ownerId);
@@ -172,7 +172,7 @@ const Candidate = {
     const total = docs.length;
 
     // Status counts
-    const statusCounts = { pending: 0, in_progress: 0, success: 0, failed: 0, no_response: 0, not_interested: 0, other_job: 0, have_a_doubt: 0 };
+    const statusCounts = { pending: 0, in_progress: 0, success: 0, failed: 0, no_response: 0, not_interested: 0, other_job: 0, have_a_doubt: 0, dangerous: 0 };
     docs.forEach(c => { if (statusCounts[c.status] !== undefined) statusCounts[c.status]++; });
     const totalFailed = FAILED_STATUSES.reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
     const conversionRate = total > 0 ? Math.round((statusCounts.success / total) * 100) : 0;

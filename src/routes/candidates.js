@@ -171,7 +171,7 @@ router.patch('/:id/status', async (req, res) => {
           const STATUS_LABEL = {
             pending: 'Pending', in_progress: 'In Progress', success: 'Success',
             no_response: 'No Response', not_interested: 'Not Interested',
-            other_job: 'Already Occupied', have_a_doubt: 'Have a Doubt', failed: 'Failed',
+            other_job: 'Already Occupied', have_a_doubt: 'Have a Doubt', failed: 'Failed', dangerous: 'Dangerous',
           };
           const statusLabel = STATUS_LABEL[status] || status;
 
