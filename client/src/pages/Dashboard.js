@@ -702,7 +702,9 @@ export default function Dashboard() {
                         {activeCandidates.map((c, i) => {
                           const recruiter = getRecruiter(c.recruiterId);
                           const LABEL_COLORS = { 'Unresponsive': '#9ca3af', 'Passive': '#f59e0b', 'Engaged': '#3b82f6', 'Active': '#10b981', 'Very Active': '#6366f1' };
-                          const scoreColor = LABEL_COLORS[c.engagementLabel] || '#9ca3af';
+                          const scoreForLabel = c.combinedEngagementScore ?? ((c.engagementScore || 1) - 1) / 4 * 9 + 1;
+                          const displayLabel = scoreForLabel >= 8.5 ? 'Very Active' : scoreForLabel >= 6.5 ? 'Active' : scoreForLabel >= 4.5 ? 'Engaged' : scoreForLabel >= 2.5 ? 'Passive' : 'Unresponsive';
+                          const scoreColor = LABEL_COLORS[displayLabel] || '#9ca3af';
                           return (
                             <tr key={c.id} style={{ cursor: 'pointer' }} onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }}>
                               <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
@@ -733,15 +735,15 @@ export default function Dashboard() {
                               )}
                               <td><span className={`status-badge status-${c.status}`}>{STATUS_CONFIG[c.status]?.label || c.status}</span></td>
                               <td style={{ textAlign: 'center' }}>
-                                <div title={c.aiEngagementReasoning || c.engagementLabel || ''} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: c.aiEngagementReasoning ? 'help' : 'default' }}>
+                                <div title={c.aiEngagementReasoning || displayLabel} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: c.aiEngagementReasoning ? 'help' : 'default' }}>
                                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
                                     <span style={{ fontSize: 16, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>
-                                      {c.combinedEngagementScore != null ? c.combinedEngagementScore.toFixed(1) : ((c.engagementScore || 1) * 2 - 1).toFixed(1)}
+                                      {c.combinedEngagementScore != null ? c.combinedEngagementScore.toFixed(1) : scoreForLabel.toFixed(1)}
                                     </span>
                                     <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 400 }}>/10</span>
                                   </div>
                                   <span style={{ fontSize: 9, color: scoreColor, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                                    {c.engagementLabel || 'Unresponsive'}{c.aiEngagementScore != null ? ' ★' : ''}
+                                    {displayLabel}{c.aiEngagementScore != null ? ' ★' : ''}
                                   </span>
                                 </div>
                               </td>
