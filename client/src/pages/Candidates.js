@@ -383,8 +383,8 @@ export default function Candidates() {
   const [ownerFilter,      setOwnerFilter]      = useState(saved.ownerFilter     || '');
   const [page,             setPage]             = useState(saved.page            || 1);
   const [pageSize,         setPageSize]         = useState(saved.pageSize        || 20);
-  const [fromDate,         setFromDate]         = useState(saved.fromDate || isoDaysAgo(7));
-  const [toDate,           setToDate]           = useState(saved.toDate   || isoToday());
+  const [fromDate,         setFromDate]         = useState('fromDate' in saved ? saved.fromDate : isoDaysAgo(7));
+  const [toDate,           setToDate]           = useState('toDate'   in saved ? saved.toDate   : isoToday());
 
   // ── Selection state ────────────────────────────────────────────────────────
   const [selectedIds,   setSelectedIds]   = useState(new Set());
