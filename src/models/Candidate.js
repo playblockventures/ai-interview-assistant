@@ -16,38 +16,53 @@ const LIST_FIELDS = [
 ];
 
 // Compute engagement metrics from conversationHistory — same filter rules as findActiveWithResponseTime
+function isValidCandidateMsg(m) {
+  if (m.role !== 'user') return false;
+  if (m.fromCandidate === false) return false;
+  const content = (m.content || '').trim();
+  if (/^\[.*\]$/.test(content) || content === '.') return false;
+  return true;
+}
+
+function engagementLabelFromScore(score) {
+  if (score >= 8.5) return 'Very Active';
+  if (score >= 6.5) return 'Active';
+  if (score >= 4.5) return 'Engaged';
+  if (score >= 2.5) return 'Passive';
+  return 'Unresponsive';
+}
+
 function computeEngagement(conversationHistory) {
   const history = conversationHistory || [];
 
-  const candidateMsgTimes = history
-    .filter(m => {
-      if (m.role !== 'user') return false;
-      if (m.fromCandidate === false) return false;
-      const content = (m.content || '').trim();
-      if (/^\[.*\]$/.test(content) || content === '.') return false;
-      return true;
-    })
+  const validMsgs = history.filter(isValidCandidateMsg);
+  const candidateMessageCount = validMsgs.length;
+
+  // Only use messages with valid timestamps for gap calculation
+  const timestampedTimes = validMsgs
     .map(m => new Date(m.timestamp || m.createdAt || 0).getTime())
     .filter(ms => ms > 0)
     .sort((a, b) => a - b);
 
   const gaps = [];
-  for (let i = 1; i < candidateMsgTimes.length; i++) {
-    gaps.push(candidateMsgTimes[i] - candidateMsgTimes[i - 1]);
+  for (let i = 1; i < timestampedTimes.length; i++) {
+    gaps.push(timestampedTimes[i] - timestampedTimes[i - 1]);
   }
 
-  const candidateMessageCount = candidateMsgTimes.length;
   const avgResponseMs = gaps.length > 0 ? gaps.reduce((a, b) => a + b, 0) / gaps.length : null;
 
-  // Score 1–5 based on reply count and avg response speed
+  // Base score 1–5
   let engagementScore = 1;
-  let engagementLabel = 'Unresponsive';
   const avgH = avgResponseMs !== null ? avgResponseMs / 3600000 : Infinity;
 
-  if      (candidateMessageCount >= 10 && avgH < 1)  { engagementScore = 5; engagementLabel = 'Very Active'; }
-  else if (candidateMessageCount >= 5  && avgH < 4)  { engagementScore = 4; engagementLabel = 'Active'; }
-  else if (candidateMessageCount >= 3  && avgH < 24) { engagementScore = 3; engagementLabel = 'Engaged'; }
-  else if (candidateMessageCount >= 1)               { engagementScore = 2; engagementLabel = 'Passive'; }
+  if      (candidateMessageCount >= 10 && avgH < 1)  engagementScore = 5;
+  else if (candidateMessageCount >= 5  && avgH < 4)  engagementScore = 4;
+  else if (candidateMessageCount >= 3  && avgH < 24) engagementScore = 3;
+  else if (candidateMessageCount >= 1)               engagementScore = 2;
+
+  // Normalize base score to 1–10 scale for label (before AI score is available)
+  const baseNormalized = (engagementScore - 1) / 4 * 9 + 1;
+  const engagementLabel = engagementLabelFromScore(baseNormalized);
 
   return { avgResponseMs, candidateMessageCount, engagementScore, engagementLabel };
 }
@@ -106,6 +121,7 @@ Respond with ONLY a JSON object in this exact format:
       aiEngagementScore:       aiScore,
       aiEngagementReasoning:   parsed.reasoning || '',
       combinedEngagementScore: combined,
+      engagementLabel:         engagementLabelFromScore(combined),
       updatedAt: now(),
     });
   } catch (_) {}
