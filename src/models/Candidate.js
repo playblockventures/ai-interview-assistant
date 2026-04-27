@@ -66,15 +66,28 @@ function computeEngagement(conversationHistory) {
   return { avgResponseMs, candidateMessageCount, engagementScore, engagementLabel };
 }
 
+// Compute combined score synchronously using base score + existing AI score (if any)
+function computeCombined(engagementScore, existingAiScore) {
+  const baseNormalized = (engagementScore - 1) / 4 * 9 + 1;
+  if (existingAiScore != null) {
+    return Math.round((baseNormalized * 0.65 + existingAiScore * 0.35) * 100) / 100;
+  }
+  return Math.round(baseNormalized * 100) / 100;
+}
+
 // Persist computed engagement to Firestore and trigger AI analysis
 async function persistEngagement(id, db, history, ownerId) {
+  const doc = await db.collection(COL).doc(id).get();
+  const existingAiScore = doc.data()?.aiEngagementScore ?? null;
   const engagement = computeEngagement(history);
+  const combined = computeCombined(engagement.engagementScore, existingAiScore);
   await db.collection(COL).doc(id).update({
-    candidateMessageCount: engagement.candidateMessageCount,
-    engagementScore:       engagement.engagementScore,
-    engagementLabel:       engagement.engagementLabel,
-    avgResponseMs:         engagement.avgResponseMs,
-    updatedAt:             now(),
+    candidateMessageCount:   engagement.candidateMessageCount,
+    engagementScore:         engagement.engagementScore,
+    avgResponseMs:           engagement.avgResponseMs,
+    combinedEngagementScore: combined,
+    engagementLabel:         engagementLabelFromScore(combined),
+    updatedAt:               now(),
   });
   if (engagement.candidateMessageCount >= 1) {
     analyzeEngagementWithAI(id, history, engagement, ownerId).catch(() => {});
@@ -513,14 +526,16 @@ const Candidate = {
     const existing = docData.conversationHistory || [];
     const updatedHistory = [...existing, ...withTimestamps];
     const engagement = computeEngagement(updatedHistory);
+    const combined = computeCombined(engagement.engagementScore, docData.aiEngagementScore ?? null);
     await db.collection(COL).doc(id).update({
-      conversationHistory: updatedHistory,
-      lastMessageAt: ts,
-      updatedAt: ts,
-      avgResponseMs:          engagement.avgResponseMs,
-      candidateMessageCount:  engagement.candidateMessageCount,
-      engagementScore:        engagement.engagementScore,
-      engagementLabel:        engagement.engagementLabel,
+      conversationHistory:     updatedHistory,
+      lastMessageAt:           ts,
+      updatedAt:               ts,
+      avgResponseMs:           engagement.avgResponseMs,
+      candidateMessageCount:   engagement.candidateMessageCount,
+      engagementScore:         engagement.engagementScore,
+      combinedEngagementScore: combined,
+      engagementLabel:         engagementLabelFromScore(combined),
     });
 
     // Trigger AI deep analysis when new real candidate messages were added
