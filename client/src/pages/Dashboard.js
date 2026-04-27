@@ -679,6 +679,20 @@ export default function Dashboard() {
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                         {activeCandidates.length} in progress · contacted within 14 days · sorted by engagement score
                       </div>
+                      <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+                        {[
+                          { label: 'Unresponsive', color: '#9ca3af' },
+                          { label: 'Passive',      color: '#f59e0b' },
+                          { label: 'Engaged',      color: '#3b82f6' },
+                          { label: 'Active',       color: '#10b981' },
+                          { label: 'Very Active',  color: '#6366f1' },
+                        ].map(({ label, color }) => (
+                          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     <button className="btn btn-secondary btn-sm" onClick={() => navigateFiltered({ statusFilter: 'in_progress' })}>
                       View all →
