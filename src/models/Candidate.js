@@ -67,6 +67,21 @@ function computeEngagement(conversationHistory) {
   return { avgResponseMs, candidateMessageCount, engagementScore, engagementLabel };
 }
 
+// Persist computed engagement to Firestore and trigger AI analysis
+async function persistEngagement(id, db, history, ownerId) {
+  const engagement = computeEngagement(history);
+  await db.collection(COL).doc(id).update({
+    candidateMessageCount: engagement.candidateMessageCount,
+    engagementScore:       engagement.engagementScore,
+    engagementLabel:       engagement.engagementLabel,
+    avgResponseMs:         engagement.avgResponseMs,
+    updatedAt:             now(),
+  });
+  if (engagement.candidateMessageCount >= 1) {
+    analyzeEngagementWithAI(id, history, engagement, ownerId).catch(() => {});
+  }
+}
+
 // AI-powered deep engagement analysis — fire-and-forget, persists aiEngagementScore + combinedEngagementScore
 async function analyzeEngagementWithAI(id, history, baseEngagement, ownerId) {
   try {
@@ -519,15 +534,27 @@ const Candidate = {
 
   async clearConversation(id) {
     const db = getDB();
-    await db.collection(COL).doc(id).update({ conversationHistory: [], updatedAt: now() });
+    await db.collection(COL).doc(id).update({
+      conversationHistory:    [],
+      candidateMessageCount:  0,
+      engagementScore:        1,
+      engagementLabel:        'Unresponsive',
+      avgResponseMs:          null,
+      aiEngagementScore:      null,
+      aiEngagementReasoning:  '',
+      combinedEngagementScore: null,
+      updatedAt: now(),
+    });
   },
 
   async deleteConversationMessage(id, index) {
     const db = getDB();
     const doc = await db.collection(COL).doc(id).get();
-    const arr = [...(doc.data().conversationHistory || [])];
+    const data = doc.data();
+    const arr = [...(data.conversationHistory || [])];
     arr.splice(index, 1);
     await db.collection(COL).doc(id).update({ conversationHistory: arr, updatedAt: now() });
+    await persistEngagement(id, db, arr, data.ownerId);
   },
 
   async deleteOutreachMessage(id, index) {
@@ -549,10 +576,12 @@ const Candidate = {
   async updateConversationMessage(id, index, newContent) {
     const db = getDB();
     const doc = await db.collection(COL).doc(id).get();
-    const arr = [...(doc.data().conversationHistory || [])];
+    const data = doc.data();
+    const arr = [...(data.conversationHistory || [])];
     if (index < 0 || index >= arr.length) throw new Error('Message index out of range');
-    arr[index] = { ...arr[index], content: newContent, editedAt: new Date().toISOString() };
-    await db.collection(COL).doc(id).update({ conversationHistory: arr, updatedAt: new Date().toISOString() });
+    arr[index] = { ...arr[index], content: newContent, editedAt: now() };
+    await db.collection(COL).doc(id).update({ conversationHistory: arr, updatedAt: now() });
+    await persistEngagement(id, db, arr, data.ownerId);
   },
 
   async updateScenario(id, index, newContent) {

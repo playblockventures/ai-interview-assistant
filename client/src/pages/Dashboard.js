@@ -701,8 +701,8 @@ export default function Dashboard() {
                       <tbody>
                         {activeCandidates.map((c, i) => {
                           const recruiter = getRecruiter(c.recruiterId);
-                          const scoreColors = ['', '#9ca3af', '#f59e0b', '#3b82f6', '#10b981', '#6366f1'];
-                          const scoreColor = scoreColors[c.engagementScore || 1];
+                          const LABEL_COLORS = { 'Unresponsive': '#9ca3af', 'Passive': '#f59e0b', 'Engaged': '#3b82f6', 'Active': '#10b981', 'Very Active': '#6366f1' };
+                          const scoreColor = LABEL_COLORS[c.engagementLabel] || '#9ca3af';
                           return (
                             <tr key={c.id} style={{ cursor: 'pointer' }} onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }}>
                               <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
