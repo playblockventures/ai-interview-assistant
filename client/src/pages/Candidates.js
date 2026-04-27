@@ -697,6 +697,7 @@ export default function Candidates() {
                         <th>Recruiter</th>
                         <th>Added By</th>
                         <th>Status</th>
+                        <th style={{ textAlign: 'center' }}>Score</th>
                         <th>Last Message</th>
                         <th></th>
                       </tr>
@@ -746,6 +747,20 @@ export default function Candidates() {
                             </td>
                             <td style={{ cursor: 'pointer' }}>
                               <span className={`status-badge status-${c.status}`}>{STATUS_LABELS[c.status] || c.status?.replace(/_/g, ' ')}</span>
+                            </td>
+                            <td style={{ textAlign: 'center', cursor: 'pointer' }}>
+                              {(() => {
+                                const LABEL_COLORS = { 'Unresponsive': '#9ca3af', 'Passive': '#f59e0b', 'Engaged': '#3b82f6', 'Active': '#10b981', 'Very Active': '#6366f1' };
+                                const s = c.combinedEngagementScore ?? ((c.engagementScore || 1) - 1) / 4 * 9 + 1;
+                                const lbl = s >= 8.5 ? 'Very Active' : s >= 6.5 ? 'Active' : s >= 4.5 ? 'Engaged' : s >= 2.5 ? 'Passive' : 'Unresponsive';
+                                const col = LABEL_COLORS[lbl];
+                                return c.combinedEngagementScore != null || c.engagementScore != null ? (
+                                  <div title={c.aiEngagementReasoning || lbl} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: col }}>{s.toFixed(2)}</span>
+                                    <span style={{ fontSize: 9, color: col, fontWeight: 600 }}>{lbl}{c.aiEngagementScore != null ? ' ★' : ''}</span>
+                                  </div>
+                                ) : <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>;
+                              })()}
                             </td>
                             <td style={{ fontSize: 11, color: c.lastMessageAt ? 'var(--text-secondary)' : 'var(--text-muted)', cursor: 'pointer' }}>
                               {formatDate(c.lastMessageAt)}
@@ -798,6 +813,7 @@ export default function Candidates() {
                         <th>Recruiter</th>
                         <th>Added By</th>
                         <th>Status</th>
+                        <th style={{ textAlign: 'center' }}>Score</th>
                         <th>Last Message</th>
                         <th></th>
                       </tr>
@@ -847,6 +863,20 @@ export default function Candidates() {
                         </td>
                         <td style={{ cursor: 'pointer' }}>
                           <span className={`status-badge status-${c.status}`}>{STATUS_LABELS[c.status] || c.status?.replace(/_/g, ' ')}</span>
+                        </td>
+                        <td style={{ textAlign: 'center', cursor: 'pointer' }}>
+                          {(() => {
+                            const LABEL_COLORS = { 'Unresponsive': '#9ca3af', 'Passive': '#f59e0b', 'Engaged': '#3b82f6', 'Active': '#10b981', 'Very Active': '#6366f1' };
+                            const s = c.combinedEngagementScore ?? ((c.engagementScore || 1) - 1) / 4 * 9 + 1;
+                            const lbl = s >= 8.5 ? 'Very Active' : s >= 6.5 ? 'Active' : s >= 4.5 ? 'Engaged' : s >= 2.5 ? 'Passive' : 'Unresponsive';
+                            const col = LABEL_COLORS[lbl];
+                            return c.combinedEngagementScore != null || c.engagementScore != null ? (
+                              <div title={c.aiEngagementReasoning || lbl} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: col }}>{s.toFixed(2)}</span>
+                                <span style={{ fontSize: 9, color: col, fontWeight: 600 }}>{lbl}{c.aiEngagementScore != null ? ' ★' : ''}</span>
+                              </div>
+                            ) : <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>;
+                          })()}
                         </td>
                         <td style={{ fontSize: 11, color: c.lastMessageAt ? 'var(--text-secondary)' : 'var(--text-muted)', cursor: 'pointer' }}>
                           {formatDate(c.lastMessageAt)}

@@ -1327,6 +1327,19 @@ function ProfileCard({ candidate }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
           <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{candidate.fullName || '—'}</div>
           <span className={`status-badge status-${candidate.status}`}>{candidate.status?.replace('_', ' ')}</span>
+          {(() => {
+            const LABEL_COLORS = { 'Unresponsive': '#9ca3af', 'Passive': '#f59e0b', 'Engaged': '#3b82f6', 'Active': '#10b981', 'Very Active': '#6366f1' };
+            const s = candidate.combinedEngagementScore ?? ((candidate.engagementScore || 1) - 1) / 4 * 9 + 1;
+            const lbl = s >= 8.5 ? 'Very Active' : s >= 6.5 ? 'Active' : s >= 4.5 ? 'Engaged' : s >= 2.5 ? 'Passive' : 'Unresponsive';
+            const col = LABEL_COLORS[lbl];
+            if (candidate.combinedEngagementScore == null && candidate.engagementScore == null) return null;
+            return (
+              <div title={candidate.aiEngagementReasoning || lbl} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--bg-elevated)', border: `1px solid ${col}`, borderRadius: 6, padding: '2px 8px', cursor: candidate.aiEngagementReasoning ? 'help' : 'default' }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: col }}>{s.toFixed(2)}</span>
+                <span style={{ fontSize: 9, color: col, fontWeight: 600 }}>/10 · {lbl}{candidate.aiEngagementScore != null ? ' ★' : ''}</span>
+              </div>
+            );
+          })()}
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
           {candidate.currentTitle && <span>💼 {candidate.currentTitle}</span>}
