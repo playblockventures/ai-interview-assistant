@@ -738,7 +738,7 @@ export default function Dashboard() {
                                 <div title={c.aiEngagementReasoning || displayLabel} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: c.aiEngagementReasoning ? 'help' : 'default' }}>
                                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
                                     <span style={{ fontSize: 16, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>
-                                      {c.combinedEngagementScore != null ? c.combinedEngagementScore.toFixed(1) : scoreForLabel.toFixed(1)}
+                                      {c.combinedEngagementScore != null ? c.combinedEngagementScore.toFixed(2) : scoreForLabel.toFixed(2)}
                                     </span>
                                     <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 400 }}>/10</span>
                                   </div>

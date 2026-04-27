@@ -127,7 +127,7 @@ Respond with ONLY a JSON object in this exact format:
 
     // Normalize base score (1–5) to 1–10 scale, then blend
     const baseNormalized = (baseEngagement.engagementScore - 1) / 4 * 9 + 1;
-    const combined = Math.round((baseNormalized * 0.35 + aiScore * 0.65) * 10) / 10;
+    const combined = Math.round((baseNormalized * 0.65 + aiScore * 0.35) * 100) / 100;
 
     const db = getDB();
     await db.collection(COL).doc(id).update({
