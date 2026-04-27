@@ -18,7 +18,6 @@ const LIST_FIELDS = [
 // Compute engagement metrics from conversationHistory — same filter rules as findActiveWithResponseTime
 function isValidCandidateMsg(m) {
   if (m.role !== 'user') return false;
-  if (m.fromCandidate === false) return false;
   const content = (m.content || '').trim();
   if (/^\[.*\]$/.test(content) || content === '.') return false;
   return true;
@@ -88,7 +87,6 @@ async function analyzeEngagementWithAI(id, history, baseEngagement, ownerId) {
     const candidateMessages = history
       .filter(m => {
         if (m.role !== 'user') return false;
-        if (m.fromCandidate === false) return false;
         const content = (m.content || '').trim();
         return !(/^\[.*\]$/.test(content) || content === '.');
       })
@@ -526,7 +524,7 @@ const Candidate = {
     });
 
     // Trigger AI deep analysis when new real candidate messages were added
-    const hasNewCandidateMsg = entries.some(e => e.role === 'user' && e.fromCandidate !== false);
+    const hasNewCandidateMsg = entries.some(e => e.role === 'user');
     if (hasNewCandidateMsg && engagement.candidateMessageCount >= 1) {
       analyzeEngagementWithAI(id, updatedHistory, engagement, docData.ownerId).catch(() => {});
     }
