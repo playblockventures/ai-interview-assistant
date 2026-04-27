@@ -204,14 +204,14 @@ function ScenarioTab({ candidate, onScenarioApplied }) {
             value={config.customInstructions} onChange={e => set('customInstructions', e.target.value)} style={{ minHeight: 70 }} />
         </div>
         <button className="btn btn-primary" onClick={generate} disabled={loading}>
-          {loading ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Generating...</> : (scenario ? '↺ Regenerate Scenario' : '◎ Generate Scenario')}
+          {loading ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Generating...</> : (scenario ? '↺ Regenerate Prompt' : '◎ Generate Prompt')}
         </button>
       </div>
 
       {scenario && (
         <div className="card">
           <div className="flex items-center justify-between mb-16">
-            <div className="card-title">Interview Scenario</div>
+            <div className="card-title">AI Prompt — Outreach &amp; Conversation</div>
             <div className="flex gap-8">
               {editing ? (
                 <>

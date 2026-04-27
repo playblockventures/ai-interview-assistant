@@ -192,57 +192,42 @@ router.post('/scenario', async (req, res) => {
     const toneLabel = TONES[tone] || tone;
     const candidateContext = buildCandidateContext(candidate);
 
-    // ── System prompt: who the AI is + all context ────────────────────────────
-    // Priority order (last = highest): knowledge base → recruiter/candidate profile → company scenario → custom instructions
+    // ── System prompt ─────────────────────────────────────────────────────────
     const systemPrompt = [
-      `You are an expert technical recruiter and interview coach specialising in ${roleLabel} roles.`,
-      // 4. Knowledge base (lowest priority)
+      `You are an expert technical recruiter specialising in ${roleLabel} roles.`,
       knowledgeContext
-        ? `${knowledgeContext}\n\nIMPORTANT: You MUST base the interview scenario and questions directly on the requirements, technologies, and criteria described in the knowledge base above. Do not generate generic questions — tailor everything to the specifics found in those documents.`
+        ? `${knowledgeContext}\n\nIMPORTANT: Base the scenario instructions directly on the requirements, technologies, and criteria described in the knowledge base. Do not use generic content — tailor everything to the specifics found in those documents.`
         : '',
-      // 3. Recruiter & candidate profile
       recruiterContext,
-      candidateContext ? `\n\n--- CANDIDATE TO INTERVIEW ---\n${candidateContext}` : '',
-      // 2. Company interview framework/scenario
+      candidateContext ? `\n\n--- CANDIDATE ---\n${candidateContext}` : '',
       companyScenario
         ? `\n\n=== COMPANY INTERVIEW FRAMEWORK ===\n${companyScenario}\n=== END ===`
         : '',
-      // 1. Custom instructions (highest priority — placed last)
       userInstructions
-        ? `\n\n=== CUSTOM INSTRUCTIONS (HIGHEST PRIORITY — FOLLOW THESE ABOVE ALL ELSE) ===\n${userInstructions}\n=== END ===`
+        ? `\n\n=== CUSTOM INSTRUCTIONS (HIGHEST PRIORITY) ===\n${userInstructions}\n=== END ===`
         : '',
     ].filter(Boolean).join('');
 
-    // ── User prompt: what to generate ─────────────────────────────────────────
-    // If a company scenario exists, the AI must follow it — no hardcoded structure
-    // If no scenario, use a sensible default structure
-    const hasCompanyScenario = !!companyScenario;
-
-    const userPrompt = hasCompanyScenario
-      ? [
-          `Generate a complete interview scenario for the ${roleLabel} position following the INTERVIEW SCENARIO structure defined in your instructions EXACTLY.`,
-          `Interview Goal: ${goal || 'Assess technical competency and cultural fit'}`,
-          `Tone: ${toneLabel}`,
-          candidateContext ? 'Personalise the questions based on the candidate profile provided.' : '',
-          customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : '',
-          '\nDo NOT use a different structure. Follow the defined scenario precisely.',
-        ].filter(Boolean).join('\n')
-      : [
-          `Generate a comprehensive, structured interview scenario for a ${roleLabel} position.`,
-          candidateContext ? 'Personalise all questions and assessments for the candidate profile.' : '',
-          `\nInterview Goal: ${goal || 'Assess technical competency and cultural fit'}`,
-          `Tone: ${toneLabel}`,
-          customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : '',
-          userInstructions ? '' : `
-Structure the scenario with:
-1. **Interview Overview** — context and objectives
-2. **Opening Questions** (3-4) — warm-up and background
-3. **Technical Assessment** (5-7 role-specific questions with expected answers)
-4. **Behavioral Questions** (3-4) — situation-based
-5. **Culture & Motivation** (2-3 questions)
-6. **Closing** — questions to offer the candidate, next steps
-7. **Evaluation Rubric** — key criteria and scoring`,
-        ].filter(Boolean).join('\n');
+    // ── User prompt ───────────────────────────────────────────────────────────
+    const userPrompt = [
+      `Write an AI instruction prompt that will be injected as a system prompt when generating outreach messages and interview conversation replies for this ${roleLabel} candidate.`,
+      ``,
+      `The prompt must instruct the AI on:`,
+      `- The goal of this recruitment (what we are assessing or achieving)`,
+      `- The tone and communication style to use`,
+      `- Key topics, skills, or areas to focus on or ask about`,
+      `- How to handle this specific candidate based on their background`,
+      `- Any specific questions, angles, or talking points to cover`,
+      `- What to avoid or be careful about`,
+      ``,
+      `Goal: ${goal || 'Assess technical competency and cultural fit'}`,
+      `Tone: ${toneLabel}`,
+      candidateContext ? `Personalise the instructions based on the candidate profile provided.` : '',
+      companyScenario  ? `Follow the company interview framework defined in your context.` : '',
+      customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : '',
+      ``,
+      `Output ONLY the instruction prompt text — no meta-commentary, no example messages, no Q&A. Write it as direct instructions to an AI recruiter.`,
+    ].filter(Boolean).join('\n');
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
@@ -300,7 +285,9 @@ router.post('/outreach', async (req, res) => {
     const messageLabel  = MESSAGE_TYPE_LABELS[messageType] || messageType;
     const candidateContext = buildCandidateContext(candidate);
 
-    // Priority order (last = highest): knowledge base → recruiter/candidate profile → custom instructions
+    const candidateScenario = candidate?.interviewScenarios?.[0]?.content || '';
+
+    // Priority order (last = highest): knowledge base → recruiter/candidate profile → candidate scenario → custom instructions
     const systemPrompt = [
       `You are an expert recruiter writing ${messageLabel} messages for ${roleLabel} positions.`,
       // 4. Knowledge base (lowest priority)
@@ -308,6 +295,10 @@ router.post('/outreach', async (req, res) => {
       // 3. Recruiter & candidate profile
       recruiterContext,
       candidateContext ? `\n\n--- CANDIDATE ---\n${candidateContext}` : '',
+      // 2. Candidate interview scenario — guides tone, focus, and content of the message
+      candidateScenario
+        ? `\n\n=== CANDIDATE INTERVIEW SCENARIO (USE THIS TO GUIDE THE MESSAGE CONTENT) ===\n${candidateScenario}\n=== END ===`
+        : '',
       // 1. Custom instructions (highest priority — placed last)
       userInstructions
         ? `\n\n=== CUSTOM INSTRUCTIONS (HIGHEST PRIORITY — FOLLOW THESE ABOVE ALL ELSE) ===\n${userInstructions}\n=== END ===`
@@ -380,7 +371,7 @@ router.post('/conversation', async (req, res) => {
     const roleLabel    = await resolveRoleLabel(role);
     const toneLabel    = TONES[tone] || tone;
 
-    // Applied scenario on this specific candidate (set via Apply to Conversation)
+    // Candidate scenario: only use explicitly applied scenario (manual apply required)
     const appliedScenario = candidate?.appliedScenario || '';
 
     // Priority order (last = highest): knowledge base → recruiter/candidate profile → company scenario → candidate scenario → custom instructions
