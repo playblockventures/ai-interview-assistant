@@ -244,6 +244,11 @@ const Candidate = {
     const snapshot = await query.get();
     const allDocs = snapshot.docs.map(docToObj);
 
+    // ── Duplicate detection — always unscoped (cross-user visibility) ──────
+    const allDocsForDupes = ownerId
+      ? (await db.collection(COL).select(...ANALYTICS_FIELDS).get()).docs.map(docToObj)
+      : allDocs;
+
     // ── Stale candidates (unfiltered — operational alert) ──────────────────
     const staleCandidates = allDocs
       .filter(c => {
@@ -257,9 +262,9 @@ const Candidate = {
         return bd - ad;
       });
 
-    // ── Duplicate groups (unfiltered — operational alert) ──────────────────
+    // ── Duplicate groups — cross-user, only shown when current user has stake ─
     const nameMap = {}, emailMap = {};
-    allDocs.forEach(c => {
+    allDocsForDupes.forEach(c => {
       const name  = (c.fullName || '').toLowerCase().trim();
       const email = (c.email    || '').toLowerCase().trim();
       if (name)  { if (!nameMap[name])   nameMap[name]  = []; nameMap[name].push(c);  }
@@ -274,6 +279,8 @@ const Candidate = {
       seenKeys.add(key);
       const UNDECIDED = new Set(['pending', 'in_progress']);
       if (!group.some(c => UNDECIDED.has(c.status))) return;
+      // For scoped users: only include groups where at least one candidate belongs to them
+      if (ownerId && !group.some(c => c.ownerId === ownerId)) return;
       duplicateGroups.push({ reason, value: group[0][reason === 'name' ? 'fullName' : 'email'], candidates: group });
     };
     Object.values(nameMap).forEach(g  => addGroup(g, 'name'));

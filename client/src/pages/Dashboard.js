@@ -637,9 +637,12 @@ export default function Dashboard() {
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                           {group.candidates.map(c => {
                             const recruiter = getRecruiter(c.recruiterId);
+                            const isOwn = user?.isAdmin || c.ownerId === user?.id;
                             return (
-                              <div key={c.id} onClick={e => navTo(e, `/candidates/${c.id}`)} onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }}
-                                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', cursor: 'pointer', minWidth: 220 }}>
+                              <div key={c.id}
+                                onClick={isOwn ? e => navTo(e, `/candidates/${c.id}`) : undefined}
+                                onMouseDown={isOwn ? e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } } : undefined}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: `1px solid ${isOwn ? 'var(--border)' : 'var(--border)'}`, cursor: isOwn ? 'pointer' : 'default', minWidth: 220, opacity: isOwn ? 1 : 0.7 }}>
                                 <Avatar src={c.photoUrl} name={c.fullName} size={28} />
                                 <div style={{ minWidth: 0 }}>
                                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.fullName || '—'}</div>
@@ -653,11 +656,9 @@ export default function Dashboard() {
                                         ◈ {recruiter.name}
                                       </span>
                                     )}
-                                    {c.ownerId && (
-                                      <span style={{ fontSize: 9, color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 8, border: '1px solid var(--border)' }}>
-                                        👤 {getOwnerName(c)}
-                                      </span>
-                                    )}
+                                    <span style={{ fontSize: 9, color: isOwn ? 'var(--text-muted)' : 'var(--accent)', background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                                      👤 {getOwnerName(c)}{!isOwn ? ' · No access' : ''}
+                                    </span>
                                   </div>
                                 </div>
                               </div>
