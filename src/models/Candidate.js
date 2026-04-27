@@ -66,7 +66,7 @@ async function analyzeEngagementWithAI(id, history, baseEngagement, ownerId) {
       .filter(Boolean)
       .slice(-20); // analyse most recent 20 messages
 
-    if (candidateMessages.length < 2) return;
+    if (candidateMessages.length < 1) return;
 
     const { getOpenAIClient } = require('../utils/openai');
     const openai = await getOpenAIClient(ownerId);
@@ -357,7 +357,7 @@ const Candidate = {
         const durationSinceLastMessageMs = Date.now() - new Date(lastContactAt || 0).getTime();
         return { ...c, messageCount: c.candidateMessageCount || 0, durationSinceLastMessageMs };
       })
-      .filter(c => c.messageCount >= 5 && c.durationSinceLastMessageMs <= ACTIVE_THRESHOLD_MS)
+      .filter(c => c.messageCount >= 1 && c.durationSinceLastMessageMs <= ACTIVE_THRESHOLD_MS)
       .sort((a, b) => {
         const scoreA = a.combinedEngagementScore ?? ((a.engagementScore || 1) - 1) / 4 * 9 + 1;
         const scoreB = b.combinedEngagementScore ?? ((b.engagementScore || 1) - 1) / 4 * 9 + 1;
@@ -496,7 +496,7 @@ const Candidate = {
 
     // Trigger AI deep analysis when new real candidate messages were added
     const hasNewCandidateMsg = entries.some(e => e.role === 'user' && e.fromCandidate !== false);
-    if (hasNewCandidateMsg && engagement.candidateMessageCount >= 2) {
+    if (hasNewCandidateMsg && engagement.candidateMessageCount >= 1) {
       analyzeEngagementWithAI(id, updatedHistory, engagement, docData.ownerId).catch(() => {});
     }
   },
