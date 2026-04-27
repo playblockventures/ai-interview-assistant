@@ -378,9 +378,10 @@ export default function Candidates() {
   const [showAdd,          setShowAdd]          = useState(false);
   const [editCandidate,    setEditCandidate]    = useState(null);
   const [search,           setSearch]           = useState(saved.search          || '');
-  const [statusFilter,     setStatusFilter]     = useState(saved.statusFilter    || '');
-  const [recruiterFilter,  setRecruiterFilter]  = useState(saved.recruiterFilter || '');
-  const [ownerFilter,      setOwnerFilter]      = useState(saved.ownerFilter     || '');
+  const [statusFilter,      setStatusFilter]      = useState(saved.statusFilter     || '');
+  const [engagementFilter,  setEngagementFilter]  = useState(saved.engagementFilter || '');
+  const [recruiterFilter,   setRecruiterFilter]   = useState(saved.recruiterFilter  || '');
+  const [ownerFilter,       setOwnerFilter]        = useState(saved.ownerFilter      || '');
   const [page,             setPage]             = useState(saved.page            || 1);
   const [pageSize,         setPageSize]         = useState(saved.pageSize        || 20);
   const [fromDate,         setFromDate]         = useState('fromDate' in saved ? saved.fromDate : isoDaysAgo(7));
@@ -393,9 +394,9 @@ export default function Candidates() {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(FILTER_KEY, JSON.stringify({ search, statusFilter, recruiterFilter, ownerFilter, page, pageSize, fromDate, toDate }));
+      sessionStorage.setItem(FILTER_KEY, JSON.stringify({ search, statusFilter, engagementFilter, recruiterFilter, ownerFilter, page, pageSize, fromDate, toDate }));
     } catch {}
-  }, [search, statusFilter, recruiterFilter, ownerFilter, page, pageSize, fromDate, toDate]);
+  }, [search, statusFilter, engagementFilter, recruiterFilter, ownerFilter, page, pageSize, fromDate, toDate]);
 
   // For admin: list of all users to filter/move by
   const [allUsers, setAllUsers] = useState([]);
@@ -431,7 +432,8 @@ export default function Candidates() {
     setLoading(true);
     try {
       const params = { search, status: statusFilter, page, limit: pageSize };
-      if (recruiterFilter) params.recruiterId = recruiterFilter;
+      if (engagementFilter) params.engagementLabel = engagementFilter;
+      if (recruiterFilter)  params.recruiterId     = recruiterFilter;
       if (user?.isAdmin && ownerFilter) params.ownerId = ownerFilter;
       if (fromDate) params.fromDate = fromDate;
       if (toDate)   params.toDate   = toDate;
@@ -445,7 +447,7 @@ export default function Candidates() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, recruiterFilter, ownerFilter, page, pageSize, user, pinnedIds, fromDate, toDate]);
+  }, [search, statusFilter, engagementFilter, recruiterFilter, ownerFilter, page, pageSize, user, pinnedIds, fromDate, toDate]);
 
   useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
 
@@ -598,6 +600,16 @@ export default function Candidates() {
               <option value="have_a_doubt"    style={{ color: '#ef4444' }}>↳ Have a Doubt</option>
               <option value="dangerous"       style={{ color: '#ef4444' }}>↳ Dangerous</option>
             </optgroup>
+          </select>
+
+          <select className="form-select" style={{ width: 150 }} value={engagementFilter}
+            onChange={e => { setEngagementFilter(e.target.value); resetPage(); }}>
+            <option value="">All Scores</option>
+            <option value="Very Active"  style={{ color: '#6366f1' }}>Very Active</option>
+            <option value="Active"       style={{ color: '#10b981' }}>Active</option>
+            <option value="Engaged"      style={{ color: '#3b82f6' }}>Engaged</option>
+            <option value="Passive"      style={{ color: '#f59e0b' }}>Passive</option>
+            <option value="Unresponsive" style={{ color: '#9ca3af' }}>Unresponsive</option>
           </select>
 
           {displayedRecruiters.length > 0 && (

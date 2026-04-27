@@ -155,7 +155,7 @@ Respond with ONLY a JSON object in this exact format:
 
 const Candidate = {
   // Fetch list using field projection — avoids downloading huge resumeText/conversationHistory
-  async findAll({ status, search, page = 1, limit = 20, recruiterId, ownerId, isAdmin, ids, excludeIds, fromDate, toDate } = {}) {
+  async findAll({ status, search, page = 1, limit = 20, recruiterId, ownerId, isAdmin, ids, excludeIds, fromDate, toDate, engagementLabel } = {}) {
     const db = getDB();
 
     // Use .select() so Firestore only returns the fields we need for the list view
@@ -199,6 +199,13 @@ const Candidate = {
       docs = docs.filter(d => !excludeSet.has(d.id));
     }
     if (recruiterId) docs = docs.filter(d => d.recruiterId === recruiterId);
+    if (engagementLabel) {
+      docs = docs.filter(d => {
+        const s = d.combinedEngagementScore ?? ((d.engagementScore || 1) - 1) / 4 * 9 + 1;
+        const derived = s >= 8.5 ? 'Very Active' : s >= 6.5 ? 'Active' : s >= 4.5 ? 'Engaged' : s >= 2.5 ? 'Passive' : 'Unresponsive';
+        return derived === engagementLabel;
+      });
+    }
     if (search) {
       const s = search.toLowerCase();
       docs = docs.filter(d =>
