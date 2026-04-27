@@ -70,7 +70,7 @@ function computeEngagement(conversationHistory) {
 function computeCombined(engagementScore, existingAiScore) {
   const baseNormalized = (engagementScore - 1) / 4 * 9 + 1;
   if (existingAiScore != null) {
-    return Math.round((baseNormalized * 0.65 + existingAiScore * 0.35) * 100) / 100;
+    return Math.round((baseNormalized * 0.5 + existingAiScore * 0.5) * 100) / 100;
   }
   return Math.round(baseNormalized * 100) / 100;
 }
@@ -140,7 +140,7 @@ Respond with ONLY a JSON object in this exact format:
 
     // Normalize base score (1–5) to 1–10 scale, then blend
     const baseNormalized = (baseEngagement.engagementScore - 1) / 4 * 9 + 1;
-    const combined = Math.round((baseNormalized * 0.65 + aiScore * 0.35) * 100) / 100;
+    const combined = Math.round((baseNormalized * 0.5 + aiScore * 0.5) * 100) / 100;
 
     const db = getDB();
     await db.collection(COL).doc(id).update({
