@@ -472,7 +472,7 @@ router.post('/conversation', async (req, res) => {
           imageMimeType: imageMimeType || null,
           attachedFileName: attachedFileName || null,
           attachedFileText: attachedFileText || null,
-          fromCandidate: false, // recruiter context/prompt, not an actual candidate reply
+          fromCandidate: true,
         });
       }
       entries.push({ role: 'assistant', content: response });
