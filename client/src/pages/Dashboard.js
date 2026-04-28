@@ -236,6 +236,7 @@ export default function Dashboard() {
   const [activeCandidates, setActiveCandidates] = useState([]);
   const [activeCollapsed,  setActiveCollapsed]  = useState(false);
   const [staleCollapsed,   setStaleCollapsed]   = useState(false);
+  const [dupeCollapsed,    setDupeCollapsed]    = useState(true);
   const [fromDate,         setFromDate]         = useState(() => isoDaysAgo(7));
   const [toDate,           setToDate]           = useState(() => isoToday());
 
@@ -622,54 +623,68 @@ export default function Dashboard() {
               {/* Duplicate profiles */}
               {duplicateGroups.length > 0 && (
                 <div className="card" style={{ marginBottom: 20, border: '1px solid rgba(255,107,107,0.3)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: dupeCollapsed ? 0 : 16, cursor: 'pointer' }} onClick={() => setDupeCollapsed(v => !v)}>
                     <span style={{ fontSize: 18 }}>⚠️</span>
                     <div style={{ flex: 1 }}>
-                      <div className="card-title" style={{ color: 'var(--error)', marginBottom: 2 }}>Duplicate Profiles ({duplicateGroups.length} group{duplicateGroups.length !== 1 ? 's' : ''})</div>
+                      <div className="card-title" style={{ color: 'var(--error)', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        Duplicate Profiles ({duplicateGroups.length} group{duplicateGroups.length !== 1 ? 's' : ''})
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>{dupeCollapsed ? '▶' : '▼'}</span>
+                      </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Candidates sharing the same name or email address</div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {duplicateGroups.map((group, gi) => (
-                      <div key={gi} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-                          {group.reason === 'name' ? '👤 Same name:' : '✉ Same email:'}{' '}
-                          <span style={{ color: 'var(--error)', fontWeight: 600 }}>{group.value}</span>
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                          {group.candidates.map(c => {
-                            const recruiter = getRecruiter(c.recruiterId);
-                            const isOwn = user?.isAdmin || c.ownerId === user?.id;
-                            return (
-                              <div key={c.id}
-                                onClick={isOwn ? e => navTo(e, `/candidates/${c.id}`) : undefined}
-                                onMouseDown={isOwn ? e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } } : undefined}
-                                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: `1px solid ${isOwn ? 'var(--border)' : 'var(--border)'}`, cursor: isOwn ? 'pointer' : 'default', minWidth: 220, opacity: isOwn ? 1 : 0.7 }}>
-                                <Avatar src={c.photoUrl} name={c.fullName} size={28} />
-                                <div style={{ minWidth: 0 }}>
-                                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.fullName || '—'}</div>
-                                  <div style={{ fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
-                                    {c.email || '—'}
+                  {!dupeCollapsed && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {duplicateGroups.map((group, gi) => (
+                        <div key={gi} style={{ border: '1px solid rgba(255,107,107,0.2)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+                          {/* Group header */}
+                          <div style={{ padding: '8px 14px', background: 'rgba(255,107,107,0.06)', borderBottom: '1px solid rgba(255,107,107,0.15)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{group.reason === 'name' ? '👤 Same name:' : '✉ Same email:'}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--error)' }}>{group.value}</span>
+                            <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '1px 8px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                              {group.candidates.length} duplicates
+                            </span>
+                          </div>
+                          {/* Candidate cards */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 1, background: 'var(--border)' }}>
+                            {group.candidates.map(c => {
+                              const recruiter = getRecruiter(c.recruiterId);
+                              const isOwn = user?.isAdmin || c.ownerId === user?.id;
+                              return (
+                                <div key={c.id}
+                                  onClick={isOwn ? e => navTo(e, `/candidates/${c.id}`) : undefined}
+                                  onMouseDown={isOwn ? e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } } : undefined}
+                                  style={{ background: 'var(--bg-card)', padding: '14px 16px', cursor: isOwn ? 'pointer' : 'default', opacity: isOwn ? 1 : 0.65, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                  {/* Top row: avatar + name + status */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <Avatar src={c.photoUrl} name={c.fullName} size={36} />
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                      <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.fullName || '—'}</div>
+                                      {c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.currentTitle}</div>}
+                                    </div>
+                                    <span className={`status-badge status-${c.status}`} style={{ flexShrink: 0, fontSize: 10 }}>{STATUS_CONFIG[c.status]?.label || c.status}</span>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                                    <span className={`status-badge status-${c.status}`} style={{ padding: '1px 6px', fontSize: 9 }}>{STATUS_CONFIG[c.status]?.label || c.status}</span>
+                                  {/* Email */}
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email || '—'}</div>
+                                  {/* Bottom row: recruiter + owner */}
+                                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                     {recruiter && (
-                                      <span style={{ fontSize: 9, color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                                      <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '2px 7px', borderRadius: 8, border: '1px solid var(--border)' }}>
                                         ◈ {recruiter.name}
                                       </span>
                                     )}
-                                    <span style={{ fontSize: 9, color: isOwn ? 'var(--text-muted)' : 'var(--accent)', background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                                    <span style={{ fontSize: 10, color: isOwn ? 'var(--text-muted)' : 'var(--accent)', background: 'var(--bg-elevated)', padding: '2px 7px', borderRadius: 8, border: '1px solid var(--border)' }}>
                                       👤 {getOwnerName(c)}{!isOwn ? ' · No access' : ''}
                                     </span>
                                   </div>
                                 </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
