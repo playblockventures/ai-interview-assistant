@@ -698,7 +698,7 @@ export default function Dashboard() {
                         <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>{activeCollapsed ? '▶' : '▼'}</span>
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        {activeCandidates.length} in progress · contacted within 14 days · Active or Very Active engagement
+                        {activeCandidates.length} in progress · Active or Very Active engagement
                       </div>
                       {!activeCollapsed && (
                         <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
