@@ -413,7 +413,11 @@ const Candidate = {
         const durationSinceLastMessageMs = Date.now() - new Date(lastContactAt || 0).getTime();
         return { ...c, messageCount: c.candidateMessageCount || 0, durationSinceLastMessageMs };
       })
-      .filter(c => c.messageCount >= 1 && c.durationSinceLastMessageMs <= ACTIVE_THRESHOLD_MS)
+      .filter(c => {
+        if (c.messageCount < 1 || c.durationSinceLastMessageMs > ACTIVE_THRESHOLD_MS) return false;
+        const s = c.combinedEngagementScore ?? ((c.engagementScore || 1) - 1) / 4 * 9 + 1;
+        return s >= 6.5; // Active (6.5–8.5) or Very Active (8.5+)
+      })
       .sort((a, b) => {
         const scoreA = a.combinedEngagementScore ?? ((a.engagementScore || 1) - 1) / 4 * 9 + 1;
         const scoreB = b.combinedEngagementScore ?? ((b.engagementScore || 1) - 1) / 4 * 9 + 1;

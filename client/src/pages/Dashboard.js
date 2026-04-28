@@ -678,7 +678,7 @@ export default function Dashboard() {
                     <div>
                       <div className="card-title" style={{ marginBottom: 2 }}>Active Candidates — Awaiting Follow-up</div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        {activeCandidates.length} in progress · contacted within 14 days · sorted by engagement score
+                        {activeCandidates.length} in progress · contacted within 14 days · Active or Very Active engagement
                       </div>
                       <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
                         {[
