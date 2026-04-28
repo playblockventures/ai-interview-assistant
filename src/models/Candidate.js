@@ -392,7 +392,7 @@ const Candidate = {
   },
 
   // Active candidates — uses persisted engagement fields, no full history load needed
-  async findActiveWithResponseTime({ ownerId, isAdmin, limit = 20 } = {}) {
+  async findActiveWithResponseTime({ ownerId, isAdmin } = {}) {
     const db = getDB();
     const ACTIVE_FIELDS = [
       'fullName', 'email', 'photoUrl', 'currentTitle', 'role',
@@ -423,7 +423,7 @@ const Candidate = {
         const scoreB = b.combinedEngagementScore ?? ((b.engagementScore || 1) - 1) / 4 * 9 + 1;
         return scoreB - scoreA || a.durationSinceLastMessageMs - b.durationSinceLastMessageMs;
       })
-      .slice(0, parseInt(limit));
+;
   },
 
   // Unscoped check — finds any dangerous candidate matching email or linkedinUrl across all users
