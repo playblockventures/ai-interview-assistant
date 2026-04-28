@@ -221,6 +221,12 @@ const Candidate = {
         const derived = s >= 8.5 ? 'Very Active' : s >= 6.5 ? 'Active' : s >= 4.5 ? 'Engaged' : s >= 2.5 ? 'Passive' : 'Unresponsive';
         return labelSet.has(derived);
       });
+      // Re-sort by score desc so highest-engagement candidates appear first
+      docs.sort((a, b) => {
+        const sA = a.combinedEngagementScore ?? ((a.engagementScore || 1) - 1) / 4 * 9 + 1;
+        const sB = b.combinedEngagementScore ?? ((b.engagementScore || 1) - 1) / 4 * 9 + 1;
+        return sB - sA;
+      });
     }
     if (search) {
       const s = search.toLowerCase();
