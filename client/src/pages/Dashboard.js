@@ -234,6 +234,8 @@ export default function Dashboard() {
   const [activeView,       setActiveView]       = useState('overview');
   const [pinnedCandidates, setPinnedCandidates] = useState([]);
   const [activeCandidates, setActiveCandidates] = useState([]);
+  const [activeCollapsed,  setActiveCollapsed]  = useState(false);
+  const [staleCollapsed,   setStaleCollapsed]   = useState(false);
   const [fromDate,         setFromDate]         = useState(() => isoDaysAgo(7));
   const [toDate,           setToDate]           = useState(() => isoToday());
 
@@ -674,32 +676,37 @@ export default function Dashboard() {
               {/* Active Candidates — sorted by time since last contact */}
               {activeCandidates.length > 0 && (
                 <div className="card" style={{ marginBottom: 20 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: activeCollapsed ? 0 : 14, cursor: 'pointer' }} onClick={() => setActiveCollapsed(v => !v)}>
                     <div>
-                      <div className="card-title" style={{ marginBottom: 2 }}>Active Candidates — Awaiting Follow-up</div>
+                      <div className="card-title" style={{ marginBottom: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        Active Candidates — Awaiting Follow-up
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>{activeCollapsed ? '▶' : '▼'}</span>
+                      </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                         {activeCandidates.length} in progress · contacted within 14 days · Active or Very Active engagement
                       </div>
-                      <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-                        {[
-                          { label: 'Unresponsive', color: '#9ca3af' },
-                          { label: 'Passive',      color: '#f59e0b' },
-                          { label: 'Engaged',      color: '#3b82f6' },
-                          { label: 'Active',       color: '#10b981' },
-                          { label: 'Very Active',  color: '#6366f1' },
-                        ].map(({ label, color }) => (
-                          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</span>
-                          </div>
-                        ))}
-                      </div>
+                      {!activeCollapsed && (
+                        <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+                          {[
+                            { label: 'Unresponsive', color: '#9ca3af' },
+                            { label: 'Passive',      color: '#f59e0b' },
+                            { label: 'Engaged',      color: '#3b82f6' },
+                            { label: 'Active',       color: '#10b981' },
+                            { label: 'Very Active',  color: '#6366f1' },
+                          ].map(({ label, color }) => (
+                            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <button className="btn btn-secondary btn-sm" onClick={() => navigateFiltered({ statusFilter: 'in_progress' })}>
+                    <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); navigateFiltered({ statusFilter: 'in_progress' }); }}>
                       View all →
                     </button>
                   </div>
-                  <div className="table-wrap">
+                  {!activeCollapsed && <div className="table-wrap">
                     <table className="data-table">
                       <thead>
                         <tr>
@@ -775,21 +782,24 @@ export default function Dashboard() {
                         })}
                       </tbody>
                     </table>
-                  </div>
+                  </div>}
                 </div>
               )}
 
               {/* No-reply candidates — visible to all users */}
               {staleCandidates.length > 0 && (
                 <div className="card" style={{ marginBottom: 20, border: '1px solid rgba(245,166,35,0.3)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: staleCollapsed ? 0 : 16, cursor: 'pointer' }} onClick={() => setStaleCollapsed(v => !v)}>
                     <span style={{ fontSize: 18 }}>⏰</span>
                     <div style={{ flex: 1 }}>
-                      <div className="card-title" style={{ color: 'var(--warning)', marginBottom: 2 }}>No Reply — Needs Follow-up ({staleCandidates.length})</div>
+                      <div className="card-title" style={{ color: 'var(--warning)', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        No Reply — Needs Follow-up ({staleCandidates.length})
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>{staleCollapsed ? '▶' : '▼'}</span>
+                      </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>In-progress candidates with no message activity for more than 3 days</div>
                     </div>
                   </div>
-                  <div className="table-wrap">
+                  {!staleCollapsed && <div className="table-wrap">
                     <table className="data-table">
                       <thead><tr>
                         <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
@@ -819,7 +829,7 @@ export default function Dashboard() {
                         })}
                       </tbody>
                     </table>
-                  </div>
+                  </div>}
                 </div>
               )}
 
