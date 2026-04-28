@@ -1553,6 +1553,26 @@ export default function CandidateDetail() {
                     {d.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{d.currentTitle}</div>}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+                    {(() => {
+                      const STATUS_STYLE = {
+                        pending:      { label: 'Pending',         color: '#9ca3af' },
+                        in_progress:  { label: 'In Progress',     color: '#3b82f6' },
+                        success:      { label: 'Success',         color: '#10b981' },
+                        failed:       { label: 'Failed',          color: '#ef4444' },
+                        no_response:  { label: 'No Response',     color: '#f59e0b' },
+                        not_interested:{ label: 'Not Interested', color: '#f59e0b' },
+                        other_job:    { label: 'Already Occupied',color: '#8b5cf6' },
+                        have_a_doubt: { label: 'Have a Doubt',    color: '#06b6d4' },
+                        dangerous:    { label: 'Dangerous',       color: '#ef4444' },
+                      };
+                      const s = STATUS_STYLE[d.status];
+                      if (!s) return null;
+                      return (
+                        <span style={{ fontSize: 11, fontWeight: 600, color: s.color, background: `${s.color}18`, border: `1px solid ${s.color}40`, borderRadius: 4, padding: '1px 6px' }}>
+                          {s.label}
+                        </span>
+                      );
+                    })()}
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                       {d.matchReason === 'email' ? 'Same email' : 'Same name'}
                     </span>
