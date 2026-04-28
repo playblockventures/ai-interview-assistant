@@ -56,7 +56,6 @@ router.get('/active-response', async (req, res) => {
     const docs = await Candidate.findActiveWithResponseTime({
       ownerId: req.user.isAdmin ? null : req.user.id,
       isAdmin: req.user.isAdmin,
-      limit: req.query.limit || 20,
     });
     res.json({ candidates: docs });
   } catch (err) { res.status(500).json({ error: err.message }); }
