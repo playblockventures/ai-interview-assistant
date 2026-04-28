@@ -413,7 +413,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
 
   // Manual message insertion
   const [showManual,   setShowManual]   = useState(false);
-  const [manualRole,   setManualRole]   = useState('user');
+  const [manualRole,   setManualRole]   = useState('assistant');
   const [manualText,   setManualText]   = useState('');
   const [addingManual, setAddingManual] = useState(false);
 
