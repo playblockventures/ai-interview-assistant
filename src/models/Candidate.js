@@ -219,10 +219,11 @@ const Candidate = {
     }
     if (recruiterId) docs = docs.filter(d => d.recruiterId === recruiterId);
     if (engagementLabel) {
+      const labelSet = new Set(engagementLabel.split(',').map(l => l.trim()).filter(Boolean));
       docs = docs.filter(d => {
         const s = d.combinedEngagementScore ?? ((d.engagementScore || 1) - 1) / 4 * 9 + 1;
         const derived = s >= 8.5 ? 'Very Active' : s >= 6.5 ? 'Active' : s >= 4.5 ? 'Engaged' : s >= 2.5 ? 'Passive' : 'Unresponsive';
-        return derived === engagementLabel;
+        return labelSet.has(derived);
       });
     }
     if (search) {
@@ -425,7 +426,6 @@ const Candidate = {
     const snapshot = await query.get();
     const docs = snapshot.docs.map(docToObj);
 
-    const ACTIVE_THRESHOLD_MS = 14 * 24 * 60 * 60 * 1000;
     return docs
       .map(c => {
         const lastContactAt = c.lastMessageAt || c.updatedAt || c.createdAt;
@@ -433,7 +433,6 @@ const Candidate = {
         return { ...c, messageCount: c.candidateMessageCount || 0, durationSinceLastMessageMs };
       })
       .filter(c => {
-        if (c.messageCount < 1 || c.durationSinceLastMessageMs > ACTIVE_THRESHOLD_MS) return false;
         const s = c.combinedEngagementScore ?? ((c.engagementScore || 1) - 1) / 4 * 9 + 1;
         return s >= 6.5; // Active (6.5–8.5) or Very Active (8.5+)
       })

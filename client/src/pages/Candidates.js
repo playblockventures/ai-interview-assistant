@@ -605,8 +605,9 @@ export default function Candidates() {
           <select className="form-select" style={{ width: 150 }} value={engagementFilter}
             onChange={e => { setEngagementFilter(e.target.value); resetPage(); }}>
             <option value="">All Scores</option>
-            <option value="Very Active"  style={{ color: '#6366f1' }}>Very Active</option>
-            <option value="Active"       style={{ color: '#10b981' }}>Active</option>
+            <option value="Active,Very Active" style={{ color: '#10b981', fontWeight: 600 }}>Active or above</option>
+            <option value="Very Active"  style={{ color: '#6366f1' }}>↳ Very Active</option>
+            <option value="Active"       style={{ color: '#10b981' }}>↳ Active</option>
             <option value="Engaged"      style={{ color: '#3b82f6' }}>Engaged</option>
             <option value="Passive"      style={{ color: '#f59e0b' }}>Passive</option>
             <option value="Unresponsive" style={{ color: '#9ca3af' }}>Unresponsive</option>

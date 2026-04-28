@@ -717,7 +717,7 @@ export default function Dashboard() {
                         </div>
                       )}
                     </div>
-                    <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); navigateFiltered({ statusFilter: 'in_progress' }); }}>
+                    <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); navigateFiltered({ statusFilter: 'in_progress', engagementFilter: 'Active,Very Active', fromDate: '', toDate: '' }); }}>
                       View all →
                     </button>
                   </div>
