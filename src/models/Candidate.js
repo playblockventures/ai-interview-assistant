@@ -59,20 +59,38 @@ function computeEngagement(conversationHistory) {
   else if (candidateMessageCount >= 3  && avgH < 24) engagementScore = 3;
   else if (candidateMessageCount >= 1)               engagementScore = 2;
 
-  // Normalize base score to 1–10 scale for label (before AI score is available)
-  const baseNormalized = (engagementScore - 1) / 4 * 9 + 1;
+  // Count consecutive unanswered recruiter messages at the END of conversation
+  const conversationMsgs = history.filter(m => m.role === 'user' || m.role === 'assistant');
+  let unrepliedRecruiterCount = 0;
+  for (let i = conversationMsgs.length - 1; i >= 0; i--) {
+    if (conversationMsgs[i].role === 'assistant') unrepliedRecruiterCount++;
+    else break;
+  }
+
+  // Penalty multiplier: each unanswered recruiter message reduces the score
+  let noReplyPenalty = 1;
+  if      (unrepliedRecruiterCount >= 3) noReplyPenalty = 0.2;
+  else if (unrepliedRecruiterCount === 2) noReplyPenalty = 0.5;
+  else if (unrepliedRecruiterCount === 1) noReplyPenalty = 0.8;
+
+  // Normalize base score to 1–10 scale, apply penalty
+  const baseNormalized = Math.max(1, ((engagementScore - 1) / 4 * 9 + 1) * noReplyPenalty);
   const engagementLabel = engagementLabelFromScore(baseNormalized);
 
-  return { avgResponseMs, candidateMessageCount, engagementScore, engagementLabel };
+  return { avgResponseMs, candidateMessageCount, engagementScore, engagementLabel, noReplyPenalty };
 }
 
 // Compute combined score synchronously using base score + existing AI score (if any)
-function computeCombined(engagementScore, existingAiScore) {
-  const baseNormalized = (engagementScore - 1) / 4 * 9 + 1;
+function computeCombined(engagementScore, existingAiScore, noReplyPenalty = 1) {
+  const baseNormalized = Math.max(1, ((engagementScore - 1) / 4 * 9 + 1) * noReplyPenalty);
+  let combined;
   if (existingAiScore != null) {
-    return Math.round((baseNormalized * 0.5 + existingAiScore * 0.5) * 100) / 100;
+    combined = baseNormalized * 0.5 + existingAiScore * 0.5;
+  } else {
+    combined = baseNormalized;
   }
-  return Math.round(baseNormalized * 100) / 100;
+  // Apply no-reply penalty to the full combined score too
+  return Math.round(Math.max(1, combined * noReplyPenalty) * 100) / 100;
 }
 
 // Persist computed engagement to Firestore and trigger AI analysis
@@ -80,7 +98,7 @@ async function persistEngagement(id, db, history, ownerId) {
   const doc = await db.collection(COL).doc(id).get();
   const existingAiScore = doc.data()?.aiEngagementScore ?? null;
   const engagement = computeEngagement(history);
-  const combined = computeCombined(engagement.engagementScore, existingAiScore);
+  const combined = computeCombined(engagement.engagementScore, existingAiScore, engagement.noReplyPenalty);
   await db.collection(COL).doc(id).update({
     candidateMessageCount:   engagement.candidateMessageCount,
     engagementScore:         engagement.engagementScore,
@@ -138,9 +156,10 @@ Respond with ONLY a JSON object in this exact format:
     const parsed = JSON.parse(completion.choices[0].message.content);
     const aiScore = Math.min(10, Math.max(1, parseFloat(parsed.score) || 5));
 
-    // Normalize base score (1–5) to 1–10 scale, then blend
-    const baseNormalized = (baseEngagement.engagementScore - 1) / 4 * 9 + 1;
-    const combined = Math.round((baseNormalized * 0.5 + aiScore * 0.5) * 100) / 100;
+    // Normalize base score (1–5) to 1–10 scale, apply no-reply penalty, then blend
+    const noReplyPenalty = baseEngagement.noReplyPenalty ?? 1;
+    const baseNormalized = Math.max(1, ((baseEngagement.engagementScore - 1) / 4 * 9 + 1) * noReplyPenalty);
+    const combined = Math.round(Math.max(1, (baseNormalized * 0.5 + aiScore * 0.5) * noReplyPenalty) * 100) / 100;
 
     const db = getDB();
     await db.collection(COL).doc(id).update({
@@ -544,7 +563,7 @@ const Candidate = {
     const existing = docData.conversationHistory || [];
     const updatedHistory = [...existing, ...withTimestamps];
     const engagement = computeEngagement(updatedHistory);
-    const combined = computeCombined(engagement.engagementScore, docData.aiEngagementScore ?? null);
+    const combined = computeCombined(engagement.engagementScore, docData.aiEngagementScore ?? null, engagement.noReplyPenalty);
     await db.collection(COL).doc(id).update({
       conversationHistory:     updatedHistory,
       lastMessageAt:           ts,
