@@ -459,6 +459,33 @@ const Candidate = {
     ) || null;
   },
 
+  // Find cross-user duplicates for a single candidate (same name or email)
+  async findDuplicates(id) {
+    const db = getDB();
+    const source = await db.collection(COL).doc(id).get();
+    if (!source.exists) return [];
+    const { fullName, email } = source.data();
+    const normName  = (fullName || '').toLowerCase().trim();
+    const normEmail = (email    || '').toLowerCase().trim();
+    if (!normName && !normEmail) return [];
+
+    const DUPE_FIELDS = ['fullName', 'email', 'currentTitle', 'photoUrl', 'status', 'ownerId', 'ownerName', 'recruiterId', 'recruiterName'];
+    const snapshot = await db.collection(COL).select(...DUPE_FIELDS).get();
+    const results = [];
+    for (const doc of snapshot.docs) {
+      if (doc.id === id) continue;
+      const d = doc.data();
+      const dName  = (d.fullName || '').toLowerCase().trim();
+      const dEmail = (d.email    || '').toLowerCase().trim();
+      const matchName  = normName  && dName  && dName  === normName;
+      const matchEmail = normEmail && dEmail && dEmail === normEmail;
+      if (matchName || matchEmail) {
+        results.push({ id: doc.id, ...d, matchReason: matchEmail ? 'email' : 'name' });
+      }
+    }
+    return results;
+  },
+
   // Fetch just the N most recently active candidates (for dashboard recent list)
   async findRecent({ ownerId, isAdmin, limit = 8 } = {}) {
     const db = getDB();

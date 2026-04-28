@@ -98,6 +98,14 @@ router.get('/', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// GET duplicates — cross-user, any authenticated user can check
+router.get('/:id/duplicates', async (req, res) => {
+  try {
+    const dupes = await Candidate.findDuplicates(req.params.id);
+    res.json(dupes);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET single
 router.get('/:id', async (req, res) => {
   try {

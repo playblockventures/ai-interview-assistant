@@ -1409,6 +1409,7 @@ export default function CandidateDetail() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(urlTab);
   const [appliedScenario, setAppliedScenario] = useState('');
+  const [duplicates, setDuplicates] = useState([]);
   const [showEditProfile, setShowEditProfile]   = useState(false);
   const [pinned, setPinned]                     = useState(false);
   const [showSharePin, setShowSharePin]         = useState(false);
@@ -1427,6 +1428,10 @@ export default function CandidateDetail() {
   }, [id]);
 
   useEffect(() => { fetchCandidate(); }, [fetchCandidate]);
+
+  useEffect(() => {
+    candidateApi.getDuplicates(id).then(setDuplicates).catch(() => {});
+  }, [id]);
 
   useEffect(() => {
     settingsApi.getPins().then(d => setPinned((d.pins || []).includes(id))).catch(() => {});
@@ -1523,6 +1528,47 @@ export default function CandidateDetail() {
         </div>
       )}
       <ProfileCard candidate={candidate} />
+
+      {duplicates.length > 0 && (
+        <div style={{ marginBottom: 16, padding: '12px 16px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: 15 }}>⚠</span>
+            <span style={{ fontWeight: 600, fontSize: 13, color: '#d97706' }}>
+              {duplicates.length === 1 ? '1 duplicate profile found' : `${duplicates.length} duplicate profiles found`}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {duplicates.map(d => {
+              const isOwn = d.ownerId === user?.id || user?.isAdmin;
+              const inner = (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                  {d.photoUrl
+                    ? <img src={d.photoUrl} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                    : <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>
+                        {(d.fullName || '?')[0].toUpperCase()}
+                      </div>
+                  }
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{d.fullName || '—'}</div>
+                    {d.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{d.currentTitle}</div>}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {d.matchReason === 'email' ? 'Same email' : 'Same name'}
+                    </span>
+                    {d.ownerName && <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Owner: {d.ownerName}</span>}
+                    {d.recruiterName && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Recruiter: {d.recruiterName}</span>}
+                  </div>
+                </div>
+              );
+              return isOwn
+                ? <Link key={d.id} to={`/candidates/${d.id}`} style={{ textDecoration: 'none' }}>{inner}</Link>
+                : <div key={d.id}>{inner}</div>;
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="tabs">
         {TABS.map((t, i) => (
           <button key={t} className={`tab ${activeTab === i ? 'active' : ''}`} onClick={() => setActiveTab(i)}>

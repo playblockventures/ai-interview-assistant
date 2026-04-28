@@ -46,6 +46,7 @@ export const candidateApi = {
   getAnalytics: (params)   => api.get('/candidates/analytics', { params }),
   getRecent:    (limit)    => api.get('/candidates/recent', { params: { limit } }),
   getById:      (id)       => api.get(`/candidates/${id}`),
+  getDuplicates:(id)       => api.get(`/candidates/${id}/duplicates`),
   create:       (formData) => api.post('/candidates', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   update:       (id, formData) => api.put(`/candidates/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   updateStatus: (id, status, notes) => api.patch(`/candidates/${id}/status`, { status, notes }),
