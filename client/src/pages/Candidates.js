@@ -437,7 +437,6 @@ export default function Candidates() {
       if (user?.isAdmin && ownerFilter) params.ownerId = ownerFilter;
       if (fromDate) params.fromDate = fromDate;
       if (toDate)   params.toDate   = toDate;
-      if (pinnedIds.size) params.excludeIds = [...pinnedIds].join(',');
       const data = await candidateApi.getAll(params);
       setCandidates(data.candidates || []);
       setTotal(data.total || 0);
@@ -447,7 +446,7 @@ export default function Candidates() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, engagementFilter, recruiterFilter, ownerFilter, page, pageSize, user, pinnedIds, fromDate, toDate]);
+  }, [search, statusFilter, engagementFilter, recruiterFilter, ownerFilter, page, pageSize, user, fromDate, toDate]);
 
   useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
 

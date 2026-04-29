@@ -240,15 +240,14 @@ const Candidate = {
       );
     }
 
-    // Compute total BEFORE excluding pinned IDs so the count matches dashboard
-    const total = docs.length;
     if (excludeIds && excludeIds.length) {
       const excludeSet = new Set(excludeIds);
       docs = docs.filter(d => !excludeSet.has(d.id));
     }
+    const total = docs.length;
     const start = (parseInt(page) - 1) * parseInt(limit);
     const paginated = docs.slice(start, start + parseInt(limit));
-    return { candidates: paginated, total, page: parseInt(page), totalPages: Math.ceil(docs.length / parseInt(limit)) };
+    return { candidates: paginated, total, page: parseInt(page), totalPages: Math.ceil(total / parseInt(limit)) };
   },
 
   // Lightweight stats for the dashboard — only reads small projection fields
