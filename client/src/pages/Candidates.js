@@ -526,6 +526,22 @@ export default function Candidates() {
     finally { setBulkRecommending(false); }
   };
 
+  const handleToggleRecommend = async (e, candidateId) => {
+    e.stopPropagation();
+    const isRec = recommendedIds.has(candidateId);
+    try {
+      if (isRec) {
+        await settingsApi.unsharePin(candidateId);
+        setRecommendedIds(prev => { const next = new Set(prev); next.delete(candidateId); return next; });
+        toast.success('Recommendation removed.');
+      } else {
+        await settingsApi.sharePin(candidateId);
+        setRecommendedIds(prev => new Set([...prev, candidateId]));
+        toast.success('Recommended!');
+      }
+    } catch (e) { toast.error(e.message); }
+  };
+
   const handleDelete = async (e, id) => {
     e.stopPropagation();
     if (!window.confirm('Delete this candidate?')) return;
@@ -823,6 +839,11 @@ export default function Candidates() {
                               <div className="flex gap-8" onClick={e => e.stopPropagation()}>
                                 <button onClick={e => togglePin(e, c)} title="Unpin"
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#f59e0b', padding: '0 4px' }}>★</button>
+                                <button onClick={e => handleToggleRecommend(e, c.id)}
+                                  title={recommendedIds.has(c.id) ? 'Remove recommendation' : 'Recommend'}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, padding: '0 4px', color: recommendedIds.has(c.id) ? '#10b981' : 'var(--text-muted)' }}>
+                                  {recommendedIds.has(c.id) ? '✓↗' : '↗'}
+                                </button>
                                 <button className="btn btn-secondary btn-sm"
                                   onClick={e => { e.stopPropagation(); setEditCandidate(c); }}>✎ Edit</button>
                                 <button onClick={e => handleDelete(e, c.id)}
@@ -942,6 +963,11 @@ export default function Candidates() {
                               title={pinnedIds.has(c.id) ? 'Unpin' : 'Pin'}
                               style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: '0 4px', color: pinnedIds.has(c.id) ? '#f59e0b' : 'var(--text-muted)' }}>
                               {pinnedIds.has(c.id) ? '★' : '☆'}
+                            </button>
+                            <button onClick={e => handleToggleRecommend(e, c.id)}
+                              title={recommendedIds.has(c.id) ? 'Remove recommendation' : 'Recommend'}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, padding: '0 4px', color: recommendedIds.has(c.id) ? '#10b981' : 'var(--text-muted)' }}>
+                              {recommendedIds.has(c.id) ? '✓↗' : '↗'}
                             </button>
                             <button className="btn btn-secondary btn-sm"
                               onClick={e => { e.stopPropagation(); setEditCandidate(c); }}>✎ Edit</button>
