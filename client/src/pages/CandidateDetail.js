@@ -1412,6 +1412,7 @@ export default function CandidateDetail() {
   const [duplicates, setDuplicates] = useState([]);
   const [showEditProfile, setShowEditProfile]   = useState(false);
   const [pinned, setPinned]                     = useState(false);
+  const [recommended, setRecommended]           = useState(false);
   const [recommending, setRecommending]         = useState(false);
   const { user } = useAuth();
 
@@ -1432,6 +1433,7 @@ export default function CandidateDetail() {
 
   useEffect(() => {
     settingsApi.getPins().then(d => setPinned((d.pins || []).includes(id))).catch(() => {});
+    settingsApi.getRecommended().then(d => setRecommended((d.recommended || []).includes(id))).catch(() => {});
   }, [id]);
 
   const togglePin = async () => {
@@ -1451,8 +1453,15 @@ export default function CandidateDetail() {
   const handleRecommend = async () => {
     setRecommending(true);
     try {
-      await settingsApi.sharePin(id, candidate?.fullName);
-      toast.success('Recommended — added to their pins!');
+      if (recommended) {
+        await settingsApi.unsharePin(id);
+        setRecommended(false);
+        toast.success('Recommendation removed.');
+      } else {
+        await settingsApi.sharePin(id, candidate?.fullName);
+        setRecommended(true);
+        toast.success('Recommended — added to their pins!');
+      }
     } catch (e) { toast.error(e.message); }
     finally { setRecommending(false); }
   };
@@ -1482,8 +1491,9 @@ export default function CandidateDetail() {
           </button>
           {pinned && (
             <button className="btn btn-secondary btn-sm" onClick={handleRecommend} disabled={recommending}
-              title={user?.isAdmin ? 'Add to owner\'s pins' : 'Add to admin\'s pins'}>
-              {recommending ? <span className="spinner" style={{ width: 14, height: 14 }} /> : '↗ Recommend'}
+              title={recommended ? 'Remove recommendation' : (user?.isAdmin ? 'Add to owner\'s pins' : 'Add to admin\'s pins')}
+              style={recommended ? { borderColor: '#10b981', color: '#10b981' } : {}}>
+              {recommending ? <span className="spinner" style={{ width: 14, height: 14 }} /> : recommended ? '✓ Recommended' : '↗ Recommend'}
             </button>
           )}
           <button className="btn btn-secondary btn-sm" onClick={() => setShowEditProfile(true)}>✎ Edit Profile</button>

@@ -388,9 +388,11 @@ export default function Candidates() {
   const [toDate,           setToDate]           = useState(saved.toDate   || '');
 
   // ── Selection state ────────────────────────────────────────────────────────
-  const [selectedIds,   setSelectedIds]   = useState(new Set());
-  const [bulkMoveTo,    setBulkMoveTo]    = useState('');
-  const [bulkSaving,    setBulkSaving]    = useState(false);
+  const [selectedIds,      setSelectedIds]      = useState(new Set());
+  const [bulkMoveTo,       setBulkMoveTo]       = useState('');
+  const [bulkSaving,       setBulkSaving]       = useState(false);
+  const [bulkRecommending, setBulkRecommending] = useState(false);
+  const [recommendedIds,   setRecommendedIds]   = useState(new Set());
 
   useEffect(() => {
     try {
@@ -421,6 +423,7 @@ export default function Candidates() {
   const [pinnedIds, setPinnedIds] = useState(new Set());
   useEffect(() => {
     settingsApi.getPins().then(d => setPinnedIds(new Set(d.pins || []))).catch(() => {});
+    settingsApi.getRecommended().then(d => setRecommendedIds(new Set(d.recommended || []))).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -496,6 +499,31 @@ export default function Candidates() {
       fetchCandidates();
     } catch (e) { toast.error(e.message); }
     finally { setBulkSaving(false); }
+  };
+
+  const handleBulkRecommend = async () => {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    const toRecommend   = ids.filter(id => !recommendedIds.has(id));
+    const toUnrecommend = ids.filter(id =>  recommendedIds.has(id));
+    setBulkRecommending(true);
+    try {
+      if (toRecommend.length)   await settingsApi.bulkSharePin(toRecommend);
+      if (toUnrecommend.length) await settingsApi.bulkUnsharePin(toUnrecommend);
+      setRecommendedIds(prev => {
+        const next = new Set(prev);
+        toRecommend.forEach(id => next.add(id));
+        toUnrecommend.forEach(id => next.delete(id));
+        return next;
+      });
+      const msg = [
+        toRecommend.length   ? `${toRecommend.length} recommended`   : '',
+        toUnrecommend.length ? `${toUnrecommend.length} unrecommended` : '',
+      ].filter(Boolean).join(', ');
+      toast.success(msg);
+      setSelectedIds(new Set());
+    } catch (e) { toast.error(e.message); }
+    finally { setBulkRecommending(false); }
   };
 
   const handleDelete = async (e, id) => {
@@ -649,6 +677,20 @@ export default function Candidates() {
             <button className="btn btn-secondary btn-sm" onClick={() => setSelectedIds(new Set())}>
               Deselect all
             </button>
+            {(() => {
+              const ids = [...selectedIds];
+              const allRec  = ids.every(id => recommendedIds.has(id));
+              const someRec = ids.some(id  => recommendedIds.has(id));
+              const label   = allRec ? `↩ Unrecommend (${ids.length})` : someRec ? `↗↩ Toggle (${ids.length})` : `↗ Recommend (${ids.length})`;
+              return (
+                <button className="btn btn-secondary btn-sm" disabled={bulkRecommending}
+                  onClick={handleBulkRecommend}
+                  style={allRec ? { borderColor: '#10b981', color: '#10b981' } : {}}
+                  title={user?.isAdmin ? 'Recommend to each candidate\'s owner' : 'Recommend to admin'}>
+                  {bulkRecommending ? <span className="spinner" style={{ width: 12, height: 12 }} /> : label}
+                </button>
+              );
+            })()}
             <div style={{ flex: 1 }} />
             {/* Admin: move to user */}
             {user?.isAdmin && allUsers.length > 0 && (
