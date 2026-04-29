@@ -215,23 +215,55 @@ router.delete('/pins/:candidateId', requireAuth, async (req, res) => {
 });
 
 // ── POST /api/settings/pins/:candidateId/share ───────────────────────────────
-// Share a pinned candidate with another user (or admin shares to a user)
+// Recommend a pinned candidate to the counterpart:
+//   admin  → pins it for the candidate's owner
+//   user   → pins it for all admins
 router.post('/pins/:candidateId/share', requireAuth, async (req, res) => {
   try {
-    const { targetUserId, candidateName } = req.body;
-    if (!targetUserId) return res.status(400).json({ error: 'targetUserId is required' });
+    const { candidateName } = req.body;
+    const S = getSettings();
     const Notification = require('../models/Notification');
+    const User = require('../models/User');
+    const Candidate = require('../models/Candidate');
     const senderName = req.user.displayName || req.user.username;
-    await Notification.create({
-      userId: targetUserId,
-      type: 'pin_share',
-      title: `${senderName} shared a candidate with you`,
-      message: `${senderName} pinned ${candidateName || 'a candidate'} and shared it with you. Click to view.`,
-      candidateId: req.params.candidateId,
-      candidateName: candidateName || '',
-      createdBy: req.user.id,
-      createdByName: senderName,
-    });
+    const candidateId = req.params.candidateId;
+
+    let targetIds = [];
+
+    if (req.user.isAdmin) {
+      // Admin → pin for the candidate's owner
+      const candidate = await Candidate.findById(candidateId);
+      if (candidate?.ownerId && candidate.ownerId !== req.user.id) {
+        targetIds = [candidate.ownerId];
+      }
+    } else {
+      // User → pin for all admins
+      const allUsers = await User.findAll();
+      targetIds = allUsers.filter(u => u.isAdmin).map(u => u.id);
+    }
+
+    if (!targetIds.length) return res.status(400).json({ error: 'No valid target to recommend to' });
+
+    await Promise.all(targetIds.map(async (targetId) => {
+      // Add to target's pins
+      const pins = await S.getForUser(targetId, 'pinned_candidates').catch(() => null) || [];
+      if (!pins.includes(candidateId)) {
+        pins.push(candidateId);
+        await S.setForUser(targetId, 'pinned_candidates', pins);
+      }
+      // Notify target
+      await Notification.create({
+        userId: targetId,
+        type: 'pin_share',
+        title: `${senderName} recommended a candidate`,
+        message: `${senderName} recommended ${candidateName || 'a candidate'} — it has been added to your pins.`,
+        candidateId,
+        candidateName: candidateName || '',
+        createdBy: req.user.id,
+        createdByName: senderName,
+      });
+    }));
+
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

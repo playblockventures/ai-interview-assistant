@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useCallback, useContext } from 'rea
 import { useParams, Link, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import toast from 'react-hot-toast';
-import { candidateApi, generateApi, interviewApi, notificationApi, settingsApi, authApi } from '../utils/api';
+import { candidateApi, generateApi, interviewApi, notificationApi, settingsApi } from '../utils/api';
 
 // Helper — download a blob response as a file
 function downloadBlob(res, fallbackName) {
@@ -1412,10 +1412,7 @@ export default function CandidateDetail() {
   const [duplicates, setDuplicates] = useState([]);
   const [showEditProfile, setShowEditProfile]   = useState(false);
   const [pinned, setPinned]                     = useState(false);
-  const [showSharePin, setShowSharePin]         = useState(false);
-  const [shareUsers, setShareUsers]             = useState([]);
-  const [shareTarget, setShareTarget]           = useState('');
-  const [sharingPin, setSharingPin]             = useState(false);
+  const [recommending, setRecommending]         = useState(false);
   const { user } = useAuth();
 
   const fetchCandidate = useCallback(async () => {
@@ -1451,27 +1448,13 @@ export default function CandidateDetail() {
     } catch (e) { toast.error(e.message); }
   };
 
-  const openSharePin = async () => {
-    if (!shareUsers.length) {
-      try {
-        const users = await authApi.listUsers();
-        // Filter out self
-        setShareUsers(users.filter(u => u.id !== user?.id));
-      } catch (e) { toast.error(e.message); return; }
-    }
-    setShowSharePin(true);
-  };
-
-  const doSharePin = async () => {
-    if (!shareTarget) return toast.error('Select a user to share with');
-    setSharingPin(true);
+  const handleRecommend = async () => {
+    setRecommending(true);
     try {
-      await settingsApi.sharePin(id, shareTarget, candidate?.fullName);
-      toast.success('Shared!');
-      setShowSharePin(false);
-      setShareTarget('');
+      await settingsApi.sharePin(id, candidate?.fullName);
+      toast.success('Recommended — added to their pins!');
     } catch (e) { toast.error(e.message); }
-    finally { setSharingPin(false); }
+    finally { setRecommending(false); }
   };
 
   const handleScenarioApplied = (content) => {
@@ -1497,36 +1480,16 @@ export default function CandidateDetail() {
             style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: 18, padding: '3px 10px', color: pinned ? '#f59e0b' : 'var(--text-muted)', lineHeight: 1 }}>
             {pinned ? '★' : '☆'}
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={openSharePin}>↗ Share</button>
+          {pinned && (
+            <button className="btn btn-secondary btn-sm" onClick={handleRecommend} disabled={recommending}
+              title={user?.isAdmin ? 'Add to owner\'s pins' : 'Add to admin\'s pins'}>
+              {recommending ? <span className="spinner" style={{ width: 14, height: 14 }} /> : '↗ Recommend'}
+            </button>
+          )}
           <button className="btn btn-secondary btn-sm" onClick={() => setShowEditProfile(true)}>✎ Edit Profile</button>
         </div>
       </div>
 
-      {/* Share pin modal */}
-      {showSharePin && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
-          onClick={() => setShowSharePin(false)}>
-          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: 24, width: 360, boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>Share Candidate</div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
-              Share <strong>{candidate.fullName}</strong> with:
-            </div>
-            <select className="form-select" value={shareTarget} onChange={e => setShareTarget(e.target.value)} style={{ marginBottom: 16 }}>
-              <option value="">Select user...</option>
-              {shareUsers.map(u => (
-                <option key={u.id} value={u.id}>{u.displayName || u.username}{u.isAdmin ? ' (admin)' : ''}</option>
-              ))}
-            </select>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowSharePin(false)}>Cancel</button>
-              <button className="btn btn-primary btn-sm" onClick={doSharePin} disabled={sharingPin || !shareTarget}>
-                {sharingPin ? <span className="spinner" style={{ width: 14, height: 14 }} /> : '↗ Share'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       <ProfileCard candidate={candidate} />
 
       {duplicates.length > 0 && (
