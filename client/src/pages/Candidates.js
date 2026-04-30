@@ -423,7 +423,12 @@ export default function Candidates() {
   const [pinnedIds, setPinnedIds] = useState(new Set());
   useEffect(() => {
     settingsApi.getPins().then(d => setPinnedIds(new Set(d.pins || []))).catch(() => {});
-    settingsApi.getRecommended().then(d => setRecommendedIds(new Set(d.recommended || []))).catch(() => {});
+    Promise.all([
+      settingsApi.getRecommended().catch(() => ({ recommended: [] })),
+      settingsApi.getReceivedRecommendations().catch(() => ({ received: [] })),
+    ]).then(([byMe, toMe]) => {
+      setRecommendedIds(new Set([...(byMe.recommended || []), ...(toMe.received || [])]));
+    });
   }, []);
 
   useEffect(() => {

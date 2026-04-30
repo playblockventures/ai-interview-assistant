@@ -85,6 +85,7 @@ export const settingsApi = {
   addPin:              (candidateId)  => api.post(`/settings/pins/${candidateId}`),
   removePin:           (candidateId)  => api.delete(`/settings/pins/${candidateId}`),
   getRecommended:      ()             => api.get('/settings/pins/recommended-by-me'),
+  getReceivedRecommendations: ()     => api.get('/settings/pins/recommended-to-me'),
   sharePin:            (candidateId, candidateName) => api.post(`/settings/pins/${candidateId}/share`, { candidateName }),
   unsharePin:          (candidateId) => api.delete(`/settings/pins/${candidateId}/share`),
   bulkSharePin:        (candidateIds) => api.post('/settings/pins/bulk-share', { candidateIds }),

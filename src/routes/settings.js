@@ -198,6 +198,14 @@ router.get('/pins/recommended-by-me', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── GET /api/settings/pins/recommended-to-me ─────────────────────────────────
+router.get('/pins/recommended-to-me', requireAuth, async (req, res) => {
+  try {
+    const received = await getSettings().getForUser(req.user.id, 'received_recommendations').catch(() => null) || [];
+    res.json({ received });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── POST /api/settings/pins/:candidateId ─────────────────────────────────────
 router.post('/pins/:candidateId', requireAuth, async (req, res) => {
   try {
@@ -251,14 +259,21 @@ router.post('/pins/bulk-share', requireAuth, async (req, res) => {
       return pinsCache[id];
     };
 
-    // Track sender's recommended list
+    // Track sender's recommended list and per-target received lists
     const senderRec = await S.getForUser(req.user.id, 'recommended_candidates').catch(() => null) || [];
+    const receivedCache = {};
+    const getTargetReceived = async (id) => {
+      if (!receivedCache[id]) receivedCache[id] = await S.getForUser(id, 'received_recommendations').catch(() => null) || [];
+      return receivedCache[id];
+    };
 
     for (const candidateId of candidateIds) {
       const { targetIds, candidateName } = await resolveRecommendTargets(req.user.id, req.user.isAdmin, candidateId);
       for (const targetId of targetIds) {
         const pins = await getTargetPins(targetId);
         if (!pins.includes(candidateId)) { pins.push(candidateId); await S.setForUser(targetId, 'pinned_candidates', pins); }
+        const received = await getTargetReceived(targetId);
+        if (!received.includes(candidateId)) { received.push(candidateId); await S.setForUser(targetId, 'received_recommendations', received); }
         await Notification.create({ userId: targetId, type: 'pin_share', title: `${senderName} recommended a candidate`, message: `${senderName} recommended ${candidateName || 'a candidate'} — it has been added to your pins.`, candidateId, candidateName, createdBy: req.user.id, createdByName: senderName });
       }
       if (!senderRec.includes(candidateId)) senderRec.push(candidateId);
@@ -281,6 +296,11 @@ router.delete('/pins/bulk-share', requireAuth, async (req, res) => {
     };
 
     let senderRec = await S.getForUser(req.user.id, 'recommended_candidates').catch(() => null) || [];
+    const receivedCache = {};
+    const getTargetReceived = async (id) => {
+      if (!receivedCache[id]) receivedCache[id] = await S.getForUser(id, 'received_recommendations').catch(() => null) || [];
+      return receivedCache[id];
+    };
 
     for (const candidateId of candidateIds) {
       const { targetIds } = await resolveRecommendTargets(req.user.id, req.user.isAdmin, candidateId);
@@ -288,6 +308,9 @@ router.delete('/pins/bulk-share', requireAuth, async (req, res) => {
         const pins = await getTargetPins(targetId);
         const updated = pins.filter(id => id !== candidateId);
         if (updated.length !== pins.length) { pinsCache[targetId] = updated; await S.setForUser(targetId, 'pinned_candidates', updated); }
+        const received = await getTargetReceived(targetId);
+        const updatedRec = received.filter(id => id !== candidateId);
+        if (updatedRec.length !== received.length) { receivedCache[targetId] = updatedRec; await S.setForUser(targetId, 'received_recommendations', updatedRec); }
       }
       senderRec = senderRec.filter(id => id !== candidateId);
     }
@@ -309,6 +332,8 @@ router.post('/pins/:candidateId/share', requireAuth, async (req, res) => {
     await Promise.all(targetIds.map(async (targetId) => {
       const pins = await S.getForUser(targetId, 'pinned_candidates').catch(() => null) || [];
       if (!pins.includes(candidateId)) { pins.push(candidateId); await S.setForUser(targetId, 'pinned_candidates', pins); }
+      const received = await S.getForUser(targetId, 'received_recommendations').catch(() => null) || [];
+      if (!received.includes(candidateId)) { received.push(candidateId); await S.setForUser(targetId, 'received_recommendations', received); }
       await Notification.create({ userId: targetId, type: 'pin_share', title: `${senderName} recommended a candidate`, message: `${senderName} recommended ${candidateName || 'a candidate'} — it has been added to your pins.`, candidateId, candidateName, createdBy: req.user.id, createdByName: senderName });
     }));
 
@@ -329,6 +354,9 @@ router.delete('/pins/:candidateId/share', requireAuth, async (req, res) => {
       const pins = await S.getForUser(targetId, 'pinned_candidates').catch(() => null) || [];
       const updated = pins.filter(id => id !== candidateId);
       if (updated.length !== pins.length) await S.setForUser(targetId, 'pinned_candidates', updated);
+      const received = await S.getForUser(targetId, 'received_recommendations').catch(() => null) || [];
+      const updatedRec = received.filter(id => id !== candidateId);
+      if (updatedRec.length !== received.length) await S.setForUser(targetId, 'received_recommendations', updatedRec);
     }));
 
     let senderRec = await S.getForUser(req.user.id, 'recommended_candidates').catch(() => null) || [];
