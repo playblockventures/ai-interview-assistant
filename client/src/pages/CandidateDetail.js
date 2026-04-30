@@ -1433,7 +1433,12 @@ export default function CandidateDetail() {
 
   useEffect(() => {
     settingsApi.getPins().then(d => setPinned((d.pins || []).includes(id))).catch(() => {});
-    settingsApi.getRecommended().then(d => setRecommended((d.recommended || []).includes(id))).catch(() => {});
+    Promise.all([
+      settingsApi.getRecommended().catch(() => ({ recommended: [] })),
+      settingsApi.getReceivedRecommendations().catch(() => ({ received: [] })),
+    ]).then(([byMe, toMe]) => {
+      setRecommended([...(byMe.recommended || []), ...(toMe.received || [])].includes(id));
+    });
   }, [id]);
 
   const togglePin = async () => {
