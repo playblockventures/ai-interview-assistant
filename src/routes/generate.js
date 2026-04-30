@@ -82,7 +82,17 @@ async function getRecruiterContext(recruiterId, userId) {
     }
 
     if (!recruiter) return '';
-    return `\n\n--- RECRUITER PROFILE ---\nName: ${recruiter.name}\nTitle: ${recruiter.currentTitle || ''}\nLocation: ${recruiter.location || ''}\nEmail: ${recruiter.email || ''}\nBio/Style: ${recruiter.profile || ''}\nWrite messages and responses in the voice and style of this recruiter.`;
+
+    const lines = ['\n\n--- RECRUITER PROFILE ---'];
+    if (recruiter.name)         lines.push(`Name: ${recruiter.name}`);
+    if (recruiter.currentTitle) lines.push(`Title: ${recruiter.currentTitle}`);
+    if (recruiter.location)     lines.push(`Location: ${recruiter.location}`);
+    if (recruiter.email)        lines.push(`Email: ${recruiter.email}`);
+    if (recruiter.phone)        lines.push(`Phone: ${recruiter.phone}`);
+    if (recruiter.linkedinUrl)  lines.push(`LinkedIn: ${recruiter.linkedinUrl}`);
+    if (recruiter.profile)      lines.push(`\nBackground & Style:\n${recruiter.profile}`);
+    lines.push('\nWrite all messages, outreach, and responses in the voice, tone, and style of this recruiter. Reference their background where relevant.');
+    return lines.join('\n');
   } catch (_) { return ''; }
 }
 

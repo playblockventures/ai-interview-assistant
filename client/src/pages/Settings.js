@@ -264,8 +264,10 @@ function RecruitersSection({ dbConnected }) {
   const [form, setForm]         = useState(blankForm);
   const [editId, setEditId]     = useState(null);
   const [editOwnerUserId, setEditOwnerUserId] = useState(null); // whose list is being edited
-  const [saving, setSaving]     = useState(false);
+  const [saving, setSaving]         = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [extractingLi, setExtractingLi] = useState(false);
+  const [linkedinInput, setLinkedinInput] = useState('');
   const [expanded, setExpanded]     = useState(null);
   const [movingId,    setMovingId]    = useState(null); // recruiter id being moved
   const [moveTarget,  setMoveTarget]  = useState(null); // target userId (null = not selected)
@@ -304,19 +306,42 @@ function RecruitersSection({ dbConnected }) {
         const data = await candidateApi.extract(fd);
         setForm(p => ({
           ...p,
-          name:         p.name         || data.fullName    || '',
+          name:         p.name         || data.fullName     || '',
           email:        p.email        || data.email        || '',
           phone:        p.phone        || data.phone        || '',
           linkedinUrl:  p.linkedinUrl  || data.linkedinUrl  || '',
           location:     p.location     || data.location     || '',
           currentTitle: p.currentTitle || data.currentTitle || '',
           photoUrl:     p.photoUrl     || data.photoUrl     || '',
+          profile:      p.profile      || data.resumeText   || '',
         }));
         toast.success('Recruiter info extracted');
       } catch (e) { toast.error('Could not extract: ' + e.message); }
       finally { setExtracting(false); }
     },
   });
+
+  const extractFromLinkedIn = async () => {
+    const url = linkedinInput.trim();
+    if (!url) return;
+    setExtractingLi(true);
+    try {
+      const data = await settingsApi.extractLinkedIn(url);
+      setForm(p => ({
+        ...p,
+        name:         p.name         || data.fullName     || '',
+        email:        p.email        || data.email        || '',
+        phone:        p.phone        || data.phone        || '',
+        linkedinUrl:  p.linkedinUrl  || url,
+        location:     p.location     || data.location     || '',
+        currentTitle: p.currentTitle || data.currentTitle || '',
+        photoUrl:     p.photoUrl     || data.photoUrl     || '',
+        profile:      p.profile      || data.resumeText   || '',
+      }));
+      toast.success('LinkedIn profile extracted — fields auto-filled');
+    } catch (e) { toast.error(e.message); }
+    finally { setExtractingLi(false); }
+  };
 
   const save = async () => {
     if (!dbConnected) return toast.error('Connect Firebase first');
@@ -340,6 +365,7 @@ function RecruitersSection({ dbConnected }) {
       setForm(blankForm);
       setEditId(null);
       setEditOwnerUserId(null);
+      setLinkedinInput('');
       toast.success(editId ? 'Recruiter updated' : 'Recruiter added');
     } catch (e) { toast.error(e.message); }
     finally { setSaving(false); }
@@ -368,7 +394,7 @@ function RecruitersSection({ dbConnected }) {
     setForm({ name: r.name||'', email: r.email||'', phone: r.phone||'', linkedinUrl: r.linkedinUrl||'', location: r.location||'', currentTitle: r.currentTitle||'', profile: r.profile||'', photoUrl: r.photoUrl||'' });
     setTimeout(() => editFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   };
-  const cancelEdit = () => { setEditId(null); setEditOwnerUserId(null); setForm(blankForm); };
+  const cancelEdit = () => { setEditId(null); setEditOwnerUserId(null); setForm(blankForm); setLinkedinInput(''); };
   const sf = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const moveRecruiter = async (r) => {
@@ -497,12 +523,35 @@ function RecruitersSection({ dbConnected }) {
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
-              Upload Profile / Resume {extracting && <span style={{ color: 'var(--accent)', fontWeight: 400 }}>⟳ Extracting...</span>}
+              Import from Resume or LinkedIn {(extracting || extractingLi) && <span style={{ color: 'var(--accent)', fontWeight: 400 }}>⟳ Extracting...</span>}
             </div>
-            <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`} style={{ padding: '12px 14px', margin: 0 }}>
+            <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`} style={{ padding: '10px 14px', margin: 0 }}>
               <input {...getInputProps()} />
-              <div className="dropzone-icon" style={{ fontSize: 16, marginBottom: 2 }}>📄</div>
-              <div className="dropzone-text" style={{ fontSize: 11 }}>{extracting ? 'Extracting...' : isDragActive ? 'Drop here' : 'Drop LinkedIn PDF or resume to auto-fill'}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                <span style={{ fontSize: 16 }}>📄</span>
+                <span style={{ color: 'var(--text-muted)' }}>
+                  {extracting ? '⟳ Extracting...' : isDragActive ? 'Drop here' : 'Drop or click to upload resume / LinkedIn PDF'}
+                </span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+              <input
+                className="form-input"
+                style={{ flex: 1, fontSize: 12 }}
+                placeholder="Or paste LinkedIn URL to auto-fill..."
+                value={linkedinInput}
+                onChange={e => setLinkedinInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && extractFromLinkedIn()}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={extractFromLinkedIn}
+                disabled={extractingLi || !linkedinInput.trim()}
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                {extractingLi ? <><span className="spinner" style={{ width: 10, height: 10 }} /> Extracting...</> : '🔗 Extract'}
+              </button>
             </div>
           </div>
         </div>
@@ -514,6 +563,17 @@ function RecruitersSection({ dbConnected }) {
           <div className="form-group"><label className="form-label">Location</label><input className="form-input" placeholder="New York, USA" value={form.location} onChange={e => sf('location', e.target.value)} /></div>
           <div className="form-group"><label className="form-label">Title / Role</label><input className="form-input" placeholder="Senior Technical Recruiter" value={form.currentTitle} onChange={e => sf('currentTitle', e.target.value)} /></div>
           <div className="form-group"><label className="form-label">LinkedIn URL</label><input className="form-input" placeholder="https://linkedin.com/in/..." value={form.linkedinUrl} onChange={e => sf('linkedinUrl', e.target.value)} /></div>
+          <div className="form-group">
+            <label className="form-label">
+              Photo URL
+              {form.photoUrl && form.photoUrl.startsWith('data:') && (
+                <span style={{ color: 'var(--warning, #f59e0b)', fontWeight: 400, marginLeft: 6, fontSize: 11 }}>
+                  ⚠ Photo from PDF won't be saved — paste a hosted URL below
+                </span>
+              )}
+            </label>
+            <input className="form-input" placeholder="https://..." value={form.photoUrl.startsWith('data:') ? '' : form.photoUrl} onChange={e => sf('photoUrl', e.target.value)} />
+          </div>
         </div>
         <div className="form-group"><label className="form-label">Profile / Bio</label><textarea className="form-textarea" style={{ minHeight: 90 }} placeholder="LinkedIn bio, resume summary, or interview style description..." value={form.profile} onChange={e => sf('profile', e.target.value)} /></div>
 

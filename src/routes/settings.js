@@ -531,7 +531,20 @@ router.put('/company-scenarios', requireAuth, async (req, res) => {
 router.put('/recruiters', requireAuth, async (req, res) => {
   try {
     const targetUserId = (req.user.isAdmin && req.query.userId) ? req.query.userId : req.user.id;
-    await getSettings().set(recruiterKey(targetUserId), req.body.recruiters || []);
+
+    // Sanitize per-recruiter fields before storing in Firestore.
+    // All recruiters share ONE document so total size matters.
+    // - profile: cap at 10,000 chars (ample for a full LinkedIn bio + experience)
+    // - photoUrl: base64 images can be 50-200KB each — keep only URLs, drop raw base64
+    const recruiters = (req.body.recruiters || []).map(r => ({
+      ...r,
+      profile:  typeof r.profile  === 'string' ? r.profile.substring(0, 10000) : '',
+      photoUrl: typeof r.photoUrl === 'string' && r.photoUrl.startsWith('data:')
+        ? ''   // base64 images are too large to store in a shared Firestore document
+        : (r.photoUrl || ''),
+    }));
+
+    await getSettings().set(recruiterKey(targetUserId), recruiters);
     invalidateCache(targetUserId);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
