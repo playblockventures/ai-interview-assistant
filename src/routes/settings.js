@@ -629,10 +629,32 @@ router.post('/knowledge/url', requireAuth, async (req, res) => {
       return res.status(422).json({ error: msg });
     }
 
-    const $ = cheerio.load(response.data);
-    $('script,style,nav,footer,header,aside,iframe,noscript').remove();
-    siteName = $('title').text().trim() || siteName;
-    text = $('body').text().replace(/\s+/g, ' ').trim().substring(0, 8000);
+    const contentType = (response.headers['content-type'] || '').toLowerCase();
+    const isPdf = contentType.includes('pdf') || url.toLowerCase().includes('.pdf');
+
+    if (isPdf) {
+      // Re-fetch as binary so pdf-parse can read it properly
+      let pdfBuf;
+      try {
+        const pdfRes = await axios.get(url, {
+          timeout: 30000,
+          responseType: 'arraybuffer',
+          headers: { 'User-Agent': BROWSER_HEADERS['User-Agent'] },
+          maxRedirects: 5,
+        });
+        pdfBuf = Buffer.from(pdfRes.data);
+      } catch (_) {
+        pdfBuf = Buffer.isBuffer(response.data) ? response.data : Buffer.from(response.data);
+      }
+      text = await extractTextFromBuffer(pdfBuf, 'document.pdf');
+      siteName = decodeURIComponent(url.split('/').pop().replace(/\.pdf$/i, '').replace(/-|_/g, ' ')) || siteName;
+      text = text.substring(0, 100000);
+    } else {
+      const $ = cheerio.load(response.data);
+      $('script,style,nav,footer,header,aside,iframe,noscript').remove();
+      siteName = $('title').text().trim() || siteName;
+      text = $('body').text().replace(/\s+/g, ' ').trim().substring(0, 50000);
+    }
 
     if (!text) {
       return res.status(422).json({ error: 'No readable text found on this page. The site may require JavaScript to render. Try pasting the content as custom instructions instead.' });

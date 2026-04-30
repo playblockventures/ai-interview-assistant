@@ -48,11 +48,11 @@ const getKnowledgeContext = async (userId, companyId = null) => {
       : allDocs;
     if (!docs.length) return '';
 
-    // Budget: 12000 chars total across all docs (fits comfortably in GPT-4o context)
-    const TOTAL_BUDGET = 12000;
-    const perDoc       = Math.floor(TOTAL_BUDGET / Math.min(docs.length, 15));
+    // Budget: 80000 chars total across all docs (GPT-4o has 128k token window)
+    const TOTAL_BUDGET = 80000;
+    const perDoc       = Math.floor(TOTAL_BUDGET / Math.min(docs.length, 20));
 
-    const sections = docs.slice(0, 15).map(d => {
+    const sections = docs.slice(0, 20).map(d => {
       const content = (d.content || '').trim();
       const truncated = content.length > perDoc
         ? content.substring(0, perDoc) + '... [truncated]'
