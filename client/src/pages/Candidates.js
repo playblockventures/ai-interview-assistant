@@ -530,25 +530,26 @@ export default function Candidates() {
   };
 
   const handleBulkRecommend = async () => {
-    const ids = [...selectedIds];
+    const ids = [...selectedIds].filter(id => !recommendedIds.has(id));
     if (!ids.length) return;
-    const toRecommend   = ids.filter(id => !recommendedIds.has(id));
-    const toUnrecommend = ids.filter(id =>  recommendedIds.has(id));
     setBulkRecommending(true);
     try {
-      if (toRecommend.length)   await settingsApi.bulkSharePin(toRecommend);
-      if (toUnrecommend.length) await settingsApi.bulkUnsharePin(toUnrecommend);
-      setRecommendedIds(prev => {
-        const next = new Set(prev);
-        toRecommend.forEach(id => next.add(id));
-        toUnrecommend.forEach(id => next.delete(id));
-        return next;
-      });
-      const msg = [
-        toRecommend.length   ? `${toRecommend.length} recommended`   : '',
-        toUnrecommend.length ? `${toUnrecommend.length} unrecommended` : '',
-      ].filter(Boolean).join(', ');
-      toast.success(msg);
+      await settingsApi.bulkSharePin(ids);
+      setRecommendedIds(prev => new Set([...prev, ...ids]));
+      toast.success(`${ids.length} candidate${ids.length > 1 ? 's' : ''} recommended`);
+      setSelectedIds(new Set());
+    } catch (e) { toast.error(e.message); }
+    finally { setBulkRecommending(false); }
+  };
+
+  const handleBulkUnrecommend = async () => {
+    const ids = [...selectedIds].filter(id => recommendedIds.has(id));
+    if (!ids.length) return;
+    setBulkRecommending(true);
+    try {
+      await settingsApi.bulkUnsharePin(ids);
+      setRecommendedIds(prev => { const next = new Set(prev); ids.forEach(id => next.delete(id)); return next; });
+      toast.success(`${ids.length} recommendation${ids.length > 1 ? 's' : ''} removed`);
       setSelectedIds(new Set());
     } catch (e) { toast.error(e.message); }
     finally { setBulkRecommending(false); }
@@ -722,17 +723,27 @@ export default function Candidates() {
               Deselect all
             </button>
             {(() => {
-              const ids = [...selectedIds];
-              const allRec  = ids.every(id => recommendedIds.has(id));
-              const someRec = ids.some(id  => recommendedIds.has(id));
-              const label   = allRec ? `↩ Unrecommend (${ids.length})` : someRec ? `↗↩ Toggle (${ids.length})` : `↗ Recommend (${ids.length})`;
+              const ids           = [...selectedIds];
+              const toRecommend   = ids.filter(id => !recommendedIds.has(id));
+              const toUnrecommend = ids.filter(id =>  recommendedIds.has(id));
               return (
-                <button className="btn btn-secondary btn-sm" disabled={bulkRecommending}
-                  onClick={handleBulkRecommend}
-                  style={allRec ? { borderColor: '#10b981', color: '#10b981' } : {}}
-                  title={user?.isAdmin ? 'Recommend to each candidate\'s owner' : 'Recommend to admin'}>
-                  {bulkRecommending ? <span className="spinner" style={{ width: 12, height: 12 }} /> : label}
-                </button>
+                <>
+                  {toRecommend.length > 0 && (
+                    <button className="btn btn-secondary btn-sm" disabled={bulkRecommending}
+                      onClick={handleBulkRecommend}
+                      title={user?.isAdmin ? 'Recommend to each candidate\'s owner' : 'Recommend to admin'}>
+                      {bulkRecommending ? <span className="spinner" style={{ width: 12, height: 12 }} /> : `↗ Recommend (${toRecommend.length})`}
+                    </button>
+                  )}
+                  {toUnrecommend.length > 0 && (
+                    <button className="btn btn-secondary btn-sm" disabled={bulkRecommending}
+                      onClick={handleBulkUnrecommend}
+                      style={{ borderColor: '#10b981', color: '#10b981' }}
+                      title="Remove recommendation">
+                      {bulkRecommending ? <span className="spinner" style={{ width: 12, height: 12 }} /> : `↩ Unrecommend (${toUnrecommend.length})`}
+                    </button>
+                  )}
+                </>
               );
             })()}
             <div style={{ flex: 1 }} />
