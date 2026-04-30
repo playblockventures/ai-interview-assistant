@@ -563,7 +563,9 @@ router.post('/knowledge/file', requireAuth, upload.single('file'), async (req, r
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const { category = 'company_docs', companyId = '', companyName = '' } = req.body;
-    const text = await extractTextFromBuffer(req.file.buffer, req.file.originalname);
+    let text = await extractTextFromBuffer(req.file.buffer, req.file.originalname);
+    // Chunking handles large content, but cap at 2M chars to avoid extreme memory use
+    if (text.length > 2_000_000) text = text.substring(0, 2_000_000);
     const item = await getKB().create({
       name: req.file.originalname, type: 'file', content: text,
       fileName: req.file.originalname, category, companyId, companyName,
