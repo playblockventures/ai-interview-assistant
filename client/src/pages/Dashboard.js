@@ -880,19 +880,20 @@ export default function Dashboard() {
                             <th>Recruiter</th>
                             {user?.isAdmin && <th>Owner</th>}
                             <th style={{ textAlign: 'right' }}>Script Generated</th>
+                            <th style={{ textAlign: 'right' }}>Status</th>
                           </tr>
                         </thead>
                         <tbody>
                           {callScriptCandidates.map((c, i) => {
                             const recruiter = getRecruiter(c.recruiterId);
                             return (
-                              <tr key={c.id} style={{ cursor: 'pointer' }}
+                              <tr key={c.id} style={{ cursor: 'pointer', opacity: c.callDone ? 0.6 : 1 }}
                                 onClick={e => navTo(e, `/candidates/${c.id}`)}
                                 onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }}>
                                 <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                                 <td><Avatar src={c.photoUrl} name={c.fullName} size={26} /></td>
                                 <td>
-                                  <div style={{ fontWeight: 600, fontSize: 13 }}>{c.fullName || '—'}</div>
+                                  <div style={{ fontWeight: 600, fontSize: 13, textDecoration: c.callDone ? 'line-through' : 'none' }}>{c.fullName || '—'}</div>
                                   {c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.currentTitle}</div>}
                                 </td>
                                 <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
@@ -912,6 +913,27 @@ export default function Dashboard() {
                                   {c.lastCallScriptAt
                                     ? new Date(c.lastCallScriptAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
                                     : '—'}
+                                </td>
+                                <td onClick={e => e.stopPropagation()} style={{ textAlign: 'right' }}>
+                                  <button
+                                    className="btn btn-sm"
+                                    style={c.callDone
+                                      ? { borderColor: '#10b981', color: '#10b981', background: 'rgba(16,185,129,0.08)', fontSize: 11, padding: '3px 10px' }
+                                      : { fontSize: 11, padding: '3px 10px' }}
+                                    onClick={async () => {
+                                      try {
+                                        if (c.callDone) {
+                                          await candidateApi.unmarkCallDone(c.id);
+                                          setCallScriptCandidates(prev => prev.map(x => x.id === c.id ? { ...x, callDone: false, callDoneAt: null } : x));
+                                        } else {
+                                          await candidateApi.markCallDone(c.id);
+                                          setCallScriptCandidates(prev => prev.map(x => x.id === c.id ? { ...x, callDone: true, callDoneAt: new Date().toISOString() } : x));
+                                        }
+                                      } catch (e) { console.error(e); }
+                                    }}
+                                    title={c.callDone ? 'Unmark done' : 'Mark call as done'}>
+                                    {c.callDone ? '✓ Done' : '☎ Mark Done'}
+                                  </button>
                                 </td>
                               </tr>
                             );

@@ -74,7 +74,7 @@ router.get('/with-call-scripts', async (req, res) => {
     const snap = await query.select(
       'fullName', 'email', 'currentTitle', 'photoUrl', 'role', 'status',
       'recruiterId', 'recruiterName', 'ownerId', 'ownerName',
-      'lastCallScriptAt', 'createdAt'
+      'lastCallScriptAt', 'callDone', 'callDoneAt', 'createdAt'
     ).get();
     const candidates = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     res.json({ candidates });
@@ -115,6 +115,38 @@ router.get('/', async (req, res) => {
       excludeIds: excludeIds ? excludeIds.split(',').filter(Boolean) : undefined,
     });
     res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST mark call script as done
+router.post('/:id/call-done', async (req, res) => {
+  try {
+    const { getDB } = require('../utils/firebase');
+    const candidate = await Candidate.findById(req.params.id);
+    if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
+    if (!Candidate.canAccess(candidate, req.user)) return res.status(403).json({ error: 'Access denied' });
+    await getDB().collection('candidates').doc(req.params.id).update({
+      callDone:   true,
+      callDoneAt: new Date().toISOString(),
+      callDoneBy: req.user.id,
+    });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE unmark call script done
+router.delete('/:id/call-done', async (req, res) => {
+  try {
+    const { getDB, FieldValue } = require('../utils/firebase');
+    const candidate = await Candidate.findById(req.params.id);
+    if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
+    if (!Candidate.canAccess(candidate, req.user)) return res.status(403).json({ error: 'Access denied' });
+    await getDB().collection('candidates').doc(req.params.id).update({
+      callDone:   false,
+      callDoneAt: null,
+      callDoneBy: null,
+    });
+    res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

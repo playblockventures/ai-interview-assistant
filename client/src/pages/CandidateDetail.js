@@ -931,7 +931,14 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
                 return (
                   <div key={i} style={{ margin: '12px 0', padding: '14px 18px', border: '2px solid #0d9488', borderRadius: 12, background: 'rgba(13,148,136,0.06)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: '#0d9488' }}>📞 Call Script</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: '#0d9488' }}>📞 Call Script</span>
+                        {candidate?.callDone && (
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#10b981', background: 'rgba(16,185,129,0.12)', padding: '2px 8px', borderRadius: 8, border: '1px solid rgba(16,185,129,0.3)' }}>
+                            ✓ Done {candidate.callDoneAt ? `· ${new Date(candidate.callDoneAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex gap-8" style={{ alignItems: 'center' }}>
                         {msg.timestamp && (
                           <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>
@@ -947,6 +954,11 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
                           </>
                         ) : (
                           <>
+                            <button className="btn btn-secondary btn-sm" onClick={handleToggleCallDone} disabled={callDoneLoading}
+                              style={candidate?.callDone ? { borderColor: '#10b981', color: '#10b981' } : {}}
+                              title={candidate?.callDone ? 'Unmark call as done' : 'Mark call as done'}>
+                              {callDoneLoading ? <span className="spinner" style={{ width: 12, height: 12 }} /> : candidate?.callDone ? '✓ Done' : '☎ Mark Done'}
+                            </button>
                             <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(msg.content); toast.success('Copied!'); }}>Copy</button>
                             <button className="btn btn-secondary btn-sm" onClick={() => downloadCallScriptPdf(msg.content)}>↓ PDF</button>
                             <button className="btn btn-secondary btn-sm" onClick={() => startEdit(i)}>✎ Edit</button>
@@ -1414,6 +1426,7 @@ export default function CandidateDetail() {
   const [pinned, setPinned]                     = useState(false);
   const [recommended, setRecommended]           = useState(false);
   const [recommending, setRecommending]         = useState(false);
+  const [callDoneLoading, setCallDoneLoading]   = useState(false);
   const { user } = useAuth();
 
   const fetchCandidate = useCallback(async () => {
@@ -1469,6 +1482,22 @@ export default function CandidateDetail() {
       }
     } catch (e) { toast.error(e.message); }
     finally { setRecommending(false); }
+  };
+
+  const handleToggleCallDone = async () => {
+    setCallDoneLoading(true);
+    try {
+      if (candidate?.callDone) {
+        await candidateApi.unmarkCallDone(id);
+        setCandidate(prev => ({ ...prev, callDone: false, callDoneAt: null, callDoneBy: null }));
+        toast.success('Call marked as not done');
+      } else {
+        await candidateApi.markCallDone(id);
+        setCandidate(prev => ({ ...prev, callDone: true, callDoneAt: new Date().toISOString(), callDoneBy: user?.id }));
+        toast.success('Call marked as done!');
+      }
+    } catch (e) { toast.error(e.message); }
+    finally { setCallDoneLoading(false); }
   };
 
   const handleScenarioApplied = (content) => {
