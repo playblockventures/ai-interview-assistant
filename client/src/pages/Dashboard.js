@@ -232,11 +232,13 @@ export default function Dashboard() {
   const [groupMode,        setGroupMode]        = useState('none');
   const [allUsers,         setAllUsers]         = useState([]);
   const [activeView,       setActiveView]       = useState('overview');
-  const [pinnedCandidates, setPinnedCandidates] = useState([]);
-  const [activeCandidates, setActiveCandidates] = useState([]);
-  const [activeCollapsed,  setActiveCollapsed]  = useState(false);
-  const [staleCollapsed,   setStaleCollapsed]   = useState(false);
-  const [dupeCollapsed,    setDupeCollapsed]    = useState(true);
+  const [pinnedCandidates,     setPinnedCandidates]     = useState([]);
+  const [activeCandidates,     setActiveCandidates]     = useState([]);
+  const [callScriptCandidates, setCallScriptCandidates] = useState([]);
+  const [activeCollapsed,      setActiveCollapsed]      = useState(false);
+  const [staleCollapsed,       setStaleCollapsed]       = useState(false);
+  const [dupeCollapsed,        setDupeCollapsed]        = useState(true);
+  const [callScriptCollapsed,  setCallScriptCollapsed]  = useState(false);
   const [fromDate,         setFromDate]         = useState(() => isoDaysAgo(7));
   const [toDate,           setToDate]           = useState(() => isoToday());
 
@@ -248,15 +250,17 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const [analyticsData, recentData, pinsData, activeData] = await Promise.all([
+        const [analyticsData, recentData, pinsData, activeData, callScriptData] = await Promise.all([
           candidateApi.getAnalytics({ fromDate, toDate }),
           candidateApi.getRecent(20),
           settingsApi.getPins().catch(() => ({ pins: [] })),
           candidateApi.getActiveWithResponseTime(),
+          candidateApi.getWithCallScripts().catch(() => ({ candidates: [] })),
         ]);
         setServerAnalytics(analyticsData);
         setRecent(recentData.candidates || []);
         setActiveCandidates(activeData.candidates || []);
+        setCallScriptCandidates(callScriptData.candidates || []);
         const pinIds = pinsData.pins || [];
         if (pinIds.length) {
           candidateApi.getByIds(pinIds)
@@ -845,6 +849,77 @@ export default function Dashboard() {
                       </tbody>
                     </table>
                   </div>}
+                </div>
+              )}
+
+              {/* Candidates with Call Scripts */}
+              {callScriptCandidates.length > 0 && (
+                <div className="card" style={{ marginBottom: 20, border: '1px solid rgba(99,102,241,0.3)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: callScriptCollapsed ? 0 : 14, cursor: 'pointer' }} onClick={() => setCallScriptCollapsed(v => !v)}>
+                    <div>
+                      <div className="card-title" style={{ marginBottom: 2, color: '#6366f1', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        Call Scripts Generated ({callScriptCandidates.length})
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>{callScriptCollapsed ? '▶' : '▼'}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Candidates with an AI-generated call script ready</div>
+                    </div>
+                    <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); window.location.href = '/generate?tab=call'; }}>
+                      Generate more →
+                    </button>
+                  </div>
+                  {!callScriptCollapsed && (
+                    <div className="table-wrap">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
+                            <th style={{ width: 34 }}></th>
+                            <th>Candidate</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Recruiter</th>
+                            {user?.isAdmin && <th>Owner</th>}
+                            <th style={{ textAlign: 'right' }}>Script Generated</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {callScriptCandidates.map((c, i) => {
+                            const recruiter = getRecruiter(c.recruiterId);
+                            return (
+                              <tr key={c.id} style={{ cursor: 'pointer' }}
+                                onClick={e => navTo(e, `/candidates/${c.id}`)}
+                                onMouseDown={e => { if (e.button === 1) { e.preventDefault(); openTab(`/candidates/${c.id}`); } }}>
+                                <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
+                                <td><Avatar src={c.photoUrl} name={c.fullName} size={26} /></td>
+                                <td>
+                                  <div style={{ fontWeight: 600, fontSize: 13 }}>{c.fullName || '—'}</div>
+                                  {c.currentTitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.currentTitle}</div>}
+                                </td>
+                                <td style={{ fontSize: 12 }}>{getRoleLabel(c.role)}</td>
+                                <td><span className={`status-badge status-${c.status}`}>{STATUS_CONFIG[c.status]?.label || c.status}</span></td>
+                                <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                  {recruiter ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                      <div style={{ width: 18, height: 18, borderRadius: '50%', flexShrink: 0, background: 'var(--accent-dim)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: 9 }}>
+                                        {recruiter.photoUrl ? <img src={recruiter.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : recruiter.name.charAt(0).toUpperCase()}
+                                      </div>
+                                      {recruiter.name}
+                                    </div>
+                                  ) : '—'}
+                                </td>
+                                {user?.isAdmin && <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{getOwnerName(c)}</td>}
+                                <td style={{ textAlign: 'right', fontSize: 11, color: '#6366f1', fontWeight: 600 }}>
+                                  {c.lastCallScriptAt
+                                    ? new Date(c.lastCallScriptAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                    : '—'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
 

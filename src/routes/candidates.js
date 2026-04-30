@@ -61,6 +61,26 @@ router.get('/active-response', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// GET with-call-scripts — candidates that have a generated call script
+router.get('/with-call-scripts', async (req, res) => {
+  try {
+    const { getDB } = require('../utils/firebase');
+    const db = getDB();
+    let query = db.collection('candidates')
+      .where('hasCallScript', '==', true)
+      .orderBy('lastCallScriptAt', 'desc')
+      .limit(50);
+    if (!req.user.isAdmin) query = query.where('ownerId', '==', req.user.id);
+    const snap = await query.select(
+      'fullName', 'email', 'currentTitle', 'photoUrl', 'role', 'status',
+      'recruiterId', 'recruiterName', 'ownerId', 'ownerName',
+      'lastCallScriptAt', 'createdAt'
+    ).get();
+    const candidates = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json({ candidates });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET recent — small list for dashboard recent activity
 router.get('/recent', async (req, res) => {
   try {

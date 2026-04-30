@@ -596,6 +596,7 @@ const Candidate = {
     const updatedHistory = [...existing, ...withTimestamps];
     const engagement = computeEngagement(updatedHistory);
     const combined = computeCombined(engagement.engagementScore, docData.aiEngagementScore ?? null, engagement.noReplyPenalty);
+    const hasCallScriptEntry = entries.some(e => e.role === 'call_script');
     await db.collection(COL).doc(id).update({
       conversationHistory:     updatedHistory,
       lastMessageAt:           ts,
@@ -605,6 +606,7 @@ const Candidate = {
       engagementScore:         engagement.engagementScore,
       combinedEngagementScore: combined,
       engagementLabel:         engagementLabelFromScore(combined),
+      ...(hasCallScriptEntry ? { hasCallScript: true, lastCallScriptAt: ts } : {}),
     });
 
     // Trigger AI deep analysis when new real candidate messages were added
