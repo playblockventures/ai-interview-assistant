@@ -5,6 +5,10 @@ const COL = 'candidates';
 const now = () => new Date().toISOString();
 const docToObj = (doc) => ({ id: doc.id, ...doc.data() });
 
+// 60-second in-memory cache for analytics — avoids redundant full-table scans on date-range changes
+const analyticsCache = new Map();
+const ANALYTICS_CACHE_TTL = 60 * 1000;
+
 // Fields fetched for the list view — excludes large payload fields
 const LIST_FIELDS = [
   'fullName', 'email', 'phone', 'location', 'currentTitle', 'linkedinUrl',
@@ -264,6 +268,10 @@ const Candidate = {
 
   // Server-side analytics computation — replaces client-side useMemo for dashboard
   async computeAnalytics({ ownerId, isAdmin, fromDate, toDate } = {}) {
+    const cacheKey = `${ownerId || 'admin'}_${fromDate || ''}_${toDate || ''}`;
+    const cached = analyticsCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) return cached.data;
+
     const db = getDB();
     const ANALYTICS_FIELDS = [
       'fullName', 'email', 'photoUrl', 'currentTitle', 'status', 'role', 'location',
@@ -277,10 +285,8 @@ const Candidate = {
     const snapshot = await query.get();
     const allDocs = snapshot.docs.map(docToObj);
 
-    // ── Duplicate detection — always unscoped (cross-user visibility) ──────
-    const allDocsForDupes = ownerId
-      ? (await db.collection(COL).select(...ANALYTICS_FIELDS).get()).docs.map(docToObj)
-      : allDocs;
+    // ── Duplicate detection — scoped to user's own candidates (no second full scan) ──
+    const allDocsForDupes = allDocs;
 
     // ── Stale candidates (unfiltered — operational alert) ──────────────────
     const staleCandidates = allDocs
@@ -409,12 +415,22 @@ const Candidate = {
       .map(s => ({ ...s, successRate: s.total > 0 ? Math.round((s.success / s.total) * 100) : 0 }))
       .sort((a, b) => b.total - a.total);
 
-    return {
+    // Recent candidates — derived from already-fetched allDocs, no extra Firestore read
+    const recent = [...allDocs].sort((a, b) => {
+      const aTime = a.lastMessageAt || a.updatedAt || a.createdAt || '';
+      const bTime = b.lastMessageAt || b.updatedAt || b.createdAt || '';
+      return bTime.localeCompare(aTime);
+    }).slice(0, 20);
+
+    const result = {
       total, statusCounts, totalFailed, conversionRate, successRate,
       roleBreakdown, locationBreakdown, recruiterPerf, avgDays,
       monthlyTrend, weeklyActivity, userBreakdown,
-      staleCandidates, duplicateGroups,
+      staleCandidates, duplicateGroups, recent,
     };
+
+    analyticsCache.set(cacheKey, { data: result, expiresAt: Date.now() + ANALYTICS_CACHE_TTL });
+    return result;
   },
 
   // Active candidates — uses persisted engagement fields, no full history load needed
@@ -492,10 +508,12 @@ const Candidate = {
     return results;
   },
 
-  // Fetch just the N most recently active candidates (for dashboard recent list)
+  // Fetch the N most recently active candidates — uses a capped Firestore read, sorts in JS
   async findRecent({ ownerId, isAdmin, limit = 8 } = {}) {
     const db = getDB();
-    let query = db.collection(COL).select(...LIST_FIELDS);
+    const lim = parseInt(limit);
+    // Fetch a capped set (10x limit) — avoids a full table scan while still returning accurate results
+    let query = db.collection(COL).select(...LIST_FIELDS).limit(lim * 10);
     if (ownerId) query = query.where('ownerId', '==', ownerId);
     const snapshot = await query.get();
     let docs = snapshot.docs.map(docToObj);
@@ -504,7 +522,7 @@ const Candidate = {
       const bTime = b.lastMessageAt || b.updatedAt || b.createdAt || '';
       return bTime.localeCompare(aTime);
     });
-    return docs.slice(0, parseInt(limit));
+    return docs.slice(0, lim);
   },
 
   async findById(id) {

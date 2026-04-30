@@ -250,15 +250,14 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const [analyticsData, recentData, pinsData, activeData, callScriptData] = await Promise.all([
+        const [analyticsData, pinsData, activeData, callScriptData] = await Promise.all([
           candidateApi.getAnalytics({ fromDate, toDate }),
-          candidateApi.getRecent(20),
           settingsApi.getPins().catch(() => ({ pins: [] })),
           candidateApi.getActiveWithResponseTime(),
           candidateApi.getWithCallScripts().catch(() => ({ candidates: [] })),
         ]);
         setServerAnalytics(analyticsData);
-        setRecent(recentData.candidates || []);
+        setRecent(analyticsData.recent || []);
         setActiveCandidates(activeData.candidates || []);
         setCallScriptCandidates(callScriptData.candidates || []);
         const pinIds = pinsData.pins || [];
