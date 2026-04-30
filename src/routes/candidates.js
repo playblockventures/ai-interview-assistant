@@ -61,22 +61,63 @@ router.get('/active-response', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// GET with-call-scripts — candidates that have a generated call script
+// GET with-call-scripts — candidates that have a generated call script.
+// Avoids composite indexes by using a single .where() per query and filtering/sorting in JS.
+// Also scans conversationHistory for call_script entries to catch candidates added before
+// the hasCallScript field was introduced.
 router.get('/with-call-scripts', async (req, res) => {
   try {
     const { getDB } = require('../utils/firebase');
     const db = getDB();
-    let query = db.collection('candidates')
-      .where('hasCallScript', '==', true)
-      .orderBy('lastCallScriptAt', 'desc')
-      .limit(50);
-    if (!req.user.isAdmin) query = query.where('ownerId', '==', req.user.id);
-    const snap = await query.select(
-      'fullName', 'email', 'currentTitle', 'photoUrl', 'role', 'status',
+    const FIELDS = ['fullName', 'email', 'currentTitle', 'photoUrl', 'role', 'status',
       'recruiterId', 'recruiterName', 'ownerId', 'ownerName',
-      'lastCallScriptAt', 'callDone', 'callDoneAt', 'createdAt'
-    ).get();
-    const candidates = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      'lastCallScriptAt', 'hasCallScript', 'callDone', 'callDoneAt', 'createdAt',
+      'conversationHistory'];
+
+    let candidates = [];
+
+    if (req.user.isAdmin) {
+      // Single .where() — no composite index needed
+      const snap = await db.collection('candidates')
+        .where('hasCallScript', '==', true)
+        .select(...FIELDS)
+        .get();
+      candidates = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } else {
+      // Single .where() on ownerId — no composite index needed; filter hasCallScript in JS
+      const snap = await db.collection('candidates')
+        .where('ownerId', '==', req.user.id)
+        .select(...FIELDS)
+        .get();
+      candidates = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(c => c.hasCallScript ||
+          (Array.isArray(c.conversationHistory) && c.conversationHistory.some(m => m.role === 'call_script')));
+    }
+
+    // Also catch candidates whose conversationHistory has call_script but hasCallScript wasn't set yet
+    if (req.user.isAdmin) {
+      candidates = candidates.filter(c => c.hasCallScript ||
+        (Array.isArray(c.conversationHistory) && c.conversationHistory.some(m => m.role === 'call_script')));
+    }
+
+    // Derive lastCallScriptAt from conversationHistory if missing
+    candidates = candidates.map(c => {
+      if (!c.lastCallScriptAt && Array.isArray(c.conversationHistory)) {
+        const entries = c.conversationHistory.filter(m => m.role === 'call_script');
+        if (entries.length) {
+          c.lastCallScriptAt = entries[entries.length - 1].timestamp || entries[entries.length - 1].createdAt || null;
+        }
+      }
+      // Strip conversationHistory from response — not needed on frontend
+      const { conversationHistory: _, ...rest } = c;
+      return rest;
+    });
+
+    // Sort by most recent script
+    candidates.sort((a, b) => (b.lastCallScriptAt || '').localeCompare(a.lastCallScriptAt || ''));
+    candidates = candidates.slice(0, 50);
+
     res.json({ candidates });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
