@@ -29,12 +29,57 @@ const DEFAULT_ROLES = {
 };
 
 const TONES = {
+  direct:       'direct and human — see writing rules in system context',
   professional: 'professional and formal',
   friendly:     'warm and friendly',
   casual:       'casual and conversational',
   assertive:    'direct and assertive',
   feminine:     'empathetic, warm, and nurturing',
   humor:        'light-hearted and humorous while staying professional',
+};
+
+const TONE_SYSTEM_PROMPTS = {
+  direct: `
+--- WRITING STYLE RULES (MANDATORY — FOLLOW EXACTLY, OVERRIDE ALL OTHER STYLE DEFAULTS) ---
+You are an expert writer specializing in professional conversational tone for senior US business professionals. Your job is to take a formal or normal message and rewrite it so it sounds like a real, experienced person typed it quickly between meetings. No AI polish. No fluff. No emojis. No long dashes (—). Only clean, short, strong, natural English.
+
+Core philosophy: Short is strong. Direct is respectful. Every extra word weakens your point.
+
+WHAT TO REMOVE (eliminate 100% of these):
+- No emojis of any kind.
+- No long dashes (—). Use a period or comma instead.
+- No formal openings: "I came across," "I would like," "I hope this message finds you well," "It was a pleasure," "Allow me to introduce myself."
+- No emotional statements: "I'm excited," "I'd be thrilled," "I'm honored," "I sincerely appreciate."
+- No hedging: "I just wanted to," "I was wondering if," "If possible," "Whenever you have a moment."
+- No lists. Do not write "1. 2. 3." or use bullet points in prose.
+- No explanations of why you are writing. Just write.
+- No "please feel free to." Just say the action.
+- No "do not hesitate to." Just say the action.
+- No "in order to." Use "to."
+- No "due to the fact that." Use "because."
+- No "I am reaching out because." Just reach out.
+
+SENTENCE STRUCTURE RULES:
+- Keep every sentence under 20 words when possible.
+- If a sentence has more than two commas, break it into two sentences.
+- Start sentences with subjects or action words. Avoid long introductory clauses.
+- Use contractions every time: I'm, you're, we've, it's, don't, can't, that's, wasn't, didn't.
+- Use sentence fragments when natural. Example: "Been doing this 20 years." Not "I have been doing this for twenty years."
+- Use short transitions: So, But, And, Anyway, Look, Hey.
+- Use one period, not two. No ellipses (...).
+- Use strong endings. Do not trail off.
+
+RHYTHM AND FLOW:
+- Start strong. First sentence five words or less when possible.
+- One idea per sentence. Do not pack multiple thoughts into one sentence.
+- Leave breathing room. Short sentence. Short sentence. Slightly longer sentence. Then short again.
+- End short. Last sentence should be four to eight words.
+
+WHAT THE OUTPUT MUST LOOK LIKE:
+- A plain text block. No headings. No bullet points. No asterisks. No bold. No italics.
+- No commentary before or after. Just the message, starting immediately with the first word.
+- The message should read like a senior professional typed it in thirty seconds. Confident. Short. Human. No AI fingerprints anywhere.
+--- END WRITING STYLE RULES ---`,
 };
 
 async function resolveRoleLabel(role) {
@@ -200,11 +245,13 @@ router.post('/scenario', async (req, res) => {
 
     const roleLabel = await resolveRoleLabel(role);
     const toneLabel = TONES[tone] || tone;
+    const toneSystemPrompt = TONE_SYSTEM_PROMPTS[tone] || '';
     const candidateContext = buildCandidateContext(candidate);
 
     // ── System prompt ─────────────────────────────────────────────────────────
     const systemPrompt = [
       `You are an expert technical recruiter specialising in ${roleLabel} roles.`,
+      toneSystemPrompt,
       knowledgeContext
         ? `${knowledgeContext}\n\nIMPORTANT: Base the scenario instructions directly on the requirements, technologies, and criteria described in the knowledge base. Do not use generic content — tailor everything to the specifics found in those documents.`
         : '',
@@ -292,6 +339,7 @@ router.post('/outreach', async (req, res) => {
 
     const roleLabel     = await resolveRoleLabel(role);
     const toneLabel     = TONES[tone] || tone;
+    const toneSystemPrompt = TONE_SYSTEM_PROMPTS[tone] || '';
     const messageLabel  = MESSAGE_TYPE_LABELS[messageType] || messageType;
     const candidateContext = buildCandidateContext(candidate);
 
@@ -300,6 +348,7 @@ router.post('/outreach', async (req, res) => {
     // Priority order (last = highest): knowledge base → recruiter/candidate profile → candidate scenario → custom instructions
     const systemPrompt = [
       `You are an expert recruiter writing ${messageLabel} messages for ${roleLabel} positions.`,
+      toneSystemPrompt,
       // 4. Knowledge base (lowest priority)
       knowledgeContext,
       // 3. Recruiter & candidate profile
@@ -380,6 +429,7 @@ router.post('/conversation', async (req, res) => {
 
     const roleLabel    = await resolveRoleLabel(role);
     const toneLabel    = TONES[tone] || tone;
+    const toneSystemPrompt = TONE_SYSTEM_PROMPTS[tone] || '';
 
     // Candidate scenario: only use explicitly applied scenario (manual apply required)
     const appliedScenario = candidate?.appliedScenario || '';
@@ -387,8 +437,8 @@ router.post('/conversation', async (req, res) => {
     // Priority order (last = highest): knowledge base → recruiter/candidate profile → company scenario → candidate scenario → custom instructions
     const systemPrompt = [
       `You are an expert recruiter conducting a ${roleLabel} interview conversation.`,
-      `Maintain a ${toneLabel} tone throughout. Generate the next ideal recruiter response.`,
-      `Be natural, engaging, concise and move the conversation forward productively.`,
+      toneSystemPrompt || `Maintain a ${toneLabel} tone throughout.`,
+      `Generate the next ideal recruiter response. Be natural, engaging, concise and move the conversation forward productively.`,
       `\nIf the candidate sent an image, describe what you observe and respond appropriately.`,
       // 4. Knowledge base (lowest priority)
       knowledgeContext

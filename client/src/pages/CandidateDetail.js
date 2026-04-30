@@ -19,6 +19,7 @@ import { AppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
 const TONES = [
+  { value: 'direct',       label: 'Direct (Default)' },
   { value: 'professional', label: 'Professional' },
   { value: 'friendly',     label: 'Friendly' },
   { value: 'casual',       label: 'Casual' },
@@ -98,7 +99,7 @@ function CompanySelectInline({ value, onChange }) {
 function ScenarioTab({ candidate, onScenarioApplied }) {
   const { roles } = useContext(AppContext);
   const [config, setConfig] = useState({
-    role: candidate.role || '', goal: '', tone: localStorage.getItem(`tone_${candidate.id}`) || 'friendly',
+    role: candidate.role || '', goal: '', tone: localStorage.getItem(`tone_${candidate.id}`) || 'direct',
     customInstructions: '', recruiterId: candidate.recruiterId || '',
     companyId: candidate.companyId || '',
   });
@@ -250,7 +251,7 @@ function OutreachTab({ candidate }) {
   const { roles } = useContext(AppContext);
   const [config, setConfig] = useState({
     role: candidate.role || '', messageType: 'outreach',
-    tone: localStorage.getItem(`tone_${candidate.id}`) || 'friendly',
+    tone: localStorage.getItem(`tone_${candidate.id}`) || 'direct',
     goal: '', customInstructions: '', recruiterId: candidate.recruiterId || '',
     companyId: candidate.companyId || '',
   });
@@ -373,7 +374,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
   const { roles, recruiters } = useContext(AppContext);
   const { user } = useAuth();
   const [config, setConfig] = useState({
-    role: candidate.role || '', tone: localStorage.getItem(`tone_${candidate.id}`) || 'friendly',
+    role: candidate.role || '', tone: localStorage.getItem(`tone_${candidate.id}`) || 'direct',
     recruiterId: candidate.recruiterId || '',
     customInstructions: '',
     companyId: candidate.companyId || '',

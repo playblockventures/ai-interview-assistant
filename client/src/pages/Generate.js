@@ -6,6 +6,7 @@ import { generateApi, candidateApi } from '../utils/api';
 import { AppContext } from '../context/AppContext';
 
 const TONES = [
+  { value: 'direct',       label: 'Direct (Default)' },
   { value: 'professional', label: 'Professional' },
   { value: 'friendly',     label: 'Friendly' },
   { value: 'casual',       label: 'Casual' },
@@ -36,10 +37,10 @@ export default function Generate() {
   const [applying,    setApplying]    = useState(false);
 
   const [scenarioConfig, setScenarioConfig] = useState({
-    candidateId: '', role: '', goal: '', tone: 'professional', customInstructions: '', recruiterId: '',
+    candidateId: '', role: '', goal: '', tone: 'direct', customInstructions: '', recruiterId: '',
   });
   const [outreachConfig, setOutreachConfig] = useState({
-    candidateId: '', role: '', messageType: 'outreach', tone: 'professional', goal: '', customInstructions: '', recruiterId: '',
+    candidateId: '', role: '', messageType: 'outreach', tone: 'direct', goal: '', customInstructions: '', recruiterId: '',
   });
 
   useEffect(() => {
