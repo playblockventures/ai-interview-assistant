@@ -110,8 +110,6 @@ router.post('/', importUpload.single('file'), async (req, res) => {
 
         const kbSnap = await getDB().collection('knowledge_base').get();
         await Promise.all(kbSnap.docs.map(d => d.ref.delete()));
-        const kbChunkSnap = await getDB().collection('knowledge_base_chunks').get();
-        await Promise.all(kbChunkSnap.docs.map(d => d.ref.delete()));
       } else {
         // User replace: wipe only their own data
         const existing = await Candidate.findAll({ ownerId: req.user.id, limit: 100000 });
