@@ -643,13 +643,14 @@ router.post('/knowledge/url', requireAuth, async (req, res) => {
       text = await extractTextFromBuffer(rawBuffer, 'document.pdf');
       const urlFilename = url.split('/').pop().split('?')[0].replace(/\.pdf$/i, '');
       siteName = decodeURIComponent(urlFilename).replace(/[-_]/g, ' ') || siteName;
-      text = text.substring(0, 100000);
+      // No truncation here — KnowledgeBase.create() enforces the 800 KB Firestore limit
     } else {
       const htmlStr = rawBuffer.toString('utf-8');
       const $ = cheerio.load(htmlStr);
       $('script,style,nav,footer,header,aside,iframe,noscript').remove();
       siteName = $('title').text().trim() || siteName;
-      text = $('body').text().replace(/\s+/g, ' ').trim().substring(0, 50000);
+      text = $('body').text().replace(/\s+/g, ' ').trim();
+      // No truncation here — KnowledgeBase.create() enforces the 800 KB Firestore limit
     }
 
     if (!text) {
