@@ -580,42 +580,47 @@ router.post('/knowledge/url', requireAuth, async (req, res) => {
     const { url, category = 'company_docs', companyId = '', companyName = '' } = req.body;
     let text = '', siteName = new URL(url).hostname;
 
-    const BROWSER_HEADERS = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.5',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Connection': 'keep-alive',
-      'Upgrade-Insecure-Requests': '1',
-      'Cache-Control': 'max-age=0',
-    };
+    const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
     let fetchError = null;
-    let response   = null;
+    let rawBuffer  = null;
+    let contentType = '';
 
-    // First attempt — full browser headers
+    // Fetch as arraybuffer so we can handle both PDF and HTML with one request
+    // without corrupting binary PDF data via string decoding
     try {
-      response = await axios.get(url, { timeout: 20000, headers: BROWSER_HEADERS, maxRedirects: 5 });
+      const r = await axios.get(url, {
+        timeout: 30000,
+        responseType: 'arraybuffer',
+        headers: {
+          'User-Agent': USER_AGENT,
+          'Accept': 'text/html,application/xhtml+xml,application/xml,application/pdf,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+        },
+        maxRedirects: 5,
+      });
+      rawBuffer   = Buffer.from(r.data);
+      contentType = (r.headers['content-type'] || '').toLowerCase();
     } catch (e) {
       fetchError = e;
     }
 
-    // Second attempt — minimal headers (some servers reject Accept-Encoding)
-    if (!response && fetchError) {
+    // Second attempt — minimal headers
+    if (!rawBuffer && fetchError) {
       try {
-        response = await axios.get(url, {
-          timeout: 20000,
-          headers: { 'User-Agent': BROWSER_HEADERS['User-Agent'], 'Accept': 'text/html,*/*' },
+        const r = await axios.get(url, {
+          timeout: 30000,
+          responseType: 'arraybuffer',
+          headers: { 'User-Agent': USER_AGENT, 'Accept': '*/*' },
           maxRedirects: 5,
-          decompress: false,
         });
-        fetchError = null;
-      } catch (e2) {
-        // Surface the original error if both attempts fail
-      }
+        rawBuffer   = Buffer.from(r.data);
+        contentType = (r.headers['content-type'] || '').toLowerCase();
+        fetchError  = null;
+      } catch (_) {}
     }
 
-    if (!response) {
+    if (!rawBuffer) {
       const status = fetchError?.response?.status;
       const friendlyErrors = {
         401: 'The page requires authentication — try copying the text manually.',
@@ -629,28 +634,19 @@ router.post('/knowledge/url', requireAuth, async (req, res) => {
       return res.status(422).json({ error: msg });
     }
 
-    const contentType = (response.headers['content-type'] || '').toLowerCase();
-    const isPdf = contentType.includes('pdf') || url.toLowerCase().includes('.pdf');
+    // Detect PDF by magic bytes (%PDF) — most reliable regardless of URL or headers
+    const isPdf = (rawBuffer.length > 4 && rawBuffer[0] === 0x25 && rawBuffer[1] === 0x50 && rawBuffer[2] === 0x44 && rawBuffer[3] === 0x46)
+      || contentType.includes('pdf')
+      || url.toLowerCase().includes('.pdf');
 
     if (isPdf) {
-      // Re-fetch as binary so pdf-parse can read it properly
-      let pdfBuf;
-      try {
-        const pdfRes = await axios.get(url, {
-          timeout: 30000,
-          responseType: 'arraybuffer',
-          headers: { 'User-Agent': BROWSER_HEADERS['User-Agent'] },
-          maxRedirects: 5,
-        });
-        pdfBuf = Buffer.from(pdfRes.data);
-      } catch (_) {
-        pdfBuf = Buffer.isBuffer(response.data) ? response.data : Buffer.from(response.data);
-      }
-      text = await extractTextFromBuffer(pdfBuf, 'document.pdf');
-      siteName = decodeURIComponent(url.split('/').pop().replace(/\.pdf$/i, '').replace(/-|_/g, ' ')) || siteName;
+      text = await extractTextFromBuffer(rawBuffer, 'document.pdf');
+      const urlFilename = url.split('/').pop().split('?')[0].replace(/\.pdf$/i, '');
+      siteName = decodeURIComponent(urlFilename).replace(/[-_]/g, ' ') || siteName;
       text = text.substring(0, 100000);
     } else {
-      const $ = cheerio.load(response.data);
+      const htmlStr = rawBuffer.toString('utf-8');
+      const $ = cheerio.load(htmlStr);
       $('script,style,nav,footer,header,aside,iframe,noscript').remove();
       siteName = $('title').text().trim() || siteName;
       text = $('body').text().replace(/\s+/g, ' ').trim().substring(0, 50000);

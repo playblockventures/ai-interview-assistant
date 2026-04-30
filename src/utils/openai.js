@@ -48,18 +48,22 @@ const getKnowledgeContext = async (userId, companyId = null) => {
       : allDocs;
     if (!docs.length) return '';
 
-    // Budget: 80000 chars total across all docs (GPT-4o has 128k token window)
-    const TOTAL_BUDGET = 80000;
-    const perDoc       = Math.floor(TOTAL_BUDGET / Math.min(docs.length, 20));
+    // Each doc gets up to 80k chars; total context capped at 120k
+    // (GPT-4o has a 128k token window — ~512k chars — so this is well within limits)
+    const MAX_PER_DOC   = 80000;
+    const TOTAL_BUDGET  = 120000;
+    let remaining = TOTAL_BUDGET;
 
-    const sections = docs.slice(0, 20).map(d => {
-      const content = (d.content || '').trim();
-      const truncated = content.length > perDoc
-        ? content.substring(0, perDoc) + '... [truncated]'
-        : content;
-      const label = d.companyName ? `${d.name} — ${d.companyName}` : d.name;
-      return `### ${label} (${d.category || d.type})\n${truncated}`;
-    });
+    const sections = [];
+    for (const d of docs.slice(0, 20)) {
+      if (remaining <= 0) break;
+      const content  = (d.content || '').trim();
+      const cap      = Math.min(content.length, MAX_PER_DOC, remaining);
+      const truncated = content.length > cap ? content.substring(0, cap) + '... [truncated]' : content;
+      const label    = d.companyName ? `${d.name} — ${d.companyName}` : d.name;
+      sections.push(`### ${label} (${d.category || d.type})\n${truncated}`);
+      remaining -= truncated.length;
+    }
 
     return '\n\n=== COMPANY KNOWLEDGE BASE (READ THIS FIRST — MANDATORY) ===\n' +
       'The following documents define the company context, project requirements, technologies, and evaluation criteria. ' +
