@@ -980,6 +980,7 @@ function KnowledgeSection({ dbConnected, targetUserId = null }) {
           </div>
           {loading ? <span className="spinner" /> : items
             .filter(item => {
+              if (!item.name) return false; // hide orphaned chunk documents
               if (!filterCompanyId) return true;
               if (filterCompanyId === '__none__') return !item.companyId;
               return item.companyId === filterCompanyId;
