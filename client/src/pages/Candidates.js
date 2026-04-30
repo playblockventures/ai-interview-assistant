@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useContext } from 'react';
+import React, { useEffect, useState, useCallback, useContext, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import toast from 'react-hot-toast';
@@ -431,6 +431,34 @@ export default function Candidates() {
     candidateApi.getByIds([...pinnedIds]).then(d => setPinnedCandidates(d.candidates || [])).catch(() => {});
   }, [pinnedIds]);
 
+  const filteredPinned = useMemo(() => {
+    let list = pinnedCandidates;
+
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(c =>
+        (c.fullName      || '').toLowerCase().includes(q) ||
+        (c.email         || '').toLowerCase().includes(q) ||
+        (c.currentTitle  || '').toLowerCase().includes(q)
+      );
+    }
+    if (statusFilter)    list = list.filter(c => c.status === statusFilter);
+    if (recruiterFilter) list = list.filter(c => c.recruiterId === recruiterFilter);
+    if (ownerFilter)     list = list.filter(c => c.ownerId === ownerFilter);
+    if (fromDate)        list = list.filter(c => c.createdAt && c.createdAt >= fromDate);
+    if (toDate)          list = list.filter(c => c.createdAt && c.createdAt <= toDate + 'T23:59:59');
+    if (engagementFilter) {
+      const labelSet = new Set(engagementFilter.split(',').map(l => l.trim()).filter(Boolean));
+      list = list.filter(c => {
+        const s   = c.combinedEngagementScore ?? ((c.engagementScore || 1) - 1) / 4 * 9 + 1;
+        const lbl = s >= 8.5 ? 'Very Active' : s >= 6.5 ? 'Active' : s >= 4.5 ? 'Engaged' : s >= 2.5 ? 'Passive' : 'Unresponsive';
+        return labelSet.has(lbl);
+      });
+    }
+
+    return list;
+  }, [pinnedCandidates, search, statusFilter, engagementFilter, recruiterFilter, ownerFilter, fromDate, toDate]);
+
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
     try {
@@ -736,7 +764,7 @@ export default function Candidates() {
           <div style={{ textAlign: 'center', padding: 60 }}>
             <span className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
           </div>
-        ) : candidates.length === 0 && pinnedCandidates.length === 0 ? (
+        ) : candidates.length === 0 && filteredPinned.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">◈</div>
             <div className="empty-state-title">No candidates found</div>
@@ -746,12 +774,12 @@ export default function Candidates() {
         ) : (
           <>
             {/* ── Pinned candidates — separate section ── */}
-            {pinnedCandidates.length > 0 && (
+            {filteredPinned.length > 0 && (
               <div style={{ marginBottom: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '0 2px' }}>
                   <span style={{ fontSize: 14, color: '#f59e0b' }}>★</span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#f59e0b' }}>Pinned Candidates</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>({pinnedCandidates.length})</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>({filteredPinned.length})</span>
                 </div>
                 <div className="table-wrap" style={{ border: '1px solid rgba(245,158,11,0.25)', borderRadius: 8, overflow: 'hidden' }}>
                   <table className="data-table">
@@ -773,7 +801,7 @@ export default function Candidates() {
                       </tr>
                     </thead>
                     <tbody>
-                      {pinnedCandidates.map((c, pidx) => {
+                      {filteredPinned.map((c, pidx) => {
                         const recruiter  = getRecruiter(c.recruiterId);
                         const isSelected = selectedIds.has(c.id);
                         return (
@@ -862,7 +890,7 @@ export default function Candidates() {
             {/* ── General candidates section ── */}
             {candidates.length > 0 && (
               <>
-                {pinnedCandidates.length > 0 && (
+                {filteredPinned.length > 0 && (
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, padding: '0 2px' }}>
                     All Candidates <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>({total})</span>
                   </div>
