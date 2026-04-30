@@ -491,6 +491,10 @@ export default function Candidates() {
   const allSelected    = allPageIds.length > 0 && allPageIds.every(id => selectedIds.has(id));
   const someSelected   = allPageIds.some(id => selectedIds.has(id));
 
+  const allPinnedIds      = filteredPinned.map(c => c.id);
+  const allPinnedSelected = allPinnedIds.length > 0 && allPinnedIds.every(id => selectedIds.has(id));
+  const somePinnedSelected = allPinnedIds.some(id => selectedIds.has(id));
+
   const toggleSelect = (id) => setSelectedIds(prev => {
     const next = new Set(prev);
     next.has(id) ? next.delete(id) : next.add(id);
@@ -502,6 +506,14 @@ export default function Candidates() {
       setSelectedIds(prev => { const next = new Set(prev); allPageIds.forEach(id => next.delete(id)); return next; });
     } else {
       setSelectedIds(prev => new Set([...prev, ...allPageIds]));
+    }
+  };
+
+  const toggleSelectAllPinned = () => {
+    if (allPinnedSelected) {
+      setSelectedIds(prev => { const next = new Set(prev); allPinnedIds.forEach(id => next.delete(id)); return next; });
+    } else {
+      setSelectedIds(prev => new Set([...prev, ...allPinnedIds]));
     }
   };
 
@@ -801,7 +813,14 @@ export default function Candidates() {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th style={{ width: 32 }} onClick={e => e.stopPropagation()}></th>
+                        <th style={{ width: 32 }} onClick={e => e.stopPropagation()}>
+                          <input type="checkbox"
+                            checked={allPinnedSelected}
+                            ref={el => { if (el) el.indeterminate = somePinnedSelected && !allPinnedSelected; }}
+                            onChange={toggleSelectAllPinned}
+                            style={{ cursor: 'pointer', width: 15, height: 15 }}
+                            title={allPinnedSelected ? 'Deselect all pinned' : 'Select all pinned'} />
+                        </th>
                         <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
                         <th style={{ width: 40 }}></th>
                         <th>Name</th>
