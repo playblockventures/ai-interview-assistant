@@ -228,30 +228,6 @@ router.get('/pins/recommended-to-me', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── POST /api/settings/pins/:candidateId ─────────────────────────────────────
-router.post('/pins/:candidateId', requireAuth, async (req, res) => {
-  try {
-    const S = getSettings();
-    const pins = await S.getForUser(req.user.id, 'pinned_candidates').catch(() => null) || [];
-    if (!pins.includes(req.params.candidateId)) {
-      pins.push(req.params.candidateId);
-      await S.setForUser(req.user.id, 'pinned_candidates', pins);
-    }
-    res.json({ pins });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── DELETE /api/settings/pins/:candidateId ───────────────────────────────────
-router.delete('/pins/:candidateId', requireAuth, async (req, res) => {
-  try {
-    const S = getSettings();
-    const pins = await S.getForUser(req.user.id, 'pinned_candidates').catch(() => null) || [];
-    const updated = pins.filter(id => id !== req.params.candidateId);
-    await S.setForUser(req.user.id, 'pinned_candidates', updated);
-    res.json({ pins: updated });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 // ── Shared helper: resolve target user IDs for recommend/unrecommend ──────────
 async function resolveRecommendTargets(senderId, isAdmin, candidateId) {
   const User = require('../models/User');
@@ -268,6 +244,7 @@ async function resolveRecommendTargets(senderId, isAdmin, candidateId) {
 }
 
 // ── POST /api/settings/pins/bulk-share ──────────────────────────────────────
+// Must be defined before POST /pins/:candidateId to avoid Express matching 'bulk-share' as a candidateId.
 router.post('/pins/bulk-share', requireAuth, async (req, res) => {
   try {
     const { candidateIds } = req.body;
@@ -385,6 +362,31 @@ router.delete('/pins/:candidateId/share', requireAuth, async (req, res) => {
     senderRec = senderRec.filter(id => id !== candidateId);
     await S.setForUser(req.user.id, 'recommended_candidates', senderRec);
     res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── POST /api/settings/pins/:candidateId ─────────────────────────────────────
+// Must be defined after all specific /pins/* routes to avoid catching them.
+router.post('/pins/:candidateId', requireAuth, async (req, res) => {
+  try {
+    const S = getSettings();
+    const pins = await S.getForUser(req.user.id, 'pinned_candidates').catch(() => null) || [];
+    if (!pins.includes(req.params.candidateId)) {
+      pins.push(req.params.candidateId);
+      await S.setForUser(req.user.id, 'pinned_candidates', pins);
+    }
+    res.json({ pins });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── DELETE /api/settings/pins/:candidateId ───────────────────────────────────
+router.delete('/pins/:candidateId', requireAuth, async (req, res) => {
+  try {
+    const S = getSettings();
+    const pins = await S.getForUser(req.user.id, 'pinned_candidates').catch(() => null) || [];
+    const updated = pins.filter(id => id !== req.params.candidateId);
+    await S.setForUser(req.user.id, 'pinned_candidates', updated);
+    res.json({ pins: updated });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
