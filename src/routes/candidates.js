@@ -95,13 +95,13 @@ router.get('/with-call-scripts', async (req, res) => {
           (Array.isArray(c.conversationHistory) && c.conversationHistory.some(m => m.role === 'call_script')));
     }
 
-    // Also catch candidates whose conversationHistory has call_script but hasCallScript wasn't set yet
+    // For admin: also catch candidates whose conversationHistory has call_script but hasCallScript wasn't set yet
     if (req.user.isAdmin) {
       candidates = candidates.filter(c => c.hasCallScript ||
         (Array.isArray(c.conversationHistory) && c.conversationHistory.some(m => m.role === 'call_script')));
     }
 
-    // Derive lastCallScriptAt from conversationHistory if missing
+    // Derive lastCallScriptAt from conversationHistory if the field is missing
     candidates = candidates.map(c => {
       if (!c.lastCallScriptAt && Array.isArray(c.conversationHistory)) {
         const entries = c.conversationHistory.filter(m => m.role === 'call_script');
@@ -109,14 +109,15 @@ router.get('/with-call-scripts', async (req, res) => {
           c.lastCallScriptAt = entries[entries.length - 1].timestamp || entries[entries.length - 1].createdAt || null;
         }
       }
-      // Strip conversationHistory from response — not needed on frontend
       const { conversationHistory: _, ...rest } = c;
       return rest;
     });
 
-    // Sort by most recent script
+    // Exclude candidates who have already done the call
+    candidates = candidates.filter(c => !c.callDone);
+
+    // Sort by most recent script, no limit
     candidates.sort((a, b) => (b.lastCallScriptAt || '').localeCompare(a.lastCallScriptAt || ''));
-    candidates = candidates.slice(0, 50);
 
     res.json({ candidates });
   } catch (err) { res.status(500).json({ error: err.message }); }

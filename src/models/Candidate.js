@@ -627,6 +627,11 @@ const Candidate = {
       aiEngagementScore:      null,
       aiEngagementReasoning:  '',
       combinedEngagementScore: null,
+      hasCallScript:          false,
+      lastCallScriptAt:       null,
+      callDone:               false,
+      callDoneAt:             null,
+      callDoneBy:             null,
       updatedAt: now(),
     });
   },
@@ -637,7 +642,17 @@ const Candidate = {
     const data = doc.data();
     const arr = [...(data.conversationHistory || [])];
     arr.splice(index, 1);
-    await db.collection(COL).doc(id).update({ conversationHistory: arr, updatedAt: now() });
+    const stillHasScript = arr.some(m => m.role === 'call_script');
+    const lastScriptEntry = stillHasScript
+      ? [...arr].reverse().find(m => m.role === 'call_script')
+      : null;
+    await db.collection(COL).doc(id).update({
+      conversationHistory: arr,
+      updatedAt: now(),
+      hasCallScript:    stillHasScript,
+      lastCallScriptAt: lastScriptEntry ? (lastScriptEntry.timestamp || lastScriptEntry.createdAt || null) : null,
+      ...(stillHasScript ? {} : { callDone: false, callDoneAt: null, callDoneBy: null }),
+    });
     await persistEngagement(id, db, arr, data.ownerId);
   },
 
