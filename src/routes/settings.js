@@ -199,10 +199,32 @@ router.get('/pins/recommended-by-me', requireAuth, async (req, res) => {
 });
 
 // ── GET /api/settings/pins/recommended-to-me ─────────────────────────────────
+// Returns candidateIds that were recommended TO the current user by others.
+// Also does a backward-compatible scan: any candidateId that appears in another
+// user's recommended_candidates list AND is in this user's pins counts as received.
 router.get('/pins/recommended-to-me', requireAuth, async (req, res) => {
   try {
-    const received = await getSettings().getForUser(req.user.id, 'received_recommendations').catch(() => null) || [];
-    res.json({ received });
+    const S = getSettings();
+    const received = new Set(
+      (await S.getForUser(req.user.id, 'received_recommendations').catch(() => null)) || []
+    );
+
+    // Backward compat: scan all settings docs for recommended_candidates_<uid> keys
+    // that belong to other users, and union with pins.
+    const myPins = new Set(
+      (await S.getForUser(req.user.id, 'pinned_candidates').catch(() => null)) || []
+    );
+    if (myPins.size) {
+      const all = await S.getAll().catch(() => ({}));
+      const myRecKey = `recommended_candidates_${req.user.id}`;
+      Object.entries(all).forEach(([key, val]) => {
+        if (key.startsWith('recommended_candidates_') && key !== myRecKey && Array.isArray(val)) {
+          val.forEach(id => { if (myPins.has(id)) received.add(id); });
+        }
+      });
+    }
+
+    res.json({ received: [...received] });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
