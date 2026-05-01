@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useContext, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useContext, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import toast from 'react-hot-toast';
@@ -60,6 +60,97 @@ const STATUS_LABELS = {
   no_response: 'No Response', not_interested: 'Not Interested',
   other_job: 'Already Occupied', have_a_doubt: 'Have a Doubt', dangerous: 'Dangerous',
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Searchable dropdown — replaces native <select> with an inline search input
+// ─────────────────────────────────────────────────────────────────────────────
+function SearchableSelect({ value, onChange, options, emptyLabel = '— None', style }) {
+  const [open,  setOpen]  = useState(false);
+  const [query, setQuery] = useState('');
+  const containerRef = useRef(null);
+  const inputRef     = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false); setQuery('');
+      }
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  useEffect(() => {
+    if (open && inputRef.current) inputRef.current.focus();
+  }, [open]);
+
+  const filtered = options.filter(o =>
+    o.label.toLowerCase().includes(query.toLowerCase())
+  );
+  const selectedLabel = options.find(o => o.value === value)?.label;
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', ...style }}>
+      <button
+        type="button"
+        className="form-select"
+        style={{ textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', width: '100%' }}
+        onClick={() => { setOpen(v => !v); setQuery(''); }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: selectedLabel ? 'var(--text-primary)' : 'var(--text-muted)', flex: 1 }}>
+          {selectedLabel || emptyLabel}
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 6, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 300,
+          background: 'var(--bg-surface)', border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-sm)', boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+          maxHeight: 220, overflow: 'hidden', display: 'flex', flexDirection: 'column', marginTop: 2,
+        }}>
+          <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+            <input
+              ref={inputRef}
+              type="text"
+              className="form-input"
+              placeholder="Search..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              style={{ margin: 0, height: 30, fontSize: 12 }}
+            />
+          </div>
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            <div
+              style={{ padding: '7px 12px', fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}
+              onMouseDown={() => { onChange(''); setOpen(false); setQuery(''); }}
+            >
+              {emptyLabel}
+            </div>
+            {filtered.length === 0 ? (
+              <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>No results</div>
+            ) : filtered.map(o => (
+              <div
+                key={o.value}
+                style={{
+                  padding: '7px 12px', fontSize: 13, cursor: 'pointer',
+                  background: o.value === value ? 'var(--accent-dim)' : 'transparent',
+                  color: o.value === value ? 'var(--accent)' : 'var(--text-primary)',
+                }}
+                onMouseEnter={e => { if (o.value !== value) e.currentTarget.style.background = 'var(--bg-elevated)'; }}
+                onMouseLeave={e => { if (o.value !== value) e.currentTarget.style.background = 'transparent'; }}
+                onMouseDown={() => { onChange(o.value); setOpen(false); setQuery(''); }}
+              >
+                {o.label}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Add / Edit Candidate Modal
@@ -285,19 +376,23 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
 
           <div className="form-group">
             <label className="form-label">Assigned Recruiter</label>
-            <select className="form-select" value={form.recruiterId} onChange={e => set('recruiterId', e.target.value)}>
-              <option value="">No recruiter assigned</option>
-              {recruiters.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-            </select>
+            <SearchableSelect
+              value={form.recruiterId}
+              onChange={v => set('recruiterId', v)}
+              options={recruiters.map(r => ({ value: r.id, label: r.name }))}
+              emptyLabel="No recruiter assigned"
+            />
           </div>
 
           {companies.length > 0 && (
             <div className="form-group">
               <label className="form-label">Company</label>
-              <select className="form-select" value={form.companyId} onChange={e => set('companyId', e.target.value)}>
-                <option value="">No company assigned</option>
-                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <SearchableSelect
+                value={form.companyId}
+                onChange={v => set('companyId', v)}
+                options={companies.map(c => ({ value: c.id, label: c.name }))}
+                emptyLabel="No company assigned"
+              />
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                 The AI will use only this company&apos;s knowledge base when generating content.
               </div>
