@@ -489,18 +489,18 @@ router.post('/conversation', async (req, res) => {
       candidate ? `\n\n--- CANDIDATE ---\n${buildCandidateContext(candidate)}` : '',
       // 2a. Company interview framework/scenario
       companyScenario
-        ? `\n\n=== COMPANY INTERVIEW FRAMEWORK ===\n${companyScenario}\n=== END ===`
+        ? `\n\n=== COMPANY INTERVIEW FRAMEWORK (use as a guide; custom instructions below take precedence on any conflict) ===\n${companyScenario}\n=== END ===`
         : '',
-      // 2b. Per-candidate applied scenario (overrides company scenario)
+      // 2b. Per-candidate applied scenario (overrides company scenario; custom instructions still win on conflicts)
       appliedScenario
-        ? `\n\n=== CANDIDATE INTERVIEW SCENARIO (FOLLOW THIS) ===\n${appliedScenario}\n=== END ===`
+        ? `\n\n=== CANDIDATE INTERVIEW SCENARIO (use as a guide; custom instructions below take precedence on any conflict) ===\n${appliedScenario}\n=== END ===`
         : '',
-      // 1. Custom instructions (highest priority — placed last)
+      // 1. Custom instructions (absolute highest priority — explicitly overrides any conflicting scenario instructions)
       userInstructions
-        ? `\n\n=== CUSTOM INSTRUCTIONS (HIGHEST PRIORITY — FOLLOW THESE ABOVE ALL ELSE) ===\n${userInstructions}\n=== END ===`
+        ? `\n\n=== CUSTOM INSTRUCTIONS — ABSOLUTE PRIORITY ===\nThese instructions override everything above. Where they conflict with the interview scenario or company framework, IGNORE those sections and follow ONLY these instructions.\n${userInstructions}\n=== END ===`
         : '',
       customInstructions
-        ? `\n\n=== SESSION INSTRUCTIONS (OVERRIDE ALL — FOLLOW EXACTLY) ===\n${customInstructions}\n=== END ===`
+        ? `\n\n=== SESSION INSTRUCTIONS — OVERRIDE ALL ===\nThese override everything above including the interview scenario and custom instructions.\n${customInstructions}\n=== END ===`
         : '',
     ].filter(Boolean).join('');
 
