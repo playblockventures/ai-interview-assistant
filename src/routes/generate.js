@@ -272,7 +272,7 @@ router.post('/scenario', async (req, res) => {
     const companyId        = companyIdOverride || candidate?.companyId || null;
     const openai           = await getOpenAIClient(effectiveUserId);
     const knowledgeContext = await getKnowledgeContext(effectiveUserId, companyId);
-    const userInstructions = await getCustomInstructions(effectiveUserId);
+    const userInstructions = await getCustomInstructions(effectiveUserId, companyId);
     const companyScenario  = await getCompanyScenario(effectiveUserId, companyId);
     const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
 
@@ -367,7 +367,7 @@ router.post('/outreach', async (req, res) => {
     const companyId        = companyIdOverride || candidate?.companyId || null;
     const openai           = await getOpenAIClient(effectiveUserId);
     const knowledgeContext = await getKnowledgeContext(effectiveUserId, companyId);
-    const userInstructions = await getCustomInstructions(effectiveUserId);
+    const userInstructions = await getCustomInstructions(effectiveUserId, companyId);
     const companyScenario  = await getCompanyScenario(effectiveUserId, companyId);
     const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
 
@@ -463,7 +463,7 @@ router.post('/conversation', async (req, res) => {
     const companyId        = companyIdOverride || candidate?.companyId || null;
     const openai           = await getOpenAIClient(effectiveUserId);
     const knowledgeContext = await getKnowledgeContext(effectiveUserId, companyId);
-    const userInstructions = await getCustomInstructions(effectiveUserId);
+    const userInstructions = await getCustomInstructions(effectiveUserId, companyId);
     const companyScenario  = await getCompanyScenario(effectiveUserId, companyId);
     const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
 
@@ -663,7 +663,7 @@ router.post('/call-script', async (req, res) => {
     const companyId        = companyIdOverride || candidate?.companyId || null;
     const openai           = await getOpenAIClient(effectiveUserId);
     const knowledgeContext = await getKnowledgeContext(effectiveUserId, companyId);
-    const userInstructions = await getCustomInstructions(effectiveUserId);
+    const userInstructions = await getCustomInstructions(effectiveUserId, companyId);
     const companyScenario  = await getCompanyScenario(effectiveUserId, companyId);
     const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
     const roleLabel        = await resolveRoleLabel(role || candidate?.role);

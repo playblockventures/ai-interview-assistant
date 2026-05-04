@@ -79,11 +79,19 @@ const getKnowledgeContext = async (userId, companyId = null) => {
   }
 };
 
-// Get custom instructions for a user
-const getCustomInstructions = async (userId) => {
+// Get custom instructions for a user, optionally scoped to a companyId
+const getCustomInstructions = async (userId, companyId = null) => {
   if (!isConnected() || !userId) return '';
   try {
     const Settings = require('../models/Settings');
+    const effectiveCompanyId = companyId || null;
+    if (effectiveCompanyId) {
+      const map = await Settings.getForUser(userId, 'company_instructions').catch(() => null);
+      if (map && typeof map === 'object' && map[effectiveCompanyId]) {
+        return `\n\n--- CUSTOM INSTRUCTIONS ---\n${map[effectiveCompanyId]}`;
+      }
+    }
+    // Fall back to global custom instructions
     const value = await Settings.getForUser(userId, 'custom_instructions');
     return value ? `\n\n--- CUSTOM INSTRUCTIONS ---\n${value}` : '';
   } catch (_) { return ''; }

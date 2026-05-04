@@ -740,7 +740,17 @@ router.post('/knowledge/instructions', requireAuth, async (req, res) => {
       category: 'instructions', companyId, companyName,
       ownerId: req.user.id, ownerName: req.user.displayName || req.user.username,
     });
-    await getSettings().setForUser(req.user.id, 'custom_instructions', content);
+    const S = getSettings();
+    if (companyId) {
+      // Save to per-company instructions map — keyed by companyId
+      const map = await S.getForUser(req.user.id, 'company_instructions').catch(() => null) || {};
+      map[companyId] = content;
+      await S.setForUser(req.user.id, 'company_instructions', map);
+    } else {
+      // No company — save as global fallback
+      await S.setForUser(req.user.id, 'custom_instructions', content);
+    }
+    invalidateCache(req.user.id);
     res.json(item);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
