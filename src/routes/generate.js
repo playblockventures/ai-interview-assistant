@@ -368,6 +368,7 @@ router.post('/outreach', async (req, res) => {
     const openai           = await getOpenAIClient(effectiveUserId);
     const knowledgeContext = await getKnowledgeContext(effectiveUserId, companyId);
     const userInstructions = await getCustomInstructions(effectiveUserId);
+    const companyScenario  = await getCompanyScenario(effectiveUserId, companyId);
     const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
 
     const roleLabel     = await resolveRoleLabel(role);
@@ -378,15 +379,19 @@ router.post('/outreach', async (req, res) => {
 
     const candidateScenario = candidate?.interviewScenarios?.[0]?.content || '';
 
-    // Priority order (last = highest): knowledge base → recruiter/candidate profile → candidate scenario → custom instructions
+    // Priority order (last = highest): knowledge base → recruiter/candidate profile → company framework → candidate scenario → custom instructions
     const systemPrompt = [
       `You are an expert recruiter writing ${messageLabel} messages for ${roleLabel} positions.`,
       toneSystemPrompt,
-      // 4. Knowledge base (lowest priority)
+      // 5. Knowledge base (lowest priority)
       knowledgeContext,
-      // 3. Recruiter & candidate profile
+      // 4. Recruiter & candidate profile
       recruiterContext,
       candidateContext ? `\n\n--- CANDIDATE ---\n${candidateContext}` : '',
+      // 3. Company interview framework — rules and constraints that apply to all outreach
+      companyScenario
+        ? `\n\n=== COMPANY INTERVIEW FRAMEWORK (MANDATORY — FOLLOW THESE RULES) ===\n${companyScenario}\n=== END OF FRAMEWORK ===`
+        : '',
       // 2. Candidate interview scenario — guides tone, focus, and content of the message
       candidateScenario
         ? `\n\n=== CANDIDATE INTERVIEW SCENARIO (USE THIS TO GUIDE THE MESSAGE CONTENT) ===\n${candidateScenario}\n=== END ===`
@@ -402,6 +407,7 @@ router.post('/outreach', async (req, res) => {
       `Goal: ${goal || 'Connect with the candidate and initiate a conversation about the opportunity'}`,
       `Tone: ${toneLabel}`,
       candidateContext ? 'Personalise the message using the candidate profile above — reference specific details from their background.' : '',
+      companyScenario ? `IMPORTANT: You MUST follow all rules and constraints in the company interview framework from your context — including any restrictions on language, company names, or content.` : '',
       candidateScenario ? `Use the candidate interview scenario from your context to guide the tone, focus, and key points of this message — reflect the recruitment goals and approach defined there.` : '',
       customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : '',
       `
