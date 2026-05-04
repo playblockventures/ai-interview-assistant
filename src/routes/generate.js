@@ -526,6 +526,15 @@ router.post('/conversation', async (req, res) => {
       })),
     ];
 
+    // Inject session instructions as a fresh system message immediately before the current
+    // turn so they stay in the model's active context rather than being buried by history.
+    if (customInstructions) {
+      messages.push({
+        role: 'system',
+        content: `ACTIVE INSTRUCTION FOR YOUR NEXT REPLY — this overrides the interview scenario and any prior instructions: ${customInstructions}`,
+      });
+    }
+
     // Build current user message content for AI
     const currentFilePrefix = attachedFileText
       ? `[Attached file: ${attachedFileName || 'file'}]\n\n${attachedFileText}`
