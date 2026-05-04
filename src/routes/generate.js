@@ -402,6 +402,7 @@ router.post('/outreach', async (req, res) => {
       `Goal: ${goal || 'Connect with the candidate and initiate a conversation about the opportunity'}`,
       `Tone: ${toneLabel}`,
       candidateContext ? 'Personalise the message using the candidate profile above — reference specific details from their background.' : '',
+      candidateScenario ? `Use the candidate interview scenario from your context to guide the tone, focus, and key points of this message — reflect the recruitment goals and approach defined there.` : '',
       customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : '',
       `
 Requirements:
