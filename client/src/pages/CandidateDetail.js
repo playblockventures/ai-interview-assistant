@@ -1566,6 +1566,13 @@ export default function CandidateDetail() {
   useEffect(() => { fetchCandidate(); }, [fetchCandidate]);
 
   useEffect(() => {
+    if (candidate?.fullName) {
+      document.title = candidate.fullName;
+      return () => { document.title = 'InterviewAI — Recruiting Assistant'; };
+    }
+  }, [candidate?.fullName]);
+
+  useEffect(() => {
     candidateApi.getDuplicates(id).then(setDuplicates).catch(() => {});
   }, [id]);
 
