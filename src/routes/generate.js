@@ -271,9 +271,9 @@ router.post('/scenario', async (req, res) => {
     const effectiveUserId  = await getEffectiveUserId(req, candidateId);
     const companyId        = companyIdOverride ?? candidate?.companyId ?? null;
     const openai           = await getOpenAIClient(effectiveUserId);
-    const knowledgeContext = await getKnowledgeContext(req.user.id, companyId);
-    const userInstructions = await getCustomInstructions(req.user.id);
-    const companyScenario  = await getCompanyScenario(req.user.id, companyId);
+    const knowledgeContext = await getKnowledgeContext(effectiveUserId, companyId);
+    const userInstructions = await getCustomInstructions(effectiveUserId);
+    const companyScenario  = await getCompanyScenario(effectiveUserId, companyId);
     const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
 
     const roleLabel = await resolveRoleLabel(role);
@@ -291,7 +291,7 @@ router.post('/scenario', async (req, res) => {
       recruiterContext,
       candidateContext ? `\n\n--- CANDIDATE ---\n${candidateContext}` : '',
       companyScenario
-        ? `\n\n=== COMPANY INTERVIEW FRAMEWORK ===\n${companyScenario}\n=== END ===`
+        ? `\n\n=== COMPANY INTERVIEW FRAMEWORK (MANDATORY — FOLLOW THIS STRUCTURE) ===\n${companyScenario}\n=== END OF FRAMEWORK ===`
         : '',
       userInstructions
         ? `\n\n=== CUSTOM INSTRUCTIONS (HIGHEST PRIORITY) ===\n${userInstructions}\n=== END ===`
@@ -313,7 +313,7 @@ router.post('/scenario', async (req, res) => {
       `Goal: ${goal || 'Assess technical competency and cultural fit'}`,
       `Tone: ${toneLabel}`,
       candidateContext ? `Personalise the instructions based on the candidate profile provided.` : '',
-      companyScenario  ? `Follow the company interview framework defined in your context.` : '',
+      companyScenario  ? `IMPORTANT: You MUST incorporate and follow the company interview framework from your context. Structure the instruction prompt around that framework — reference its specific steps, questions, and criteria directly.` : '',
       customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : '',
       ``,
       `Output ONLY the instruction prompt text — no meta-commentary, no example messages, no Q&A. Write it as direct instructions to an AI recruiter.`,
@@ -366,8 +366,8 @@ router.post('/outreach', async (req, res) => {
     const effectiveUserId  = await getEffectiveUserId(req, candidateId);
     const companyId        = companyIdOverride ?? candidate?.companyId ?? null;
     const openai           = await getOpenAIClient(effectiveUserId);
-    const knowledgeContext = await getKnowledgeContext(req.user.id, companyId);
-    const userInstructions = await getCustomInstructions(req.user.id);
+    const knowledgeContext = await getKnowledgeContext(effectiveUserId, companyId);
+    const userInstructions = await getCustomInstructions(effectiveUserId);
     const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
 
     const roleLabel     = await resolveRoleLabel(role);
@@ -455,9 +455,9 @@ router.post('/conversation', async (req, res) => {
     const effectiveUserId  = await getEffectiveUserId(req, candidateId);
     const companyId        = companyIdOverride ?? candidate?.companyId ?? null;
     const openai           = await getOpenAIClient(effectiveUserId);
-    const knowledgeContext = await getKnowledgeContext(req.user.id, companyId);
-    const userInstructions = await getCustomInstructions(req.user.id);
-    const companyScenario  = await getCompanyScenario(req.user.id, companyId);
+    const knowledgeContext = await getKnowledgeContext(effectiveUserId, companyId);
+    const userInstructions = await getCustomInstructions(effectiveUserId);
+    const companyScenario  = await getCompanyScenario(effectiveUserId, companyId);
     const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
 
     const roleLabel    = await resolveRoleLabel(role);
@@ -655,9 +655,9 @@ router.post('/call-script', async (req, res) => {
     const effectiveUserId  = await getEffectiveUserId(req, candidateId);
     const companyId        = companyIdOverride ?? candidate?.companyId ?? null;
     const openai           = await getOpenAIClient(effectiveUserId);
-    const knowledgeContext = await getKnowledgeContext(req.user.id, companyId);
-    const userInstructions = await getCustomInstructions(req.user.id);
-    const companyScenario  = await getCompanyScenario(req.user.id, companyId);
+    const knowledgeContext = await getKnowledgeContext(effectiveUserId, companyId);
+    const userInstructions = await getCustomInstructions(effectiveUserId);
+    const companyScenario  = await getCompanyScenario(effectiveUserId, companyId);
     const recruiterContext = await getRecruiterContext(recruiterId, effectiveUserId);
     const roleLabel        = await resolveRoleLabel(role || candidate?.role);
     const candidateContext = buildCandidateContext(candidate);
