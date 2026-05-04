@@ -269,7 +269,7 @@ router.post('/scenario', async (req, res) => {
     }
 
     const effectiveUserId  = await getEffectiveUserId(req, candidateId);
-    const companyId        = companyIdOverride ?? candidate?.companyId ?? null;
+    const companyId        = companyIdOverride || candidate?.companyId || null;
     const openai           = await getOpenAIClient(effectiveUserId);
     const knowledgeContext = await getKnowledgeContext(effectiveUserId, companyId);
     const userInstructions = await getCustomInstructions(effectiveUserId);
@@ -364,7 +364,7 @@ router.post('/outreach', async (req, res) => {
     }
 
     const effectiveUserId  = await getEffectiveUserId(req, candidateId);
-    const companyId        = companyIdOverride ?? candidate?.companyId ?? null;
+    const companyId        = companyIdOverride || candidate?.companyId || null;
     const openai           = await getOpenAIClient(effectiveUserId);
     const knowledgeContext = await getKnowledgeContext(effectiveUserId, companyId);
     const userInstructions = await getCustomInstructions(effectiveUserId);
@@ -460,7 +460,7 @@ router.post('/conversation', async (req, res) => {
     }
 
     const effectiveUserId  = await getEffectiveUserId(req, candidateId);
-    const companyId        = companyIdOverride ?? candidate?.companyId ?? null;
+    const companyId        = companyIdOverride || candidate?.companyId || null;
     const openai           = await getOpenAIClient(effectiveUserId);
     const knowledgeContext = await getKnowledgeContext(effectiveUserId, companyId);
     const userInstructions = await getCustomInstructions(effectiveUserId);
@@ -660,7 +660,7 @@ router.post('/call-script', async (req, res) => {
     }
 
     const effectiveUserId  = await getEffectiveUserId(req, candidateId);
-    const companyId        = companyIdOverride ?? candidate?.companyId ?? null;
+    const companyId        = companyIdOverride || candidate?.companyId || null;
     const openai           = await getOpenAIClient(effectiveUserId);
     const knowledgeContext = await getKnowledgeContext(effectiveUserId, companyId);
     const userInstructions = await getCustomInstructions(effectiveUserId);

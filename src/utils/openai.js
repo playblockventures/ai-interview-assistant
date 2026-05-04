@@ -41,10 +41,12 @@ const getKnowledgeContext = async (userId, companyId = null) => {
   try {
     const KnowledgeBase = require('../models/KnowledgeBase');
     const allDocs = await KnowledgeBase.findByUser(userId);
-    // Filter by company if specified: include company-specific docs AND general (no company) docs.
-    // General docs (no companyId) are always included as shared context.
-    const docs = companyId
-      ? allDocs.filter(d => d.companyId === companyId || !d.companyId)
+    // Normalize empty string to null so '' behaves the same as no company
+    const effectiveCompanyId = companyId || null;
+    // When a company is specified: only include that company's docs (strict isolation).
+    // When no company: include all docs.
+    const docs = effectiveCompanyId
+      ? allDocs.filter(d => d.companyId === effectiveCompanyId)
       : allDocs;
     if (!docs.length) return '';
 
