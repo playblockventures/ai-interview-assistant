@@ -186,6 +186,7 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
   const [dangerousWarning, setDangerousWarning]     = useState(null);
   const [confirmDangerous, setConfirmDangerous]     = useState(false);
   const [showLinkedInSection, setShowLinkedInSection] = useState(false);
+  const [showAllExp, setShowAllExp] = useState(false);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -311,6 +312,7 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
       if (data.resumeText) setResumeText(data.resumeText);
       if (data.linkedinProfile) setLinkedinProfile(data.linkedinProfile);
       setShowLinkedInSection(true);
+      setShowAllExp(false);
       await checkDangerous(data.email || '', url);
       toast.success('LinkedIn profile extracted — fields auto-filled');
     } catch (e) { toast.error(e.message); }
@@ -492,7 +494,7 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
                   {lpExps(linkedinProfile).length === 0 && (
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No experience entries</div>
                   )}
-                  {lpExps(linkedinProfile).map((exp, idx) => (
+                  {lpExps(linkedinProfile).slice(0, showAllExp ? undefined : 3).map((exp, idx) => (
                     <div key={idx} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 10, marginBottom: 8, position: 'relative' }}>
                       <button type="button" onClick={() => removeExp(idx)}
                         style={{ position: 'absolute', top: 6, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: 14, padding: '2px 4px', lineHeight: 1 }}>✕</button>
@@ -516,6 +518,12 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
                         onChange={e => updateExp(idx, 'description', e.target.value)} />
                     </div>
                   ))}
+                  {lpExps(linkedinProfile).length > 3 && (
+                    <button type="button" className="btn btn-secondary btn-sm" style={{ fontSize: 11, width: '100%' }}
+                      onClick={() => setShowAllExp(v => !v)}>
+                      {showAllExp ? '▲ Show less' : `▼ Show ${lpExps(linkedinProfile).length - 3} more`}
+                    </button>
+                  )}
                 </div>
 
                 {/* Education */}
