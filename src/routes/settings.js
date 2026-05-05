@@ -120,7 +120,8 @@ router.get('/', async (req, res) => {
               companies  = all[companiesKey(userId)] || [];
             }
 
-            const result = { hasOpenAI, hasFirebase, userOpenAIKey, userEnhancvKey, dbConnected: isConnected(), roles, recruiters, companies, companyScenario, companyScenarios };
+            const staleDelayDays = all.stale_delay_days != null ? Number(all.stale_delay_days) : 3;
+            const result = { hasOpenAI, hasFirebase, userOpenAIKey, userEnhancvKey, dbConnected: isConnected(), roles, recruiters, companies, companyScenario, companyScenarios, stale_delay_days: staleDelayDays };
             setCached(cacheKey, result);
             return res.json(result);
           }

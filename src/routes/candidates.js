@@ -30,10 +30,19 @@ router.use(requireAuth);
 router.get('/analytics', async (req, res) => {
   try {
     const { fromDate, toDate } = req.query;
+    const { isConnected } = require('../utils/firebase');
+    let staleDelayDays = 3;
+    if (isConnected()) {
+      try {
+        const Settings = require('../models/Settings');
+        const stored = await Settings.get('stale_delay_days');
+        if (stored && !isNaN(Number(stored))) staleDelayDays = Number(stored);
+      } catch (_) {}
+    }
     const result = await Candidate.computeAnalytics({
       ownerId: req.user.isAdmin ? null : req.user.id,
       isAdmin: req.user.isAdmin,
-      fromDate, toDate,
+      fromDate, toDate, staleDelayDays,
     });
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }

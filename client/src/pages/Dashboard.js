@@ -335,6 +335,7 @@ export default function Dashboard() {
   // Stale candidates + duplicate groups — computed server-side, no client useMemo needed
   const staleCandidates = analytics?.staleCandidates || [];
   const duplicateGroups = analytics?.duplicateGroups || [];
+  const staleDelayDays  = analytics?.staleDelayDays ?? 3;
 
   // Group helpers
   const groupedByRecruiter = useMemo(() => {
@@ -814,7 +815,7 @@ export default function Dashboard() {
                         No Reply — Needs Follow-up ({staleCandidates.length})
                         <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>{staleCollapsed ? '▶' : '▼'}</span>
                       </div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>In-progress candidates with no message activity for more than 3 days</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>In-progress candidates with no message activity for more than {staleDelayDays} days</div>
                     </div>
                   </div>
                   {!staleCollapsed && <div className="table-wrap">
@@ -1098,7 +1099,7 @@ export default function Dashboard() {
                     <span style={{ fontSize: 18 }}>⚠️</span>
                     <div>
                       <div className="card-title" style={{ color: 'var(--warning)', marginBottom: 2 }}>No Reply — Needs Attention ({staleCandidates.length})</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>In-progress candidates with no message activity for more than 3 days</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>In-progress candidates with no message activity for more than {staleDelayDays} days</div>
                     </div>
                   </div>
                   <div className="table-wrap">

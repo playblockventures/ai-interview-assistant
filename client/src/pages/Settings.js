@@ -1799,6 +1799,8 @@ export default function Settings() {
   const [savingKey, setSavingKey]           = useState(false);
   const [savingFirebase, setSavingFirebase] = useState(false);
   const [loading, setLoading]               = useState(true);
+  const [staleDelayDays, setStaleDelayDays] = useState(3);
+  const [savingDelay, setSavingDelay]       = useState(false);
 
   useEffect(() => { setActiveTab(initTab); }, [initTab]);
 
@@ -1808,6 +1810,9 @@ export default function Settings() {
       setHasOpenAI(data.hasOpenAI);
       setHasFirebase(data.hasFirebase);
       setDbConnected(data.dbConnected);
+      if (data.stale_delay_days != null && !isNaN(Number(data.stale_delay_days))) {
+        setStaleDelayDays(Number(data.stale_delay_days));
+      }
     } catch (e) { console.error(e.message); }
     finally { setLoading(false); }
   }, []);
@@ -1903,6 +1908,45 @@ export default function Settings() {
               </div>
             </div>
           </div>}
+
+          {/* Dashboard Settings — admin only */}
+          {user?.isAdmin && (
+            <div className="card mt-16">
+              <div className="card-title">Dashboard Settings</div>
+              <div className="form-group">
+                <label className="form-label">Delay Alert Threshold (days)</label>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}>
+                  Candidates in-progress with no message activity beyond this many days appear in the "No Reply — Needs Follow-up" section on the dashboard.
+                </p>
+                <div className="flex gap-8" style={{ alignItems: 'center' }}>
+                  <input
+                    type="number" min={1} max={365}
+                    className="form-input"
+                    style={{ width: 100 }}
+                    value={staleDelayDays}
+                    onChange={e => setStaleDelayDays(Math.max(1, parseInt(e.target.value) || 1))}
+                    disabled={!dbConnected}
+                  />
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>days</span>
+                  <button
+                    className="btn btn-primary"
+                    disabled={savingDelay || !dbConnected}
+                    onClick={async () => {
+                      setSavingDelay(true);
+                      try {
+                        await settingsApi.save('stale_delay_days', staleDelayDays);
+                        toast.success(`Delay threshold set to ${staleDelayDays} days`);
+                      } catch (e) { toast.error(e.message); }
+                      finally { setSavingDelay(false); }
+                    }}
+                  >
+                    {savingDelay ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Save'}
+                  </button>
+                </div>
+                {!dbConnected && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--warning)' }}>⚠ Requires database connection.</div>}
+              </div>
+            </div>
+          )}
 
           <CompaniesSection dbConnected={dbConnected} />
           <RolesSection dbConnected={dbConnected} />

@@ -267,8 +267,8 @@ const Candidate = {
   },
 
   // Server-side analytics computation — replaces client-side useMemo for dashboard
-  async computeAnalytics({ ownerId, isAdmin, fromDate, toDate } = {}) {
-    const cacheKey = `${ownerId || 'admin'}_${fromDate || ''}_${toDate || ''}`;
+  async computeAnalytics({ ownerId, isAdmin, fromDate, toDate, staleDelayDays = 3 } = {}) {
+    const cacheKey = `${ownerId || 'admin'}_${fromDate || ''}_${toDate || ''}_${staleDelayDays}`;
     const cached = analyticsCache.get(cacheKey);
     if (cached && Date.now() < cached.expiresAt) return cached.data;
 
@@ -293,7 +293,7 @@ const Candidate = {
       .filter(c => {
         if (c.status !== 'in_progress') return false;
         const last = c.lastMessageAt || c.createdAt;
-        return (Date.now() - new Date(last)) / (1000 * 60 * 60 * 24) > 3;
+        return (Date.now() - new Date(last)) / (1000 * 60 * 60 * 24) > staleDelayDays;
       })
       .sort((a, b) => {
         const ad = (Date.now() - new Date(a.lastMessageAt || a.createdAt)) / 86400000;
@@ -426,7 +426,7 @@ const Candidate = {
       total, statusCounts, totalFailed, conversionRate, successRate,
       roleBreakdown, locationBreakdown, recruiterPerf, avgDays,
       monthlyTrend, weeklyActivity, userBreakdown,
-      staleCandidates, duplicateGroups, recent,
+      staleCandidates, duplicateGroups, recent, staleDelayDays,
     };
 
     analyticsCache.set(cacheKey, { data: result, expiresAt: Date.now() + ANALYTICS_CACHE_TTL });
