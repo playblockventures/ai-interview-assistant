@@ -185,8 +185,47 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
   const [linkedinProfile, setLinkedinProfile] = useState(initial?.linkedinProfile || null);
   const [dangerousWarning, setDangerousWarning]     = useState(null);
   const [confirmDangerous, setConfirmDangerous]     = useState(false);
+  const [showLinkedInSection, setShowLinkedInSection] = useState(false);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  // ── LinkedIn profile edit helpers ──────────────────────────────────────────
+  const lpExps  = (p) => p?.experiences || p?.experience  || [];
+  const lpEdus  = (p) => p?.educations  || p?.education   || [];
+  const lpCerts = (p) => p?.certifications || [];
+
+  const updateExp = (idx, field, value) =>
+    setLinkedinProfile(prev => ({ ...prev, experiences: lpExps(prev).map((e, i) => i === idx ? { ...e, [field]: value } : e) }));
+  const addExp = () =>
+    setLinkedinProfile(prev => ({ ...prev, experiences: [...lpExps(prev), { job_title: '', company: '', start_date: '', end_date: '', description: '' }] }));
+  const removeExp = (idx) =>
+    setLinkedinProfile(prev => ({ ...prev, experiences: lpExps(prev).filter((_, i) => i !== idx) }));
+
+  const updateEdu = (idx, field, value) =>
+    setLinkedinProfile(prev => ({ ...prev, educations: lpEdus(prev).map((e, i) => i === idx ? { ...e, [field]: value } : e), education: undefined }));
+  const addEdu = () =>
+    setLinkedinProfile(prev => ({ ...prev, educations: [...lpEdus(prev), { degree_name: '', school: '', start_year: '', end_year: '' }], education: undefined }));
+  const removeEdu = (idx) =>
+    setLinkedinProfile(prev => ({ ...prev, educations: lpEdus(prev).filter((_, i) => i !== idx), education: undefined }));
+
+  const updateCert = (idx, field, value) =>
+    setLinkedinProfile(prev => ({ ...prev, certifications: lpCerts(prev).map((c, i) => i === idx ? { ...c, [field]: value } : c) }));
+  const addCert = () =>
+    setLinkedinProfile(prev => ({ ...prev, certifications: [...lpCerts(prev), { name: '', authority: '' }] }));
+  const removeCert = (idx) =>
+    setLinkedinProfile(prev => ({ ...prev, certifications: lpCerts(prev).filter((_, i) => i !== idx) }));
+
+  const skillsText = linkedinProfile
+    ? (linkedinProfile.skills || []).map(s => (typeof s === 'string' ? s : s?.name || '')).filter(Boolean).join(', ')
+    : '';
+  const setSkills = (text) =>
+    setLinkedinProfile(prev => ({ ...prev, skills: text.split(',').map(s => s.trim()).filter(Boolean) }));
+
+  const langsText = linkedinProfile
+    ? (linkedinProfile.languages || []).map(l => (typeof l === 'string' ? l : l?.name || '')).filter(Boolean).join(', ')
+    : '';
+  const setLangs = (text) =>
+    setLinkedinProfile(prev => ({ ...prev, languages: text.split(',').map(s => s.trim()).filter(Boolean) }));
 
   const checkDangerous = async (email, linkedinUrl) => {
     if (isEdit) return;
@@ -271,6 +310,7 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
       if (data.photoUrl) { setPhotoPreview(data.photoUrl); setPhotoData(data.photoUrl); }
       if (data.resumeText) setResumeText(data.resumeText);
       if (data.linkedinProfile) setLinkedinProfile(data.linkedinProfile);
+      setShowLinkedInSection(true);
       await checkDangerous(data.email || '', url);
       toast.success('LinkedIn profile extracted — fields auto-filled');
     } catch (e) { toast.error(e.message); }
@@ -308,7 +348,7 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 640 }}>
+      <div className="modal" style={{ maxWidth: 640, maxHeight: '92vh', overflowY: 'auto' }}>
         <div className="modal-title">{isEdit ? 'Edit Candidate' : 'Add Candidate'}</div>
 
         <div style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'flex-start' }}>
@@ -404,6 +444,164 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
           <div className="form-group">
             <label className="form-label">Resume URL (optional)</label>
             <input className="form-input" value={form.resumeUrl} onChange={e => set('resumeUrl', e.target.value)} placeholder="https://drive.google.com/..." />
+          </div>
+        )}
+
+        {linkedinProfile && (
+          <div style={{ marginTop: 8, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <div
+              onClick={() => setShowLinkedInSection(v => !v)}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', background: 'var(--bg-elevated)', cursor: 'pointer', userSelect: 'none' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13 }}>📋</span>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>Extracted Profile Data</span>
+                <span style={{ fontSize: 11, color: 'var(--accent)', background: 'var(--accent-dim)', padding: '2px 8px', borderRadius: 999 }}>
+                  {[
+                    lpExps(linkedinProfile).length && `${lpExps(linkedinProfile).length} exp`,
+                    lpEdus(linkedinProfile).length && `${lpEdus(linkedinProfile).length} edu`,
+                    (linkedinProfile.skills || []).length && `${(linkedinProfile.skills || []).length} skills`,
+                  ].filter(Boolean).join(' · ') || 'view & edit'}
+                </span>
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{showLinkedInSection ? '▲' : '▼ expand to review & edit'}</span>
+            </div>
+
+            {showLinkedInSection && (
+              <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+                {/* Summary */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>About / Summary</div>
+                  <textarea
+                    className="form-input"
+                    rows={4}
+                    style={{ resize: 'vertical', fontSize: 12, lineHeight: 1.5 }}
+                    placeholder="Professional summary..."
+                    value={linkedinProfile.summary || linkedinProfile.about || linkedinProfile.description || linkedinProfile.bio || ''}
+                    onChange={e => setLinkedinProfile(prev => ({ ...prev, summary: e.target.value, about: undefined, bio: undefined, description: undefined }))}
+                  />
+                </div>
+
+                {/* Experience */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Experience</div>
+                    <button type="button" className="btn btn-secondary btn-sm" style={{ fontSize: 11 }} onClick={addExp}>+ Add</button>
+                  </div>
+                  {lpExps(linkedinProfile).length === 0 && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No experience entries</div>
+                  )}
+                  {lpExps(linkedinProfile).map((exp, idx) => (
+                    <div key={idx} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 10, marginBottom: 8, position: 'relative' }}>
+                      <button type="button" onClick={() => removeExp(idx)}
+                        style={{ position: 'absolute', top: 6, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: 14, padding: '2px 4px', lineHeight: 1 }}>✕</button>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 6 }}>
+                        <input className="form-input" style={{ fontSize: 12 }} placeholder="Job title"
+                          value={exp.job_title || exp.title || exp.role || ''}
+                          onChange={e => updateExp(idx, 'job_title', e.target.value)} />
+                        <input className="form-input" style={{ fontSize: 12 }} placeholder="Company"
+                          value={exp.company || exp.company_name || ''}
+                          onChange={e => updateExp(idx, 'company', e.target.value)} />
+                        <input className="form-input" style={{ fontSize: 12 }} placeholder="Start (e.g. 2020-01)"
+                          value={exp.start_date || ''}
+                          onChange={e => updateExp(idx, 'start_date', e.target.value)} />
+                        <input className="form-input" style={{ fontSize: 12 }} placeholder="End or 'present'"
+                          value={exp.end_date || ''}
+                          onChange={e => updateExp(idx, 'end_date', e.target.value)} />
+                      </div>
+                      <textarea className="form-input" rows={2} style={{ fontSize: 11, resize: 'vertical', lineHeight: 1.4 }}
+                        placeholder="Description..."
+                        value={exp.description || ''}
+                        onChange={e => updateExp(idx, 'description', e.target.value)} />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Education */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Education</div>
+                    <button type="button" className="btn btn-secondary btn-sm" style={{ fontSize: 11 }} onClick={addEdu}>+ Add</button>
+                  </div>
+                  {lpEdus(linkedinProfile).length === 0 && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No education entries</div>
+                  )}
+                  {lpEdus(linkedinProfile).map((edu, idx) => (
+                    <div key={idx} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 10, marginBottom: 8, position: 'relative' }}>
+                      <button type="button" onClick={() => removeEdu(idx)}
+                        style={{ position: 'absolute', top: 6, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: 14, padding: '2px 4px', lineHeight: 1 }}>✕</button>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                        <input className="form-input" style={{ fontSize: 12 }} placeholder="Degree / Field"
+                          value={edu.degree_name || edu.degree || edu.field_of_study || ''}
+                          onChange={e => updateEdu(idx, 'degree_name', e.target.value)} />
+                        <input className="form-input" style={{ fontSize: 12 }} placeholder="School"
+                          value={edu.school || edu.school_name || ''}
+                          onChange={e => updateEdu(idx, 'school', e.target.value)} />
+                        <input className="form-input" style={{ fontSize: 12 }} placeholder="Start year"
+                          value={edu.start_year || (edu.start_date ? String(edu.start_date).slice(0, 4) : '')}
+                          onChange={e => updateEdu(idx, 'start_year', e.target.value)} />
+                        <input className="form-input" style={{ fontSize: 12 }} placeholder="End year"
+                          value={edu.end_year || (edu.end_date ? String(edu.end_date).slice(0, 4) : '')}
+                          onChange={e => updateEdu(idx, 'end_year', e.target.value)} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Certifications */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Certifications</div>
+                    <button type="button" className="btn btn-secondary btn-sm" style={{ fontSize: 11 }} onClick={addCert}>+ Add</button>
+                  </div>
+                  {lpCerts(linkedinProfile).length === 0 && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No certifications</div>
+                  )}
+                  {lpCerts(linkedinProfile).map((cert, idx) => (
+                    <div key={idx} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 10, marginBottom: 8, position: 'relative' }}>
+                      <button type="button" onClick={() => removeCert(idx)}
+                        style={{ position: 'absolute', top: 6, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: 14, padding: '2px 4px', lineHeight: 1 }}>✕</button>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                        <input className="form-input" style={{ fontSize: 12 }} placeholder="Certification name"
+                          value={cert.name || cert.title || ''}
+                          onChange={e => updateCert(idx, 'name', e.target.value)} />
+                        <input className="form-input" style={{ fontSize: 12 }} placeholder="Issuing organization"
+                          value={cert.authority || cert.organization || cert.issuer || ''}
+                          onChange={e => updateCert(idx, 'authority', e.target.value)} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Skills */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Skills</div>
+                  <textarea
+                    className="form-input"
+                    rows={2}
+                    style={{ fontSize: 12, resize: 'vertical', lineHeight: 1.5 }}
+                    placeholder="Comma-separated (e.g. JavaScript, React, Node.js)"
+                    value={skillsText}
+                    onChange={e => setSkills(e.target.value)}
+                  />
+                </div>
+
+                {/* Languages */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Languages</div>
+                  <textarea
+                    className="form-input"
+                    rows={1}
+                    style={{ fontSize: 12, resize: 'vertical', lineHeight: 1.5 }}
+                    placeholder="Comma-separated (e.g. English, Spanish)"
+                    value={langsText}
+                    onChange={e => setLangs(e.target.value)}
+                  />
+                </div>
+
+              </div>
+            )}
           </div>
         )}
 
