@@ -257,6 +257,10 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
       }));
       if (data.photoUrl) { setPhotoPreview(data.photoUrl); setPhotoData(data.photoUrl); }
       if (data.resumeText) setResumeText(data.resumeText);
+      if (data.linkedinProfile) {
+        setLinkedinProfile(data.linkedinProfile);
+        setShowLinkedInSection(true);
+      }
       toast.success('Resume parsed — fields auto-filled');
     } catch (e) {
       toast.error('Could not extract resume data: ' + e.message);

@@ -33,20 +33,32 @@ router.post('/', upload.single('resume'), async (req, res) => {
         model: 'gpt-4o',
         messages: [
           { role: 'system', content: 'Extract candidate information from the resume. Return ONLY valid JSON, no markdown or code fences.' },
-          { role: 'user', content: `Extract these fields (empty string if not found) and return as JSON:
+          { role: 'user', content: `Extract candidate data from the resume and return as JSON with this exact structure (use empty string or empty array if not found):
 {
   "fullName": "candidate full name",
   "email": "email address",
   "phone": "phone number",
-  "linkedinUrl": "LinkedIn URL",
+  "linkedinUrl": "LinkedIn URL if present",
   "location": "city and country",
-  "currentTitle": "most recent job title"
+  "currentTitle": "most recent job title",
+  "summary": "professional summary or about section",
+  "experiences": [
+    { "job_title": "title", "company": "company name", "start_date": "YYYY-MM or YYYY", "end_date": "YYYY-MM or YYYY or present", "description": "role description" }
+  ],
+  "educations": [
+    { "degree_name": "degree or field of study", "school": "school name", "start_year": "YYYY", "end_year": "YYYY" }
+  ],
+  "skills": ["skill1", "skill2"],
+  "certifications": [
+    { "name": "certification name", "authority": "issuing organization" }
+  ],
+  "languages": ["language1", "language2"]
 }
 
 RESUME:
-${resumeText.substring(0, 4000)}` },
+${resumeText.substring(0, 6000)}` },
         ],
-        max_tokens: 400,
+        max_tokens: 2000,
         temperature: 0,
         response_format: { type: 'json_object' },
       });
@@ -61,6 +73,15 @@ ${resumeText.substring(0, 4000)}` },
       try { photoUrl = (await extractPhotoFromBuffer(buffer)) || ''; } catch (_) {}
     }
 
+    const linkedinProfile = {
+      summary:        extracted.summary        || '',
+      experiences:    Array.isArray(extracted.experiences)    ? extracted.experiences.slice(0, 3)    : [],
+      educations:     Array.isArray(extracted.educations)     ? extracted.educations     : [],
+      skills:         Array.isArray(extracted.skills)         ? extracted.skills         : [],
+      certifications: Array.isArray(extracted.certifications) ? extracted.certifications : [],
+      languages:      Array.isArray(extracted.languages)      ? extracted.languages      : [],
+    };
+
     res.json({
       fullName:     extracted.fullName     || '',
       email:        extracted.email        || '',
@@ -71,6 +92,7 @@ ${resumeText.substring(0, 4000)}` },
       photoUrl,
       resumeText,
       resumeFileName: filename,
+      linkedinProfile,
     });
   } catch (err) {
     console.error('[Extract]', err);
