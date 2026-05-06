@@ -691,56 +691,52 @@ router.post('/call-script', async (req, res) => {
       } catch (_) {}
     }
 
-    // Summarise conversation history for context (skip call_script entries)
-    const convoSummary = history
+    // Full conversation history for context (skip call_script entries)
+    const fullConvo = history
       .filter(h => h.role !== 'call_script' && h.content)
-      .slice(-20) // last 20 messages
       .map(h => `${h.role === 'assistant' ? 'Recruiter' : 'Candidate'}: ${h.content}`)
       .join('\n');
 
-    // Priority order (last = highest): knowledge base → recruiter/candidate profile → company scenario → custom instructions
     const systemPrompt = [
-      `You are an expert recruiter writing a structured phone/video call script for a ${roleLabel || 'professional'} position.`,
-      // 4. Knowledge base (lowest priority)
+      `You are an expert recruiter writing a WORD-FOR-WORD phone call script for a ${roleLabel || 'professional'} position. ` +
+      `The recruiter will read this script aloud verbatim during the actual call. ` +
+      `Write every line as natural spoken English — full sentences, conversational tone, nothing abbreviated. ` +
+      `DO NOT use bullet points, brief notes, or memo-style formatting. ` +
+      `Every section must contain complete sentences the recruiter reads out loud. ` +
+      `Use stage directions in [brackets] to indicate pauses, candidate responses, or transitions (e.g. [Wait for response], [If they hesitate:]). ` +
+      `The script must flow naturally from start to finish as a real phone conversation.`,
       knowledgeContext,
-      // 3. Recruiter & candidate profile
       companyIntro,
       recruiterContext,
       candidateContext ? `\n\n--- CANDIDATE ---\n${candidateContext}` : '',
-      // 2. Company interview framework/scenario
       companyScenario
         ? `\n\n=== COMPANY INTERVIEW FRAMEWORK ===\n${companyScenario}\n=== END ===`
         : '',
-      // 1. Custom instructions (highest priority — placed last)
       userInstructions
         ? `\n\n=== CUSTOM INSTRUCTIONS (HIGHEST PRIORITY — FOLLOW THESE ABOVE ALL ELSE) ===\n${userInstructions}\n=== END ===`
         : '',
     ].filter(Boolean).join('');
 
     const userPrompt = [
-      `Generate a detailed, structured call script for the next recruiter call with this candidate, based on the conversation so far.`,
-      convoSummary ? `\n\n--- CONVERSATION SO FAR ---\n${convoSummary}\n---` : '',
-      customInstructions ? `\n\nCustom Instructions:\n${customInstructions}` : '',
-      `\n\nStructure the call script with these sections:
-## 1. Opening
-How to greet and set the tone for the call.
-
-## 2. Purpose of the Call
-What you'll cover and why you're calling.
-
-## 3. Key Talking Points
-Bullet points tailored to the current conversation stage and candidate profile.
-
-## 4. Questions to Ask
-5-7 targeted questions for this specific stage of the conversation.
-
-## 5. Handling Common Responses
-How to address hesitation, competing offers, or pushback.
-
-## 6. Closing
-How to wrap up, confirm next steps, and keep momentum.
-
-Make it natural, specific, and easy to follow live on a call.`,
+      fullConvo
+        ? `Below is the FULL conversation history with this candidate so far. Read it carefully — do NOT repeat anything already discussed. Build on what has been said, acknowledge progress made, and move the conversation forward.\n\n--- FULL CONVERSATION HISTORY ---\n${fullConvo}\n--- END OF HISTORY ---\n\n`
+        : '',
+      customInstructions ? `Additional instructions: ${customInstructions}\n\n` : '',
+      `Now write a complete, word-for-word call script the recruiter reads aloud during the phone call. ` +
+      `Structure it as a flowing conversation with these clearly labelled sections:\n\n` +
+      `## Opening\n` +
+      `The exact words to say when the candidate picks up. Include a warm greeting, introduce yourself and the company, and ask if this is a good time.\n\n` +
+      `## Purpose of the Call\n` +
+      `Full sentences explaining why you're calling, referencing the conversation history naturally.\n\n` +
+      `## Key Points to Cover\n` +
+      `Write out each point as full spoken paragraphs — what to say about the role, the opportunity, and what's relevant to this specific candidate based on the conversation so far.\n\n` +
+      `## Questions to Ask\n` +
+      `Write each question out in full as you would say it on the phone, with a brief spoken lead-in for each. Include [Wait for response] after each question and provide a follow-up line to say based on a typical answer.\n\n` +
+      `## Handling Objections\n` +
+      `Write word-for-word responses to likely objections (e.g. not interested, already has an offer, needs time). Each response should be a full paragraph the recruiter reads aloud.\n\n` +
+      `## Closing\n` +
+      `The exact words to wrap up the call, confirm next steps, and end on a positive note.\n\n` +
+      `Write every line as something the recruiter says out loud. Use [brackets] for stage directions and candidate responses only.`,
     ].filter(Boolean).join('');
 
     const completion = await openai.chat.completions.create({
@@ -749,7 +745,7 @@ Make it natural, specific, and easy to follow live on a call.`,
         { role: 'system', content: systemPrompt },
         { role: 'user',   content: userPrompt },
       ],
-      max_tokens: 2000,
+      max_tokens: 3500,
       temperature: 0.7,
     });
 
