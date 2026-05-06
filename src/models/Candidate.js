@@ -382,17 +382,24 @@ const Candidate = {
       .sort((a, b) => b[1] - a[1]).slice(0, 6)
       .map(([label, value]) => ({ label, value }));
 
-    // Recruiter performance — top 6
+    // Recruiter performance — top 10 by in_progress
     const recruiterStats = {};
     docs.forEach(c => {
       if (!c.recruiterId) return;
       if (!recruiterStats[c.recruiterId]) {
-        recruiterStats[c.recruiterId] = { name: c.recruiterName || 'Unknown', total: 0, success: 0, in_progress: 0, pending: 0, failed: 0 };
+        recruiterStats[c.recruiterId] = { name: c.recruiterName || 'Unknown', ownerId: c.ownerId || null, ownerName: c.ownerName || '', total: 0, success: 0, in_progress: 0, pending: 0, failed: 0 };
       }
       recruiterStats[c.recruiterId].total++;
       const rKey = FAILED_STATUSES.includes(c.status) ? 'failed' : c.status;
       if (recruiterStats[c.recruiterId][rKey] !== undefined) recruiterStats[c.recruiterId][rKey]++;
     });
+    try {
+      const User = require('./User');
+      const allUsers = await User.findAll();
+      const userMap = {};
+      allUsers.forEach(u => { userMap[u.id] = u.displayName || u.username || u.email || 'Unknown'; });
+      Object.values(recruiterStats).forEach(s => { if (s.ownerId && userMap[s.ownerId]) s.ownerName = userMap[s.ownerId]; });
+    } catch (_) {}
     const recruiterPerf = Object.entries(recruiterStats)
       .map(([id, s]) => ({ id, ...s, successRate: s.total > 0 ? Math.round((s.success / s.total) * 100) : 0 }))
       .sort((a, b) => b.in_progress - a.in_progress || b.total - a.total).slice(0, 10);

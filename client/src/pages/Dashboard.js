@@ -565,6 +565,7 @@ export default function Dashboard() {
                         <tr>
                           <th style={{ width: 32, color: 'var(--text-muted)', fontSize: 11 }}>No</th>
                           <th>Recruiter</th>
+                          <th>User</th>
                           <th style={{ textAlign: 'center' }}>Total</th>
                           <th style={{ textAlign: 'center' }}>In Progress</th>
                           <th style={{ textAlign: 'center' }}>Success</th>
@@ -578,6 +579,7 @@ export default function Dashboard() {
                           <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => navigateFiltered({ recruiterFilter: r.id })}>
                             <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                             <td style={{ fontWeight: 600, fontSize: 13 }}>{r.name}</td>
+                            <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.ownerName || '—'}</td>
                             <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent)' }}>{r.total}</td>
                             <td style={{ textAlign: 'center', color: 'var(--in-progress)' }}>{r.in_progress}</td>
                             <td style={{ textAlign: 'center', color: 'var(--success)' }}>{r.success}</td>
