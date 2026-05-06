@@ -574,7 +574,7 @@ export default function Dashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {analytics.recruiterPerf.slice(0, 10).map((r, i) => (
+                        {analytics.recruiterPerf.map((r, i) => (
                           <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => navigateFiltered({ recruiterFilter: r.id })}>
                             <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                             <td style={{ fontWeight: 600, fontSize: 13 }}>{r.name}</td>

@@ -395,7 +395,7 @@ const Candidate = {
     });
     const recruiterPerf = Object.entries(recruiterStats)
       .map(([id, s]) => ({ id, ...s, successRate: s.total > 0 ? Math.round((s.success / s.total) * 100) : 0 }))
-      .sort((a, b) => b.total - a.total).slice(0, 6);
+      .sort((a, b) => b.in_progress - a.in_progress || b.total - a.total).slice(0, 10);
 
     // Avg time to decision (days)
     const completed = docs.filter(c => (c.status === 'success' || FAILED_STATUSES.includes(c.status)) && c.createdAt && c.updatedAt);
