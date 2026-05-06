@@ -112,6 +112,7 @@ function AddUserModal({ onClose, onSaved }) {
 }
 
 export default function UserManagement() {
+  useEffect(() => { document.title = 'User Management — InterviewAI'; }, []);
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);

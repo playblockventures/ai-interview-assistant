@@ -24,6 +24,7 @@ const MESSAGE_TYPES = [
 const TABS = ['Interview Scenario', 'Outreach Message'];
 
 export default function Generate() {
+  useEffect(() => { document.title = 'Generate — InterviewAI'; }, []);
   const location = useLocation();
   const navigate  = useNavigate();
   const params    = new URLSearchParams(location.search);

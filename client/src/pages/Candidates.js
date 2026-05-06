@@ -667,6 +667,7 @@ function loadFilters() {
 }
 
 export default function Candidates() {
+  useEffect(() => { document.title = 'Candidates — InterviewAI'; }, []);
   const navigate = useNavigate();
   const openTab = (path) => {
     const a = document.createElement('a');

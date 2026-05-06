@@ -1784,6 +1784,7 @@ const TABS = [
 ];
 
 export default function Settings() {
+  useEffect(() => { document.title = 'Settings — InterviewAI'; }, []);
   const { refreshSettings } = useContext(AppContext);
   const { user } = useAuth();
   const location = useLocation();

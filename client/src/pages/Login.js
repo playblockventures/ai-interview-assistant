@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
+  useEffect(() => { document.title = 'Login — InterviewAI'; }, []);
   const { login }   = useAuth();
   const navigate    = useNavigate();
   const [form, setForm]       = useState({ username: '', password: '' });

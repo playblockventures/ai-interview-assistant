@@ -212,6 +212,7 @@ function GroupHeader({ photoUrl, initial, name, subtitle, count }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
+  useEffect(() => { document.title = 'Dashboard — InterviewAI'; }, []);
   const openTab = (path) => {
     const a = document.createElement('a');
     a.href = path; a.target = '_blank'; a.rel = 'noopener noreferrer';
