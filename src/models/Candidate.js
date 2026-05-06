@@ -403,7 +403,7 @@ const Candidate = {
       ? Math.round(completed.reduce((sum, c) => sum + (new Date(c.updatedAt) - new Date(c.createdAt)) / 86400000, 0) / completed.length)
       : null;
 
-    // User (hiring manager) breakdown
+    // User (hiring manager) breakdown — look up current names from User model
     const userStats = {};
     docs.forEach(c => {
       const key = c.ownerId || '__none__';
@@ -411,6 +411,13 @@ const Candidate = {
       userStats[key].total++;
       if (userStats[key][c.status] !== undefined) userStats[key][c.status]++;
     });
+    try {
+      const User = require('./User');
+      const allUsers = await User.findAll();
+      const userMap = {};
+      allUsers.forEach(u => { userMap[u.id] = u.displayName || u.username || u.email || 'Unknown'; });
+      Object.values(userStats).forEach(s => { if (s.id && userMap[s.id]) s.name = userMap[s.id]; });
+    } catch (_) {}
     const userBreakdown = Object.values(userStats)
       .map(s => ({ ...s, successRate: s.total > 0 ? Math.round((s.success / s.total) * 100) : 0 }))
       .sort((a, b) => b.total - a.total);
