@@ -427,7 +427,7 @@ const Candidate = {
     } catch (_) {}
     const userBreakdown = Object.values(userStats)
       .map(s => ({ ...s, successRate: s.total > 0 ? Math.round((s.success / s.total) * 100) : 0 }))
-      .sort((a, b) => b.total - a.total);
+      .sort((a, b) => b.in_progress - a.in_progress || b.total - a.total);
 
     // Recent candidates — derived from already-fetched allDocs, no extra Firestore read
     const recent = [...allDocs].sort((a, b) => {
