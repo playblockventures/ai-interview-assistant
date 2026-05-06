@@ -780,3 +780,4 @@ const Candidate = {
 };
 
 module.exports = Candidate;
+module.exports.clearAnalyticsCache = () => analyticsCache.clear();

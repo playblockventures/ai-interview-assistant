@@ -239,6 +239,12 @@ export default function Dashboard() {
   const [staleCollapsed,       setStaleCollapsed]       = useState(false);
   const [dupeCollapsed,        setDupeCollapsed]        = useState(true);
   const [callScriptCollapsed,  setCallScriptCollapsed]  = useState(false);
+  const [pipelineCollapsed,    setPipelineCollapsed]    = useState(false);
+  const [activityCollapsed,    setActivityCollapsed]    = useState(false);
+  const [roleCollapsed,        setRoleCollapsed]        = useState(false);
+  const [locationCollapsed,    setLocationCollapsed]    = useState(false);
+  const [recruiterCollapsed,   setRecruiterCollapsed]   = useState(false);
+  const [hiringMgrCollapsed,   setHiringMgrCollapsed]   = useState(false);
   const [fromDate,         setFromDate]         = useState(() => isoDaysAgo(7));
   const [toDate,           setToDate]           = useState(() => isoToday());
 
@@ -470,8 +476,11 @@ export default function Dashboard() {
               {/* Row 1: Pipeline status + Activity */}
               <div className="grid-2" style={{ marginBottom: 20 }}>
                 <div className="card">
-                  <div className="card-title">Pipeline Status</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+                  <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setPipelineCollapsed(v => !v)}>
+                    Pipeline Status
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>{pipelineCollapsed ? '▶' : '▼'}</span>
+                  </div>
+                  {!pipelineCollapsed && <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
                     <div style={{ flexShrink: 0 }}>
                       <DonutChart size={110} segments={
                         Object.entries(STATUS_CONFIG).map(([key, val]) => ({
@@ -497,46 +506,60 @@ export default function Dashboard() {
                         );
                       })}
                     </div>
-                  </div>
+                  </div>}
                 </div>
 
                 <div className="card">
-                  <div className="card-title">Weekly Activity</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Candidates added per week (last 8 weeks)</div>
-                  <ActivityTimeline weeks={analytics?.weeklyActivity || []} />
+                  <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setActivityCollapsed(v => !v)}>
+                    Weekly Activity
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>{activityCollapsed ? '▶' : '▼'}</span>
+                  </div>
+                  {!activityCollapsed && <>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Candidates added per week (last 8 weeks)</div>
+                    <ActivityTimeline weeks={analytics?.weeklyActivity || []} />
+                  </>}
                 </div>
               </div>
 
               {/* Row 2: Role breakdown + Locations */}
               <div className="grid-2" style={{ marginBottom: 20 }}>
                 <div className="card">
-                  <div className="card-title">Candidates by Role</div>
-                  {roleBreakdown.length ? (
+                  <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setRoleCollapsed(v => !v)}>
+                    Candidates by Role
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>{roleCollapsed ? '▶' : '▼'}</span>
+                  </div>
+                  {!roleCollapsed && (roleBreakdown.length ? (
                     <BarChart
                       data={roleBreakdown}
                       colorFn={(_, i) => `hsl(${160 + i * 30}, 70%, 55%)`}
                       onClickItem={(d) => navigateFiltered({ search: d.roleValue })}
                     />
-                  ) : <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No role data yet</div>}
+                  ) : <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No role data yet</div>)}
                 </div>
 
                 <div className="card">
-                  <div className="card-title">Top Locations</div>
-                  {analytics?.locationBreakdown.length ? (
+                  <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setLocationCollapsed(v => !v)}>
+                    Top Locations
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>{locationCollapsed ? '▶' : '▼'}</span>
+                  </div>
+                  {!locationCollapsed && (analytics?.locationBreakdown.length ? (
                     <BarChart
                       data={analytics.locationBreakdown}
                       colorFn={(_, i) => `hsl(${200 + i * 20}, 65%, 55%)`}
                       onClickItem={(d) => navigateFiltered({ search: d.label })}
                     />
-                  ) : <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No location data yet</div>}
+                  ) : <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No location data yet</div>)}
                 </div>
               </div>
 
               {/* Row 3: Recruiter performance */}
               {analytics?.recruiterPerf.length > 0 && (
                 <div className="card" style={{ marginBottom: 20 }}>
-                  <div className="card-title">Recruiter Performance</div>
-                  <div className="table-wrap">
+                  <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setRecruiterCollapsed(v => !v)}>
+                    Recruiter Performance
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>{recruiterCollapsed ? '▶' : '▼'}</span>
+                  </div>
+                  {!recruiterCollapsed && <div className="table-wrap">
                     <table className="data-table">
                       <thead>
                         <tr>
@@ -551,7 +574,7 @@ export default function Dashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {analytics.recruiterPerf.map((r, i) => (
+                        {analytics.recruiterPerf.slice(0, 10).map((r, i) => (
                           <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => navigateFiltered({ recruiterFilter: r.id })}>
                             <td style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{i + 1}</td>
                             <td style={{ fontWeight: 600, fontSize: 13 }}>{r.name}</td>
@@ -575,15 +598,18 @@ export default function Dashboard() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </div>}
                 </div>
               )}
 
               {/* Admin: User breakdown */}
               {user?.isAdmin && analytics?.userBreakdown.length > 0 && (
                 <div className="card" style={{ marginBottom: 20 }}>
-                  <div className="card-title">Hiring Manager Performance</div>
-                  <div className="table-wrap">
+                  <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setHiringMgrCollapsed(v => !v)}>
+                    Hiring Manager Performance
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>{hiringMgrCollapsed ? '▶' : '▼'}</span>
+                  </div>
+                  {!hiringMgrCollapsed && <div className="table-wrap">
                     <table className="data-table">
                       <thead>
                         <tr>
@@ -620,7 +646,7 @@ export default function Dashboard() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </div>}
                 </div>
               )}
 

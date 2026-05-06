@@ -377,6 +377,7 @@ router.post('/bulk-reassign-owner', async (req, res) => {
     const targetUser = await User.findById(toUserId).catch(() => null);
     const toOwnerName = targetUser?.displayName || targetUser?.username || '';
     const count = await Candidate.reassignOwnerBulk(candidateIds, toUserId, toOwnerName);
+    require('../models/Candidate').clearAnalyticsCache();
     res.json({ success: true, count });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -390,6 +391,7 @@ router.post('/reassign-owner', async (req, res) => {
     const targetUser = await User.findById(toUserId).catch(() => null);
     const toOwnerName = targetUser?.displayName || targetUser?.username || '';
     const count = await Candidate.reassignOwner(fromUserId, toUserId, recruiterId, toOwnerName);
+    require('../models/Candidate').clearAnalyticsCache();
     res.json({ success: true, count });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
