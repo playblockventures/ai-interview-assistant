@@ -182,10 +182,20 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
   const [saving, setSaving]                 = useState(false);
   const [linkedinInput, setLinkedinInput]   = useState('');
   const [extractingLi, setExtractingLi]     = useState(false);
-  const [linkedinProfile, setLinkedinProfile] = useState(initial?.linkedinProfile || null);
+  const [linkedinProfile, setLinkedinProfile] = useState(null);
   const [dangerousWarning, setDangerousWarning]     = useState(null);
   const [confirmDangerous, setConfirmDangerous]     = useState(false);
-  const [showLinkedInSection, setShowLinkedInSection] = useState(!!initial?.linkedinProfile);
+  const [showLinkedInSection, setShowLinkedInSection] = useState(false);
+
+  useEffect(() => {
+    if (!isEdit || !initial?.id) return;
+    candidateApi.getById(initial.id).then(data => {
+      if (data?.linkedinProfile) {
+        setLinkedinProfile(data.linkedinProfile);
+        setShowLinkedInSection(true);
+      }
+    }).catch(() => {});
+  }, []); // eslint-disable-line
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
