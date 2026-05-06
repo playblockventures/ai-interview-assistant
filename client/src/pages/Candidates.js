@@ -185,7 +185,7 @@ function CandidateModal({ onClose, onSaved, initial = null }) {
   const [linkedinProfile, setLinkedinProfile] = useState(initial?.linkedinProfile || null);
   const [dangerousWarning, setDangerousWarning]     = useState(null);
   const [confirmDangerous, setConfirmDangerous]     = useState(false);
-  const [showLinkedInSection, setShowLinkedInSection] = useState(false);
+  const [showLinkedInSection, setShowLinkedInSection] = useState(!!initial?.linkedinProfile);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
