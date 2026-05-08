@@ -361,8 +361,21 @@ function OutreachTab({ candidate }) {
     setConfig(p => ({ ...p, [k]: v }));
   };
 
+  const [deleting, setDeleting] = useState(false);
+
   const startEdit  = () => { setEditText(message); setEditing(true); };
   const cancelEdit = () => { setEditing(false); setEditText(''); };
+
+  const deleteMsg = async () => {
+    if (!window.confirm('Delete this outreach message?')) return;
+    setDeleting(true);
+    try {
+      await interviewApi.deleteOutreachMsg(candidate.id, 0);
+      setMessage('');
+      toast.success('Message deleted');
+    } catch (e) { toast.error(e.message); }
+    finally { setDeleting(false); }
+  };
 
   const saveEdit = async () => {
     if (!editText.trim()) return;
@@ -445,6 +458,9 @@ function OutreachTab({ candidate }) {
                 <>
                   <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(message); toast.success('Copied!'); }}>Copy</button>
                   <button className="btn btn-secondary btn-sm" onClick={startEdit}>✎ Edit</button>
+                  <button className="btn btn-danger btn-sm" onClick={deleteMsg} disabled={deleting}>
+                    {deleting ? <span className="spinner" style={{ width: 12, height: 12 }} /> : '✕ Delete'}
+                  </button>
                 </>
               )}
             </div>
