@@ -479,7 +479,8 @@ router.post('/conversation', async (req, res) => {
       `You are an expert recruiter conducting a ${roleLabel} interview conversation.`,
       toneSystemPrompt || `Maintain a ${toneLabel} tone throughout.`,
       `Generate the next ideal recruiter response. Be natural, engaging, concise and move the conversation forward productively.`,
-      `\nIf the candidate sent an image, describe what you observe and respond appropriately.`,
+      `\nIf the candidate sent an image, describe what you observe and respond appropriately.` +
+      `\nIf the candidate attached a file or document, read its full content carefully and make your response directly relevant to what the document contains.`,
       // 4. Knowledge base (lowest priority)
       knowledgeContext
         ? `${knowledgeContext}\n\nIMPORTANT: You MUST use the knowledge base above as the foundation for your interview questions and responses. Ask the candidate specifically about the technologies, requirements, and criteria described in those documents. Do not rely on generic interview questions.`
@@ -691,11 +692,18 @@ router.post('/call-script', async (req, res) => {
       } catch (_) {}
     }
 
-    // Full conversation history for context (skip call_script entries)
+    // Full conversation history for context (skip call_script entries), including any attached file text
     const fullConvo = history
-      .filter(h => h.role !== 'call_script' && h.content)
-      .map(h => `${h.role === 'assistant' ? 'Recruiter' : 'Candidate'}: ${h.content}`)
-      .join('\n');
+      .filter(h => h.role !== 'call_script' && (h.content || h.attachedFileText))
+      .map(h => {
+        const speaker = h.role === 'assistant' ? 'Recruiter' : 'Candidate';
+        const fileNote = h.attachedFileText
+          ? `[Attached file: ${h.attachedFileName || 'document'}]\n${h.attachedFileText}`
+          : '';
+        const body = [fileNote, h.content].filter(Boolean).join('\n');
+        return `${speaker}: ${body}`;
+      })
+      .join('\n\n');
 
     const systemPrompt = [
       `You are an expert recruiter writing a WORD-FOR-WORD phone call script for a ${roleLabel || 'professional'} position. ` +

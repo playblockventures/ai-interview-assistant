@@ -686,7 +686,7 @@ function ConversationTab({ candidate, appliedScenario, onStatusChange }) {
     setLoading(true);
 
     try {
-      const data = await generateApi.conversation(buildPayload(newHistory, userMsg, imgData, fileData));
+      const data = await generateApi.conversation(buildPayload(history, userMsg, imgData, fileData));
       setHistory(h => [...h, { role: 'assistant', content: data.response, timestamp: new Date().toISOString(), _origIdx: h.length }]);
       // Reflect auto status change: pending → in_progress
       if (candidate.status === 'pending' && onStatusChange) onStatusChange('in_progress');
