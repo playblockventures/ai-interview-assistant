@@ -685,6 +685,7 @@ export default function Candidates() {
 
   const [candidates,       setCandidates]       = useState([]);
   const [pinnedCandidates, setPinnedCandidates] = useState([]);
+  const [pinnedCollapsed,  setPinnedCollapsed]  = useState(true);
   const [total,            setTotal]            = useState(0);
   const [loading,          setLoading]          = useState(true);
   const [showAdd,          setShowAdd]          = useState(false);
@@ -1116,12 +1117,16 @@ export default function Candidates() {
             {/* ── Pinned candidates — separate section ── */}
             {filteredPinned.length > 0 && (
               <div style={{ marginBottom: 20 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '0 2px' }}>
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: pinnedCollapsed ? 0 : 8, padding: '0 2px', cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => setPinnedCollapsed(p => !p)}
+                >
                   <span style={{ fontSize: 14, color: '#f59e0b' }}>★</span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#f59e0b' }}>Pinned Candidates</span>
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>({filteredPinned.length})</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>{pinnedCollapsed ? '▶' : '▼'}</span>
                 </div>
-                <div className="table-wrap" style={{ border: '1px solid rgba(245,158,11,0.25)', borderRadius: 8, overflow: 'hidden' }}>
+                {!pinnedCollapsed && <div className="table-wrap" style={{ border: '1px solid rgba(245,158,11,0.25)', borderRadius: 8, overflow: 'hidden' }}>
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -1230,7 +1235,7 @@ export default function Candidates() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                </div>}
               </div>
             )}
 
